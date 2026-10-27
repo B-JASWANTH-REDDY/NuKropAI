@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
   Download, 
-  TrendingUp, 
-  ScanLine, 
   ShieldCheck, 
   Globe, 
   HelpCircle, 
@@ -27,14 +25,12 @@ interface CommandMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenLegal: (tab: 'privacy' | 'terms' | 'cookies' | 'refund') => void;
-  onSelectMarketShortcut?: (state: string, district: string, commodity: string) => void;
 }
 
 export const CommandMenu: React.FC<CommandMenuProps> = ({
   isOpen,
   onClose,
-  onOpenLegal,
-  onSelectMarketShortcut
+  onOpenLegal
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -94,28 +90,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       }
     },
     {
-      id: 'nav-mandi',
-      title: 'Live Mandi Prices & APMC Quotes',
-      category: 'Navigation',
-      icon: <TrendingUp style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />,
-      action: () => {
-        onClose();
-        document.getElementById('mandi')?.scrollIntoView({ behavior: 'smooth' });
-      }
-    },
-    {
-      id: 'nav-scanner',
-      title: 'AI Crop Disease Scanner (Vision Diagnostic)',
-      category: 'Navigation',
-      icon: <ScanLine style={{ width: '16px', height: '16px', color: '#60A5FA' }} />,
-      action: () => {
-        onClose();
-        document.getElementById('scanner')?.scrollIntoView({ behavior: 'smooth' });
-      }
-    },
-    {
       id: 'nav-features',
-      title: '6 Core Farming Pillars',
+      title: '6 Core Farming Pillars (AI Scanner, Mandi Rates & Advisory)',
       category: 'Navigation',
       icon: <ShieldCheck style={{ width: '16px', height: '16px', color: '#10B981' }} />,
       action: () => {
@@ -154,36 +130,13 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       }
     },
     {
-      id: 'market-agra-potato',
-      title: 'Agra APMC: Live Potato Trading Rates',
-      category: 'Market Data',
-      icon: <TrendingUp style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />,
+      id: 'nav-contact',
+      title: 'Farmer Support & Grievance Desk',
+      category: 'Navigation',
+      icon: <HelpCircle style={{ width: '16px', height: '16px', color: '#10B981' }} />,
       action: () => {
         onClose();
-        onSelectMarketShortcut?.('Uttar Pradesh', 'Agra', 'Potato');
-        document.getElementById('mandi')?.scrollIntoView({ behavior: 'smooth' });
-      }
-    },
-    {
-      id: 'market-agra-wheat',
-      title: 'Agra APMC: Live Wheat Trading Rates',
-      category: 'Market Data',
-      icon: <TrendingUp style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />,
-      action: () => {
-        onClose();
-        onSelectMarketShortcut?.('Uttar Pradesh', 'Agra', 'Wheat');
-        document.getElementById('mandi')?.scrollIntoView({ behavior: 'smooth' });
-      }
-    },
-    {
-      id: 'market-nashik-onion',
-      title: 'Nashik APMC: Live Onion Rates',
-      category: 'Market Data',
-      icon: <TrendingUp style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />,
-      action: () => {
-        onClose();
-        onSelectMarketShortcut?.('Maharashtra', 'Nashik', 'Onion');
-        document.getElementById('mandi')?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
       }
     },
     {

@@ -30,8 +30,6 @@ import { LegalPage } from './components/LegalPages';
 import { NotFound } from './components/NotFound';
 import { CookieConsent } from './components/CookieConsent';
 import { ContactForm } from './components/ContactForm';
-import MandiWeb from './components/MandiWeb';
-import ScannerWeb from './components/ScannerWeb';
 import { analytics } from './utils/analytics';
 
 function AppContent() {
@@ -47,13 +45,6 @@ function AppContent() {
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
   const [legalModalOpen, setLegalModalOpen] = useState(false);
   const [activeLegalTab, setActiveLegalTab] = useState<LegalTab>('privacy');
-
-  // Selected market shortcut from Command Menu
-  const [marketFilter, setMarketFilter] = useState<{
-    state: string;
-    district: string;
-    commodity: string;
-  } | null>(null);
 
   // Sync with browser history popstate
   useEffect(() => {
@@ -152,7 +143,7 @@ function AppContent() {
         <div className="nav-pill-wrapper">
           
           {/* Logo */}
-          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }} aria-label="NuKropAI Homepage">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="nav-brand" aria-label="NuKropAI Homepage">
             <div style={{ 
               padding: '6px', 
               background: 'linear-gradient(135deg, rgba(200, 232, 55, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%)', 
@@ -172,42 +163,22 @@ function AppContent() {
           {/* Desktop Navigation Links */}
           <nav className="nav-links" aria-label="Primary Navigation">
             <a href="#features" className="nav-link">Features</a>
-            <a href="#mandi" className="nav-link">Mandi Rates</a>
-            <a href="#scanner" className="nav-link">AI Scanner</a>
-            <a href="#architecture" className="nav-link">AgriTech Suite</a>
+            <a href="#architecture" className="nav-link">Architecture</a>
             <a href="#languages" className="nav-link">Languages</a>
-            <a href="#contact" className="nav-link">Support Desk</a>
             <a href="#faq" className="nav-link">FAQ</a>
-            
-            {/* Command Menu Trigger Pill */}
+            <a href="#contact" className="nav-link">Support</a>
+          </nav>
+
+          {/* Desktop Actions */}
+          <div className="nav-actions">
             <button
               onClick={() => setCommandMenuOpen(true)}
-              className="touch-target"
-              style={{
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-                borderRadius: '100px',
-                padding: '6px 14px',
-                color: 'var(--nukrop-text-dim)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                cursor: 'pointer',
-                transition: 'border-color 0.2s ease, color 0.2s ease'
-              }}
-              aria-label="Open Command Menu (Ctrl+K or Cmd+K)"
+              className="nav-search-btn"
+              aria-label="Open Quick Actions (Ctrl+K or Cmd+K)"
             >
               <Search style={{ width: '13px', height: '13px', color: 'var(--nukrop-accent)' }} />
               <span>Quick Actions</span>
-              <kbd style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                padding: '1px 5px',
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontFamily: 'inherit',
-                fontWeight: 700
-              }}>⌘K</kbd>
+              <kbd className="nav-search-kbd">⌘K</kbd>
             </button>
 
             <a 
@@ -217,18 +188,12 @@ function AppContent() {
                 analytics.track('download_apk_click', { source: 'navbar_pill', version: '2.0' });
                 showToast({ type: 'info', message: 'Starting NuKropAI APK download (~52 MB)...' });
               }}
-              className="nukrop-btn" 
-              style={{ 
-                padding: '8px 18px', 
-                fontSize: '12.5px', 
-                borderRadius: '100px',
-                boxShadow: '0 4px 14px rgba(200, 232, 55, 0.3)'
-              }}
+              className="nukrop-btn nav-download-btn"
             >
               <Download style={{ width: '14px', height: '14px' }} />
               <span>Get APK (v2.0)</span>
             </a>
-          </nav>
+          </div>
 
           {/* Mobile Menu Toggle Button */}
           <button 
@@ -245,12 +210,10 @@ function AppContent() {
       {/* Mobile Nav Drawer */}
       <div className={`nav-mobile-drawer ${mobileMenuOpen ? 'open' : ''}`} role="dialog" aria-label="Mobile Navigation Menu">
         <a href="#features" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Features</a>
-        <a href="#mandi" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Live Mandi Rates</a>
-        <a href="#scanner" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>AI Disease Scanner</a>
-        <a href="#architecture" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>AgriTech Suite</a>
+        <a href="#architecture" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>AgriTech Architecture</a>
         <a href="#languages" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Languages</a>
-        <a href="#contact" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Farmer Support Desk</a>
-        <a href="#faq" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>FAQ</a>
+        <a href="#faq" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>FAQ & Manual</a>
+        <a href="#contact" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Support & Grievance</a>
         
         <button
           onClick={() => { setMobileMenuOpen(false); setCommandMenuOpen(true); }}
@@ -271,7 +234,7 @@ function AppContent() {
           }}
         >
           <Search style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />
-          <span>Quick Commands (Ctrl+K)</span>
+          <span>Quick Actions (Ctrl+K)</span>
         </button>
 
         <a 
@@ -374,7 +337,7 @@ function AppContent() {
             </a>
 
             <a
-              href="#mandi"
+              href="#features"
               className="nukrop-btn nukrop-btn-secondary"
               style={{
                 padding: '16px 28px',
@@ -382,7 +345,7 @@ function AppContent() {
                 borderRadius: '16px',
               }}
             >
-              <span>Explore Live Mandi</span>
+              <span>Explore Features</span>
               <ChevronRight style={{ width: '16px', height: '16px' }} />
             </a>
           </div>
@@ -596,13 +559,6 @@ function AppContent() {
           </div>
         </section>
 
-
-        {/* ═════════════════ INTERACTIVE MANDI RATES ═════════════════ */}
-        <MandiWeb initialFilter={marketFilter} />
-
-
-        {/* ═════════════════ INTERACTIVE AI SCANNER ═════════════════ */}
-        <ScannerWeb />
 
 
         {/* ═════════════════ 7 SOVEREIGN ENTERPRISE MODULES ═════════════════ */}
@@ -950,9 +906,6 @@ function AppContent() {
         isOpen={commandMenuOpen}
         onClose={() => setCommandMenuOpen(false)}
         onOpenLegal={openLegal}
-        onSelectMarketShortcut={(state, district, commodity) => {
-          setMarketFilter({ state, district, commodity });
-        }}
       />
 
       {/* ── LEGAL MODAL ── */}

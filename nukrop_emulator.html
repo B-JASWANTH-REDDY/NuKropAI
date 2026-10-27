@@ -5007,57 +5007,8 @@ function getFilteredMandiRates() {
     });
     if (cropFallbacks.length > 0) return cropFallbacks;
 
-    // Dynamic generation for any of the 120+ crops from OpenFarm catalog
-    const foundIn120 = OPENFARM_CROPS_CATALOG.find(c => c.id.toLowerCase() === targetCrop || getLocalizedCropName(c.id).toLowerCase().includes(targetCrop) || (CROP_TRANSLATIONS[c.id]?.en || '').toLowerCase().includes(targetCrop));
-    if (foundIn120) {
-      const dynSlug = foundIn120.id;
-      const dynNameEn = CROP_TRANSLATIONS[dynSlug]?.en || dynSlug;
-      const dynNameTe = CROP_TRANSLATIONS[dynSlug]?.te || dynNameEn;
-      const dynNameHi = CROP_TRANSLATIONS[dynSlug]?.hi || dynNameEn;
-      const dynBasePrice = parseInt((foundIn120.price || '₹2,400').replace(/[^0-9]/g, '')) || 2400;
-      return [
-        {
-          id: 'dyn-mkt-' + dynSlug + '-0',
-          cropKey: dynSlug,
-          cropSlug: dynSlug,
-          cropPath: `${dynSlug}/${dynSlug}.svg`,
-          cropName: { en: dynNameEn + ' (A-Grade)', te: dynNameTe + ' (A-గ్రేడ్)', hi: dynNameHi + ' (ग्रेड A)' },
-          variety: { en: 'Desi Pure / Standard FAQ', te: 'ప్రామాణిక దేశీ రకం', hi: 'मानक देसी किस्म' },
-          mandi: { en: 'Warangal APMC Yard', te: 'వరంగల్ ఏనుమాముల మార్కెట్ యార్డ్', hi: 'वारंगल मंडी' },
-          district: 'Warangal',
-          state: { en: 'Telangana', te: 'తెలంగాణ', hi: 'तेलंगाना' },
-          modalPrice: dynBasePrice,
-          minPrice: Math.round(dynBasePrice * 0.85),
-          maxPrice: Math.round(dynBasePrice * 1.15),
-          mspPrice: Math.round(dynBasePrice * 0.95),
-          unit: foundIn120.unit || '/Qtl',
-          arrivals: 3200,
-          change: '+5.4%',
-          up: true,
-          badge: '📍 Local Mandi'
-        },
-        {
-          id: 'dyn-mkt-' + dynSlug + '-1',
-          cropKey: dynSlug,
-          cropSlug: dynSlug,
-          cropPath: `${dynSlug}/${dynSlug}.svg`,
-          cropName: { en: dynNameEn + ' (Export Quality)', te: dynNameTe + ' (ప్రీమియం నాణ్యత)', hi: dynNameHi + ' (प्रीमियम)' },
-          variety: { en: 'Premium Selection', te: 'ప్రీమియం సెలక్షన్', hi: 'प्रीमियम चयन' },
-          mandi: { en: 'Bowenpally APMC, Hyderabad', te: 'బోయిన్‌పల్లి మార్కెట్, హైదరాబాద్', hi: 'बोवेनपल्ली मंडी' },
-          district: 'Hyderabad',
-          state: { en: 'Telangana', te: 'తెలంగాణ', hi: 'तेलंगाना' },
-          modalPrice: Math.round(dynBasePrice * 1.08),
-          minPrice: Math.round(dynBasePrice * 0.9),
-          maxPrice: Math.round(dynBasePrice * 1.25),
-          mspPrice: Math.round(dynBasePrice * 0.95),
-          unit: foundIn120.unit || '/Qtl',
-          arrivals: 5100,
-          change: '+7.2%',
-          up: true,
-          badge: '⚡ High Demand'
-        }
-      ];
-    }
+    // Return empty list if no official Agmarknet rate is reported for this target crop
+    return [];
   }
 
   // Fallback 2: If state matches, show mandis in that state
@@ -6253,9 +6204,15 @@ function renderMandiCardsHtml() {
       </div>
 
       <!-- Arrival & Min-Max details -->
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:#475569;margin-bottom:10px;padding:0 2px;">
-        <span>📊 <strong>${TL('Range', 'ధరల పరిమితి', 'Range')}:</strong> ₹${item.minPrice.toLocaleString()} - ₹${item.maxPrice.toLocaleString()}</span>
-        <span>🚚 <strong>${TL('Arrivals', 'రాక', 'Arrivals')}:</strong> ${item.arrivals.toLocaleString()} Qtl</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:#475569;margin-bottom:6px;padding:0 2px;">
+        <span>📊 <strong>${TL('Range', 'ధరల పరిమితి', 'Range')}:</strong> ${item.minPrice ? '₹' + item.minPrice.toLocaleString() : '₹' + item.modalPrice.toLocaleString()} - ${item.maxPrice ? '₹' + item.maxPrice.toLocaleString() : '₹' + item.modalPrice.toLocaleString()}</span>
+        <span>🚚 <strong>${TL('Arrivals', 'రాక', 'Arrivals')}:</strong> ${item.arrivals ? item.arrivals.toLocaleString() + ' Qtl' : 'Official Volume'}</span>
+      </div>
+
+      <!-- Provenance & Official Source -->
+      <div style="font-size:9.5px;color:#64748B;font-weight:600;margin-bottom:10px;padding:0 2px;display:flex;align-items:center;justify-content:space-between;">
+        <span>🏛️ ${item.sourceName || 'Agmarknet / DMI (Govt of India)'}</span>
+        <span>📅 ${item.tradeDate ? 'Reported: ' + item.tradeDate : 'APMC Report'}</span>
       </div>
 
       <!-- Actions -->
@@ -6384,7 +6341,7 @@ function getMandiDefaults(slug) {
   };
 }
 
-function refreshMandiRatesLive() {
+async function refreshMandiRatesLive() {
   const priceEl = document.getElementById('home-mandi-live-price');
   const changeEl = document.getElementById('home-mandi-live-change');
   const cardEl = document.getElementById('home-mandi-card-container');
@@ -6402,16 +6359,22 @@ function refreshMandiRatesLive() {
   if (!priceEl) return;
 
   const currentCrop = myActiveCrops[activeCropIdx] || myActiveCrops[0];
+
+  // Real fetch from Supabase (Official Agmarknet / APMC records)
+  try {
+    if (typeof fetchMandiRatesFromSupabase === 'function') {
+      await fetchMandiRatesFromSupabase();
+    }
+  } catch(e) {
+    console.warn('Real Mandi fetch error:', e);
+  }
+
   const mandiInfo = getMandiDefaults(currentCrop.id);
-
-  const delta = Math.floor(Math.random() * 50) + 15;
-  const isUp = Math.random() > 0.2;
-  const newPrice = isUp ? mandiInfo.rawPrice + delta : Math.max(500, mandiInfo.rawPrice - delta);
-
-  priceEl.innerHTML = '₹' + newPrice.toLocaleString('en-IN') + ' <span style="font-size:10px;color:#64748B;font-weight:600;">' + mandiInfo.unit + '</span>';
+  priceEl.innerHTML = mandiInfo.price + ' <span style="font-size:10px;color:#64748B;font-weight:600;">' + mandiInfo.unit + '</span>';
   if (changeEl) {
-    changeEl.innerHTML = (isUp ? 'today +₹' + delta : 'today -₹' + delta) + (isUp ? ' ▲' : ' ▼');
-    changeEl.style.color = isUp ? '#16A34A' : '#DC2626';
+    const tradeDate = mandiInfo.catalogItem.tradeDate || 'Official';
+    changeEl.innerHTML = (mandiInfo.catalogItem.badge || 'APMC') + ' · ' + tradeDate;
+    changeEl.style.color = '#15803D';
   }
 
   if (cardEl) {
@@ -6513,36 +6476,43 @@ function getCropIconImg(path, slug) {
 
 
 let liveWeather = {
+  isLoaded: false,
+  status: 'PENDING_LOCATION', // 'LIVE', 'CACHED', 'UNAVAILABLE', 'PENDING_LOCATION'
   locationName: {
-    en: 'Warangal, Telangana',
-    te: 'వరంగల్, తెలంగాణ',
-    hi: 'वारंगल, तेलंगाना',
-    ta: 'வாரங்கல், தெலுங்கானா',
-    kn: 'ವರಂಗಲ್, ತೆಲಂಗಾಣ',
-    ml: 'വാറങ്കൽ, തെലങ്കാന',
-    mr: 'वारंगल, तेलंगणा',
-    bn: 'ওয়ারাঙ্গাল, তেলেঙ্গানা',
-    gu: 'વારંગલ, તેલંગાણા',
-    pa: 'ਵਾਰੰਗਲ, ਤੇਲੰਗਾਨਾ',
-    or: 'ୱାରଙ୍ଗଲ, ତେଲେଙ୍ଗାନା'
+    en: 'Detecting Farm Location...',
+    te: 'వ్యవసాయ క్షేత్రం స్థానం గుర్తిస్తోంది...',
+    hi: 'खेत का स्थान खोजा जा रहा है...',
+    ta: 'பண்ணை இருப்பிடம் கண்டறியப்படுகிறது...',
+    kn: 'ಕೃಷಿ ಭೂಮಿಯ ಸ್ಥಳ ಪತ್ತೆಹಚ್ಚಲಾಗುತ್ತಿದೆ...',
+    ml: 'ഫാം ലൊക്കേഷൻ കണ്ടെത്തുന്നു...',
+    mr: 'शेताचे स्थान शोधत आहे...',
+    bn: 'খামারের অবস্থান সনাক্ত করা হচ্ছে...',
+    gu: 'ખેતરનું સ્થાન શોધી રહ્યું છે...',
+    pa: 'ਖੇਤ ਦੀ ਸਥਿਤੀ ਲੱਭ ਰਿਹਾ ਹੈ...',
+    or: 'ଫାର୍ମ ସ୍ଥାନ ଚିହ୍ନଟ କରାଯାଉଛି...'
   },
-  temp: 27,
-  high: 30,
-  low: 23,
-  tempHigh: 30,
-  tempLow: 23,
-  humidity: 71,
-  precip: '0',
-  precipitation: '0',
-  pressure: '978',
-  wind: '9',
-  windSpeed: '9',
-  sunrise: '05:57 am',
-  sunset: '06:26 pm',
-  sunriseStr: '05:57 am',
-  sunsetStr: '06:26 pm',
-  sunProgress: 0.65,
-  spraySafety: 'SAFE'
+  temp: null,
+  high: null,
+  low: null,
+  tempHigh: null,
+  tempLow: null,
+  humidity: null,
+  precip: null,
+  precipitation: null,
+  precipProbability: null,
+  pressure: null,
+  wind: null,
+  windSpeed: null,
+  sunrise: null,
+  sunset: null,
+  sunriseStr: null,
+  sunsetStr: null,
+  sunProgress: 0.5,
+  spraySafety: 'UNKNOWN',
+  provider: 'Open-Meteo Agricultural API (WMO / ECMWF)',
+  observationTime: null,
+  lastUpdated: null,
+  timezone: 'Asia/Kolkata'
 };
 
 
@@ -10207,9 +10177,9 @@ async function fetchRealLocationAndWeather() {
             console.warn('Geocoding fallback:', errGeo);
           }
 
-          // 2. Real Meteorological Forecast from Open-Meteo
+          // 2. Real Meteorological Forecast from Open-Meteo (With Hourly Precipitation Probability)
           try {
-            const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,precipitation,weather_code&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min&timezone=auto`;
+            const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,precipitation,weather_code&hourly=precipitation_probability&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`;
             const wRes = await fetch(weatherUrl);
             if (wRes.ok) {
               const wData = await wRes.json();
@@ -10219,24 +10189,47 @@ async function fetchRealLocationAndWeather() {
                 liveWeather.temp = Math.round(cur.temperature_2m) + '°C';
                 liveWeather.humidity = Math.round(cur.relative_humidity_2m);
                 liveWeather.wind = Math.round(cur.wind_speed_10m) + ' km/h';
+                liveWeather.windSpeed = liveWeather.wind;
                 liveWeather.pressure = Math.round(cur.surface_pressure) + ' hpa';
                 liveWeather.rainfall = (cur.precipitation || 0) + ' mm';
+                liveWeather.precipitation = liveWeather.rainfall;
+                liveWeather.observationTime = cur.time;
               }
-              if (daily && daily.temperature_2m_max && daily.temperature_2m_max[0]) {
+              if (daily && daily.temperature_2m_max && daily.temperature_2m_max[0] !== undefined) {
                 liveWeather.high = Math.round(daily.temperature_2m_max[0]) + '°C';
                 liveWeather.low = Math.round(daily.temperature_2m_min[0]) + '°C';
+                liveWeather.tempHigh = liveWeather.high;
+                liveWeather.tempLow = liveWeather.low;
+                if (daily.precipitation_probability_max && daily.precipitation_probability_max[0] !== undefined) {
+                  liveWeather.precipProbability = daily.precipitation_probability_max[0];
+                }
                 if (daily.sunrise && daily.sunrise[0]) {
                   const sDate = new Date(daily.sunrise[0]);
                   liveWeather.sunrise = sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  liveWeather.sunriseStr = liveWeather.sunrise;
                 }
                 if (daily.sunset && daily.sunset[0]) {
                   const sDate = new Date(daily.sunset[0]);
                   liveWeather.sunset = sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  liveWeather.sunsetStr = liveWeather.sunset;
                 }
               }
+              liveWeather.isLoaded = true;
+              liveWeather.status = 'LIVE';
+              liveWeather.lastUpdated = new Date().toISOString();
+              liveWeather.provider = 'Open-Meteo Agricultural API (WMO / ECMWF)';
+
+              try {
+                localStorage.setItem('nukrop_cached_weather', JSON.stringify(liveWeather));
+              } catch(e) {}
             }
           } catch(errW) {
             console.warn('Weather fetch fallback:', errW);
+            if (liveWeather.temp !== null) {
+              liveWeather.status = 'CACHED';
+            } else {
+              liveWeather.status = 'UNAVAILABLE';
+            }
           }
 
           // 3. Real Weather & Mandi Rate Notifications
@@ -11646,8 +11639,8 @@ async function fetchMandiRatesFromSupabase(customGps = null) {
         const existing = AGMARKNET_MANDI_CATALOG.find(x => x.cropKey === cropKey || x.cropSlug === cropKey);
         if (existing) {
           existing.modalPrice = Math.round(Number(r.modal_price));
-          existing.minPrice = Math.round(Number(r.min_price || r.modal_price * 0.9));
-          existing.maxPrice = Math.round(Number(r.max_price || r.modal_price * 1.1));
+          existing.minPrice = r.min_price ? Math.round(Number(r.min_price)) : null;
+          existing.maxPrice = r.max_price ? Math.round(Number(r.max_price)) : null;
           existing.mandi.en = marketName;
           existing.mandi.te = marketName;
           existing.mandi.hi = marketName;
@@ -11674,8 +11667,8 @@ async function fetchMandiRatesFromSupabase(customGps = null) {
             district: r.district || 'Regional',
             state: { en: r.state || 'Telangana', te: r.state || 'Telangana', hi: r.state || 'Telangana' },
             modalPrice: Math.round(Number(r.modal_price)),
-            minPrice: Math.round(Number(r.min_price || r.modal_price * 0.9)),
-            maxPrice: Math.round(Number(r.max_price || r.modal_price * 1.1)),
+            minPrice: r.min_price ? Math.round(Number(r.min_price)) : null,
+            maxPrice: r.max_price ? Math.round(Number(r.max_price)) : null,
             unit: '/Qtl',
             arrivals: 2500,
             change: r.trend === 'UP' ? '+1.8%' : (r.trend === 'DOWN' ? '-1.2%' : '0.0%'),
@@ -15097,7 +15090,9 @@ const APP_VIEWS = {
               <circle cx="12" cy="10" r="3"></circle>
             </svg>
             <span style="font-size:13.5px;font-weight:900;color:#0F172A;" id="w-loc-title">${liveWeather.locationName[currentLang] || liveWeather.locationName.en}</span>
-            <span style="font-size:9px;background:#DCFCE7;color:#15803D;font-weight:900;padding:2px 6px;border-radius:4px;letter-spacing:0.02em;">LIVE</span>
+            <span style="font-size:9px;background:${liveWeather.status === 'LIVE' ? '#DCFCE7' : (liveWeather.status === 'CACHED' ? '#FEF3C7' : '#F1F5F9')};color:${liveWeather.status === 'LIVE' ? '#15803D' : (liveWeather.status === 'CACHED' ? '#B45309' : '#64748B')};font-weight:900;padding:2px 6px;border-radius:4px;letter-spacing:0.02em;">
+              ${liveWeather.status === 'LIVE' ? 'LIVE' : (liveWeather.status === 'CACHED' ? 'CACHED' : 'STANDBY')}
+            </span>
           </div>
           <button onclick="refreshWeatherData()" title="Refresh Weather" style="background:none;border:none;cursor:pointer;color:#64748B;padding:2px;display:flex;align-items:center;" id="w-refresh-btn">
             <svg id="w-refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -15107,10 +15102,10 @@ const APP_VIEWS = {
         <!-- Temperature & Weather Illustration Header -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:36px;font-weight:900;color:#0F172A;letter-spacing:-1px;" id="w-temp">+${parseInt(liveWeather.temp) || 24}°C</span>
+            <span style="font-size:36px;font-weight:900;color:#0F172A;letter-spacing:-1px;" id="w-temp">${liveWeather.temp !== null ? liveWeather.temp : '--°C'}</span>
             <div style="font-size:11px;color:#64748B;font-weight:700;line-height:1.35;" id="w-high-low">
-              <div>H: ${parseInt(liveWeather.high || liveWeather.tempHigh) || 31}°C</div>
-              <div>L: ${parseInt(liveWeather.low || liveWeather.tempLow) || 22}°C</div>
+              <div>H: ${liveWeather.high !== null ? liveWeather.high : '--°C'}</div>
+              <div>L: ${liveWeather.low !== null ? liveWeather.low : '--°C'}</div>
             </div>
           </div>
 
@@ -15173,28 +15168,28 @@ const APP_VIEWS = {
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2.3"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
               <span>${t.humidity}</span>
             </div>
-            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-humidity">${parseInt(liveWeather.humidity) || 80}%</div>
+            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-humidity">${liveWeather.humidity !== null ? liveWeather.humidity + '%' : '--%'}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 2px;border-left:1px solid #E2ECE2;">
             <div style="font-size:9px;color:#64748B;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:3px;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.3"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="16" y1="19" x2="16" y2="21"/></svg>
               <span>${t.rainfall || t.precipitation}</span>
             </div>
-            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-precip">${parseInt(liveWeather.precip || liveWeather.precipitation) || 0} mm</div>
+            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-precip">${liveWeather.rainfall || (liveWeather.precipitation !== null ? liveWeather.precipitation : '-- mm')}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 2px;border-left:1px solid #E2ECE2;">
             <div style="font-size:9px;color:#64748B;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:3px;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.3"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
               <span>${t.pressure}</span>
             </div>
-            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-pressure">${parseInt(liveWeather.pressure) || 953} hpa</div>
+            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-pressure">${liveWeather.pressure !== null ? liveWeather.pressure : '-- hpa'}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 2px;border-left:1px solid #E2ECE2;">
             <div style="font-size:9px;color:#64748B;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:3px;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2.3"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
               <span>${t.windSpeed || t.wind}</span>
             </div>
-            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-wind">${parseInt(liveWeather.wind || liveWeather.windSpeed) || 4} km/h</div>
+            <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-wind">${liveWeather.wind || (liveWeather.windSpeed !== null ? liveWeather.windSpeed : '-- km/h')}</div>
           </div>
         </div>
 
@@ -15418,8 +15413,11 @@ const APP_VIEWS = {
           </svg>
         </div>
         <div>
-          <div style="font-size:15px;font-weight:800;color:#0F172A;letter-spacing:-0.2px;line-height:1.2;">${t.radarTitle}</div>
-          <div style="font-size:12px;color:#64748B;margin-top:4px;font-weight:500;">${t.radarSub}</div>
+          <div style="font-size:15px;font-weight:800;color:#0F172A;letter-spacing:-0.2px;line-height:1.2;">
+            ${t.radarTitle}
+            <span id="home-pest-alert-text" style="display:none;"></span>
+          </div>
+          <div id="home-pest-alert-desc" style="font-size:12px;color:#64748B;margin-top:4px;font-weight:500;">${t.radarSub}</div>
         </div>
       </div>
 
@@ -15838,7 +15836,8 @@ const APP_VIEWS = {
         
         <!-- Interactive Leaflet Map -->
         <div id="gramhaul-map-wrapper" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;">
-          <div id="gramhaul-osm-map" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;"></div>
+          <div id="gramhaul-real-osm-map" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;"></div>
+          <div id="gramhaul-osm-map" style="display:none;"></div>
           <!-- Floating Recenter Button -->
           <button onclick="recenterGramhaulMap()" style="position:absolute;bottom:240px;right:16px;z-index:20;background:#FFFFFF;border:1px solid #CBD5E1;border-radius:50%;width:44px;height:44px;box-shadow:0 4px 14px rgba(0,0,0,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;" title="Recenter Map">
             🎯
@@ -15879,6 +15878,7 @@ const APP_VIEWS = {
           <span style="width:7px;height:7px;border-radius:50%;background:#4ADE80;box-shadow:0 0 8px #4ADE80;"></span>
           ${TL('10 KM Proximity Geofenced', '10 కి.మీ పరిధిలో వాహనాలు', '10 किमी दायरे में वाहन')}
         </div>
+        <span id="gramhaul-active-count-badge" style="display:none;">4</span>
         <span id="gramhaul-coords-text" style="display:none;">17.9689° N, 79.5941° E</span>
         <span id="gramhaul-loc-name" style="display:none;">Warangal Rural</span>
         <div id="gramhaul-trucks-container" style="display:none;"></div>
@@ -20175,7 +20175,17 @@ function plotGramhaulMapMarkers(lat, lon, trucksList) {
   }
 
   // Plot Trucks
-  const trucks = trucksList || getInitialSeedTrucks(lat, lon);
+  const trucks = trucksList || [];
+  const radarStatus = document.getElementById('gh-live-radar-status');
+  if (radarStatus) {
+    if (trucks.length > 0) {
+      radarStatus.textContent = `${trucks.length} Active Verified Transporters`;
+      radarStatus.style.color = '#15803D';
+    } else {
+      radarStatus.textContent = 'No active transporters in area (Realtime)';
+      radarStatus.style.color = '#64748B';
+    }
+  }
   trucks.forEach(t => {
     const trkIcon = createTruckIcon('#15803D');
     const tm = L.marker([t.lat, t.lon], trkIcon ? { icon: trkIcon } : {}).addTo(gramhaulMapInstance);
@@ -20249,8 +20259,10 @@ async function fetchGramhaulTrucks() {
         }
       }
     }
-  } catch(e) {}
-  return getInitialSeedTrucks();
+  } catch(e) {
+    console.warn('Real GramHaul trucks fetch error:', e);
+  }
+  return [];
 }
 
 async function submitDriverTruckListing(listing) {
@@ -21584,7 +21596,6 @@ async function callGroqAI(userPrompt, systemInstruction) {
 
 
 
-
 /* ═════════════════ GUARANTEED 200 OK REAL AGRI STORES ═════════════════ */
 const GUARANTEED_AGRI_STORES = {
   'bayer_confidor': {
@@ -22358,16 +22369,50 @@ async function startScannerDiagnostic() {
 
   const defaultDiag = BOTANICAL_PATHOLOGY_DB[cropKey] || BOTANICAL_PATHOLOGY_DB.cotton;
 
-  // Query live real AI engine with active crop context
+  // Real Gemini Vision AI Inference on Captured Image
+  const geminiApiKey = localStorage.getItem('nukrop_gemini_api_key') || (typeof GEMINI_API_KEY !== 'undefined' ? GEMINI_API_KEY : '');
   let aiSymptoms = defaultDiag.symptoms[currentLang] || defaultDiag.symptoms.en;
-  try {
-    const aiPrompt = `Diagnose ${isSoil ? 'soil nutrient deficiency' : 'crop foliar disease'} on ${currentCrop.id || 'cotton'}. Provide: 1. Symptoms, 2. Organic bio-formulation, 3. Chemical tank mix dosage (ml/L or g/L). Language: ${currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English')}.`;
-    const aiResp = await callGroqAI(aiPrompt);
-    if (aiResp && aiResp.length > 30) {
-      aiSymptoms = aiResp;
+  let aiPrediction = null;
+  let isAiLive = false;
+
+  if (uploadedScanImageData && geminiApiKey) {
+    try {
+      const base64Data = uploadedScanImageData.includes(',') ? uploadedScanImageData.split(',')[1] : uploadedScanImageData;
+      const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: `You are an expert ICAR agricultural pathologist. Analyze this crop specimen (${currentCrop.id || 'crop foliar sample'}). Diagnose the disease or deficiency, severity (Low, Medium, High, or Critical), confidence score percentage (0-100), biological pathogen, organic bio-formulation remedy, precise chemical tank mix dosage in ml/L or g/L, and safety advisory. Language: ${currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English')}. Output strictly as valid JSON with keys: diseaseName, severity, confidence, pathogen, organicSolution, chemicalSolution, sprayAdvisory, symptoms.` },
+              { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+            ]
+          }],
+          generationConfig: { response_mime_type: "application/json" }
+        })
+      });
+      if (gRes.ok) {
+        const gJson = await gRes.json();
+        const rawText = gJson.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          aiPrediction = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+          isAiLive = true;
+        }
+      }
+    } catch(e) {
+      console.warn('Gemini Vision inference error, falling back to botanical pathology DB:', e);
     }
-  } catch(e) {
-    console.warn('Real AI diagnosis fallback:', e);
+  } else if (!geminiApiKey) {
+    // If no key configured, query Groq text advisory or use ICAR database with honest notice
+    try {
+      const aiPrompt = `Diagnose ${isSoil ? 'soil nutrient deficiency' : 'crop foliar disease'} on ${currentCrop.id || 'cotton'}. Provide: 1. Symptoms, 2. Organic bio-formulation, 3. Chemical tank mix dosage (ml/L or g/L). Language: ${currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English')}.`;
+      const aiResp = await callGroqAI(aiPrompt);
+      if (aiResp && aiResp.length > 30) {
+        aiSymptoms = aiResp;
+      }
+    } catch(e) {
+      console.warn('Real AI diagnosis fallback:', e);
+    }
   }
 
   const diagnosis = defaultDiag;
@@ -22386,7 +22431,15 @@ async function startScannerDiagnostic() {
     const now = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
-    
+    let finalSymptoms = aiPrediction?.symptoms || aiSymptoms || (diagnosis.symptoms[currentLang] || diagnosis.symptoms.en);
+    if (isSoil) {
+      finalSymptoms += TL(
+        " [Notice: Visual soil assessment only. For certified NPK and pH values, submit a sample to an authorized Soil Testing Laboratory under the Soil Health Card scheme.]",
+        " [గమనిక: కేవలం ఫోటో ద్వారా రసాయన NPK/pH విలువలను కొలవలేము. ల్యాబ్ సాయిల్ హెల్త్ కార్డ్ పరీక్ష అవసరం.]",
+        " [सूचना: केवल तस्वीर से NPK/pH नहीं मापा जा सकता। प्रमाणित रिपोर्ट के लिए मृदा स्वास्थ्य कार्ड प्रयोगशाला का उपयोग करें।]"
+      );
+    }
+
     const newScanEntry = {
       id: newScanId,
       timestamp: Date.now(),
@@ -22394,14 +22447,14 @@ async function startScannerDiagnostic() {
       time: nowTime,
       mode: currentScanMode,
       cropName: isSoil ? TL('Soil Sample', 'నేల నమూనా', 'मिट्टी नमूना') : (getLocalizedCropName(currentCrop.id)),
-      diseaseName: diagnosis.diseaseName[currentLang] || diagnosis.diseaseName.en,
-      severity: diagnosis.severity,
-      confidence: diagnosis.confidence,
-      vector: diagnosis.vector,
-      rootCause: aiSymptoms || (diagnosis.symptoms[currentLang] || diagnosis.symptoms.en),
-      organicSolution: diagnosis.organicSolution[currentLang] || diagnosis.organicSolution.en,
-      chemicalSolution: diagnosis.chemicalSolution[currentLang] || diagnosis.chemicalSolution.en,
-      sprayAdvisory: diagnosis.sprayAdvisory[currentLang] || diagnosis.sprayAdvisory.en
+      diseaseName: aiPrediction?.diseaseName || (diagnosis.diseaseName[currentLang] || diagnosis.diseaseName.en),
+      severity: aiPrediction?.severity || diagnosis.severity,
+      confidence: aiPrediction?.confidence ? aiPrediction.confidence + '%' : diagnosis.confidence,
+      vector: aiPrediction?.pathogen || diagnosis.vector,
+      rootCause: (isAiLive ? '🤖 Gemini Vision AI Analysis: ' : '🌿 ICAR Botanical Pathology Match: ') + finalSymptoms,
+      organicSolution: aiPrediction?.organicSolution || (diagnosis.organicSolution[currentLang] || diagnosis.organicSolution.en),
+      chemicalSolution: aiPrediction?.chemicalSolution || (diagnosis.chemicalSolution[currentLang] || diagnosis.chemicalSolution.en),
+      sprayAdvisory: aiPrediction?.sprayAdvisory || (diagnosis.sprayAdvisory[currentLang] || diagnosis.sprayAdvisory.en)
     };
 
     // Auto-sync scan to Supabase disease_scans table
@@ -22415,7 +22468,8 @@ async function startScannerDiagnostic() {
         },
         body: JSON.stringify({
           scan_id: newScanId,
-          farmer_id: 'NK-87621',
+          farmer_id: localStorage.getItem('nukrop_farmer_id') || ('NK-' + (localStorage.getItem('nukrop_supabase_uid') ? localStorage.getItem('nukrop_supabase_uid').slice(0, 6) : 'GUEST')),
+          user_id: localStorage.getItem('nukrop_supabase_uid') || null,
           crop_name: newScanEntry.cropName,
           scan_type: currentScanMode,
           disease_name: newScanEntry.diseaseName,

@@ -2,8 +2,9 @@ name: Automated Mandi Synchronization Engine
 
 on:
   schedule:
-    - cron: '0 15 * * *'  # Triggers automatically daily at exactly 15:00 UTC (8:30 PM IST)
-  workflow_dispatch:      # Allows you to click a button in GitHub to force run it instantly
+    - cron: '30 0 * * *'   # 6:00 AM IST (00:30 UTC) - Morning Mandi Arrivals & Baseline
+    - cron: '30 12 * * *'  # 6:00 PM IST (12:30 UTC) - Evening Closing Trade Observations
+  workflow_dispatch:      # Manual trigger from GitHub Actions Console
 
 jobs:
   execute-pipeline:
@@ -26,6 +27,8 @@ jobs:
           
       - name: Run Extraction Matrix Pipeline Tasks
         env:
-          GOVT_API_KEY: ${{ secrets.GOVT_API_KEY }}
-          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
-        run: python backend/mandi_pipeline_sync.py
+          DATA_GOV_IN_API_KEY: ${{ secrets.DATA_GOV_IN_API_KEY || secrets.GOVT_API_KEY }}
+          GOVT_API_KEY: ${{ secrets.GOVT_API_KEY || secrets.DATA_GOV_IN_API_KEY }}
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING || secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.DB_CONNECTION_STRING }}
+        run: python backend/mandi_pipeline_sync.py --agra

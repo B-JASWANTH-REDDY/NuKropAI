@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { X, ShieldCheck, FileText, Cookie, AlertCircle } from 'lucide-react';
 
-export type LegalTab = 'privacy' | 'terms' | 'cookies';
+export type LegalTab = 'privacy' | 'terms' | 'cookies' | 'refund';
 
 interface LegalModalProps {
   isOpen: boolean;
@@ -139,6 +139,27 @@ export const LegalModal: React.FC<LegalModalProps> = ({
             >
               <Cookie style={{ width: '15px', height: '15px' }} />
               Cookie &amp; Storage
+            </button>
+
+            <button
+              onClick={() => onSelectTab('refund')}
+              className="touch-target"
+              style={{
+                background: activeTab === 'refund' ? 'rgba(200, 232, 55, 0.15)' : 'transparent',
+                border: `1px solid ${activeTab === 'refund' ? 'rgba(200, 232, 55, 0.35)' : 'transparent'}`,
+                color: activeTab === 'refund' ? 'var(--nukrop-accent)' : 'var(--nukrop-text-dim)',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                fontSize: '13.5px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <AlertCircle style={{ width: '15px', height: '15px' }} />
+              Refund Policy
             </button>
           </div>
 
@@ -324,6 +345,41 @@ export const LegalModal: React.FC<LegalModalProps> = ({
 
               <p style={{ fontSize: '13px' }}>
                 You may clear these keys at any time via your browser settings or by resetting preferences using our Cookie Settings button in the footer.
+              </p>
+            </div>
+          )}
+
+          {activeTab === 'refund' && (
+            <div>
+              <h2 id="legal-modal-title" style={{ fontSize: '24px', color: '#FFFFFF', marginBottom: '16px' }}>
+                Refund Policy Notice
+              </h2>
+              <p style={{ fontSize: '12.5px', color: 'var(--nukrop-accent)', marginBottom: '20px' }}>
+                Non-Commercial Public Service Disclosures
+              </p>
+
+              <div style={{
+                padding: '16px',
+                background: 'rgba(200, 232, 55, 0.08)',
+                border: '1px solid rgba(200, 232, 55, 0.25)',
+                borderRadius: '12px',
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-start',
+                marginBottom: '20px'
+              }}>
+                <AlertCircle style={{ color: 'var(--nukrop-accent)', width: '20px', height: '20px', flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '13.5px' }}>
+                  <strong style={{ color: '#FFFFFF', display: 'block', marginBottom: '4px' }}>NuKropAI Is 100% Free For Indian Smallholders</strong>
+                  Because NuKropAI does not sell commercial software subscriptions, digital credits, or physical commodities, <strong>a monetary refund policy is not applicable</strong>. We do not accept or process consumer payments.
+                </div>
+              </div>
+
+              <h3 style={{ color: '#FFFFFF', fontSize: '17px', marginTop: '20px', marginBottom: '8px' }}>
+                Fraud Prevention
+              </h3>
+              <p>
+                NuKropAI will never solicit payments, UPI transfers, or bank credentials. If any entity charges you claiming to represent NuKropAI, report it immediately to our Grievance Desk at <code style={{ color: 'var(--nukrop-accent)' }}>grievance@nukrop.ai</code>.
               </p>
             </div>
           )}

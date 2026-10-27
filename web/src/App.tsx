@@ -20,20 +20,28 @@ import {
   Search,
   FileText,
   Cookie,
-  SlidersHorizontal
+  SlidersHorizontal,
+  AlertCircle
 } from 'lucide-react';
 import { ToastProvider, useToast } from './components/Toast';
 import { CommandMenu } from './components/CommandMenu';
 import { LegalModal, LegalTab } from './components/LegalModal';
+import { LegalPage } from './components/LegalPages';
+import { NotFound } from './components/NotFound';
 import { CookieConsent } from './components/CookieConsent';
+import { ContactForm } from './components/ContactForm';
 import MandiWeb from './components/MandiWeb';
 import ScannerWeb from './components/ScannerWeb';
+import { analytics } from './utils/analytics';
 
 function AppContent() {
   const { showToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrollProgress, setScrollProgress] = useState(0);
+
+  // Client Routing State
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname.toLowerCase());
 
   // Command Menu & Legal Modal States
   const [commandMenuOpen, setCommandMenuOpen] = useState(false);
@@ -46,6 +54,21 @@ function AppContent() {
     district: string;
     commodity: string;
   } | null>(null);
+
+  // Sync with browser history popstate
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentPath(window.location.pathname.toLowerCase());
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path.toLowerCase());
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Scroll Progress Tracker
   useEffect(() => {
@@ -72,6 +95,23 @@ function AppContent() {
     setActiveLegalTab(tab);
     setLegalModalOpen(true);
   };
+
+  // Dedicated Route Handlers
+  if (currentPath === '/privacy' || currentPath === '/privacy.html') {
+    return <LegalPage page="privacy" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath === '/terms' || currentPath === '/terms.html') {
+    return <LegalPage page="terms" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath === '/cookies' || currentPath === '/cookies.html') {
+    return <LegalPage page="cookies" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath === '/refund' || currentPath === '/refund.html') {
+    return <LegalPage page="refund" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath !== '/' && !currentPath.startsWith('/#') && !currentPath.startsWith('/index.html')) {
+    return <NotFound onNavigateHome={() => navigate('/')} onOpenCommandMenu={() => setCommandMenuOpen(true)} />;
+  }
 
   const faqs = [
     {
@@ -112,7 +152,7 @@ function AppContent() {
         <div className="nav-pill-wrapper">
           
           {/* Logo */}
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }} aria-label="NuKropAI Homepage">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }} aria-label="NuKropAI Homepage">
             <div style={{ 
               padding: '6px', 
               background: 'linear-gradient(135deg, rgba(200, 232, 55, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%)', 
@@ -136,6 +176,7 @@ function AppContent() {
             <a href="#scanner" className="nav-link">AI Scanner</a>
             <a href="#architecture" className="nav-link">AgriTech Suite</a>
             <a href="#languages" className="nav-link">Languages</a>
+            <a href="#contact" className="nav-link">Support Desk</a>
             <a href="#faq" className="nav-link">FAQ</a>
             
             {/* Command Menu Trigger Pill */}
@@ -158,7 +199,7 @@ function AppContent() {
               aria-label="Open Command Menu (Ctrl+K or Cmd+K)"
             >
               <Search style={{ width: '13px', height: '13px', color: 'var(--nukrop-accent)' }} />
-              <span>Search Actions</span>
+              <span>Quick Actions</span>
               <kbd style={{
                 background: 'rgba(255, 255, 255, 0.1)',
                 padding: '1px 5px',
@@ -172,7 +213,10 @@ function AppContent() {
             <a 
               href="/NuKropAI.apk" 
               download="NuKropAI.apk"
-              onClick={() => showToast({ type: 'info', message: 'Starting NuKropAI APK download (~52 MB)...' })}
+              onClick={() => {
+                analytics.track('download_apk_click', { source: 'navbar_pill', version: '2.0' });
+                showToast({ type: 'info', message: 'Starting NuKropAI APK download (~52 MB)...' });
+              }}
               className="nukrop-btn" 
               style={{ 
                 padding: '8px 18px', 
@@ -205,6 +249,7 @@ function AppContent() {
         <a href="#scanner" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>AI Disease Scanner</a>
         <a href="#architecture" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>AgriTech Suite</a>
         <a href="#languages" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Languages</a>
+        <a href="#contact" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Farmer Support Desk</a>
         <a href="#faq" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>FAQ</a>
         
         <button
@@ -235,6 +280,7 @@ function AppContent() {
           className="nukrop-btn" 
           onClick={() => {
             setMobileMenuOpen(false);
+            analytics.track('download_apk_click', { source: 'mobile_drawer', version: '2.0' });
             showToast({ type: 'info', message: 'Downloading NuKropAI APK...' });
           }}
           style={{ width: '100%', padding: '12px 20px', fontSize: '14px', marginTop: '6px', borderRadius: '12px' }}
@@ -303,7 +349,10 @@ function AppContent() {
             <a
               href="/NuKropAI.apk"
               download="NuKropAI.apk"
-              onClick={() => showToast({ type: 'info', message: 'Downloading NuKropAI APK (~52 MB)...' })}
+              onClick={() => {
+                analytics.track('download_apk_click', { source: 'hero_primary', version: '2.0' });
+                showToast({ type: 'info', message: 'Downloading NuKropAI APK (~52 MB)...' });
+              }}
               className="nukrop-btn"
               style={{
                 padding: '16px 36px',
@@ -439,7 +488,7 @@ function AppContent() {
               <div 
                 role="img"
                 aria-label="Crop disease scanning sample"
-                style={{ height: '190px', backgroundImage: 'url("/feature_scan.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ height: '190px', backgroundImage: 'url("/feature_scan.webp"), url("/feature_scan.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
               ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
@@ -457,7 +506,7 @@ function AppContent() {
               <div 
                 role="img"
                 aria-label="Mandi trading market"
-                style={{ height: '190px', backgroundImage: 'url("/feature_mandi.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ height: '190px', backgroundImage: 'url("/feature_mandi.webp"), url("/feature_mandi.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
               ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
@@ -476,7 +525,7 @@ function AppContent() {
               <div 
                 role="img"
                 aria-label="Government agricultural scheme verification"
-                style={{ height: '190px', backgroundImage: 'url("/feature_subsidy.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ height: '190px', backgroundImage: 'url("/feature_subsidy.webp"), url("/feature_subsidy.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
               ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
@@ -494,7 +543,7 @@ function AppContent() {
               <div 
                 role="img"
                 aria-label="Hyperlocal weather radar preview"
-                style={{ height: '190px', backgroundImage: 'url("/feature_weather.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ height: '190px', backgroundImage: 'url("/feature_weather.webp"), url("/feature_weather.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
               ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
@@ -513,7 +562,7 @@ function AppContent() {
               <div 
                 role="img"
                 aria-label="Soil testing and nutrient profile"
-                style={{ height: '190px', backgroundImage: 'url("/feature_soil.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ height: '190px', backgroundImage: 'url("/feature_soil.webp"), url("/feature_soil.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
               ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
@@ -531,7 +580,7 @@ function AppContent() {
               <div 
                 role="img"
                 aria-label="Vernacular agronomy copilot"
-                style={{ height: '190px', backgroundImage: 'url("/feature_advisor.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                style={{ height: '190px', backgroundImage: 'url("/feature_advisor.webp"), url("/feature_advisor.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
               ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
@@ -682,6 +731,10 @@ function AppContent() {
         </section>
 
 
+        {/* ═════════════════ CONTACT & DPDP GRIEVANCE FORM ═════════════════ */}
+        <ContactForm />
+
+
         {/* ═════════════════ FAQ ACCORDION ═════════════════ */}
         <section id="faq" className="site-container section-spacing">
           <div style={{ textAlign: 'center', marginBottom: '36px' }}>
@@ -780,17 +833,22 @@ function AppContent() {
                 Platform &amp; Tools
               </h4>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <li><a href="#features" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>6 Core Pillars</a></li>
-                <li><a href="#mandi" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>Live Mandi Rates</a></li>
-                <li><a href="#scanner" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>AI Disease Scanner</a></li>
-                <li><a href="#architecture" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>AgriTech Suite</a></li>
-                <li><a href="#faq" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>FAQ &amp; Manual</a></li>
+                <li><a href="#features" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>6 Core Pillars</a></li>
+                <li><a href="#mandi" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>Live Mandi Rates</a></li>
+                <li><a href="#scanner" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>AI Disease Scanner</a></li>
+                <li><a href="#architecture" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>AgriTech Suite</a></li>
+                <li><a href="#contact" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>Farmer Support Desk</a></li>
+                <li><a href="#faq" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>FAQ &amp; Manual</a></li>
                 <li>
                   <a 
                     href="/NuKropAI.apk" 
                     download="NuKropAI.apk" 
-                    onClick={() => showToast({ type: 'info', message: 'Downloading NuKropAI APK...' })}
-                    style={{ color: 'var(--nukrop-accent)', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700' }}
+                    onClick={() => {
+                      analytics.track('download_apk_click', { source: 'footer_link', version: '2.0' });
+                      showToast({ type: 'info', message: 'Downloading NuKropAI APK...' });
+                    }}
+                    className="touch-target"
+                    style={{ color: 'var(--nukrop-accent)', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center' }}
                   >
                     Download APK (v2.0 Latest)
                   </a>
@@ -806,7 +864,8 @@ function AppContent() {
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <li>
                   <button 
-                    onClick={() => openLegal('privacy')}
+                    onClick={() => navigate('/privacy')}
+                    className="touch-target"
                     style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
                     <FileText style={{ width: '13px', height: '13px' }} />
@@ -815,7 +874,8 @@ function AppContent() {
                 </li>
                 <li>
                   <button 
-                    onClick={() => openLegal('terms')}
+                    onClick={() => navigate('/terms')}
+                    className="touch-target"
                     style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
                     <FileText style={{ width: '13px', height: '13px' }} />
@@ -824,7 +884,8 @@ function AppContent() {
                 </li>
                 <li>
                   <button 
-                    onClick={() => openLegal('cookies')}
+                    onClick={() => navigate('/cookies')}
+                    className="touch-target"
                     style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
                     <Cookie style={{ width: '13px', height: '13px' }} />
@@ -833,10 +894,21 @@ function AppContent() {
                 </li>
                 <li>
                   <button 
+                    onClick={() => navigate('/refund')}
+                    className="touch-target"
+                    style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <AlertCircle style={{ width: '13px', height: '13px' }} />
+                    <span>Refund Policy Notice</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
                     onClick={() => {
                       const event = new CustomEvent('open-cookie-preferences');
                       window.dispatchEvent(event);
                     }}
+                    className="touch-target"
                     style={{ background: 'none', border: 'none', color: 'var(--nukrop-accent)', fontSize: '13px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
                   >
                     <SlidersHorizontal style={{ width: '13px', height: '13px' }} />

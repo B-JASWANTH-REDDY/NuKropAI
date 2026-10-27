@@ -26,7 +26,7 @@ export interface CommandItem {
 interface CommandMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenLegal: (tab: 'privacy' | 'terms' | 'cookies') => void;
+  onOpenLegal: (tab: 'privacy' | 'terms' | 'cookies' | 'refund') => void;
   onSelectMarketShortcut?: (state: string, district: string, commodity: string) => void;
 }
 
@@ -187,6 +187,16 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       }
     },
     {
+      id: 'nav-contact',
+      title: 'Farmer Support & Data Rights Desk',
+      category: 'Navigation',
+      icon: <HelpCircle style={{ width: '16px', height: '16px', color: '#10B981' }} />,
+      action: () => {
+        onClose();
+        document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+      }
+    },
+    {
       id: 'legal-privacy',
       title: 'Privacy Policy (DPDP Act 2023 Compliant)',
       category: 'Legal & Compliance',
@@ -214,6 +224,16 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
       action: () => {
         onClose();
         onOpenLegal('cookies');
+      }
+    },
+    {
+      id: 'legal-refund',
+      title: 'Refund Policy & Free Service Notice',
+      category: 'Legal & Compliance',
+      icon: <FileText style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />,
+      action: () => {
+        onClose();
+        onOpenLegal('refund');
       }
     }
   ];

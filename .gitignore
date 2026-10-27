@@ -58,6 +58,7 @@ test_*.mjs
 tests/**/__pycache__/
 tests/**/*.pyc
 *.txt
+!web/public/robots.txt
 *.png
 !web/public/*.png
 !app/src/main/res/**/*.png

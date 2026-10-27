@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { TrendingUp, Activity, Search, RefreshCw, AlertCircle, Database, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../api/client';
+import { MandiCardSkeleton } from './Skeleton';
+import { useToast } from './Toast';
 
-interface MandiItem {
+export interface MandiItem {
   state: string;
   district: string;
   market: string;
@@ -17,20 +19,55 @@ interface MandiItem {
   fetched_at?: string;
 }
 
-export default function MandiWeb() {
+interface MandiWebProps {
+  initialFilter?: {
+    state: string;
+    district: string;
+    commodity: string;
+  } | null;
+}
+
+export default function MandiWeb({ initialFilter }: MandiWebProps) {
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MandiItem[]>([]);
   const [error, setError] = useState('');
-  const [dataSource, setDataSource] = useState<'live' | 'cache' | 'none'>('none');
+  const [dataSource, setDataSource] = useState<'live' | 'cache' | 'stale' | 'none'>('none');
   const [lastFetched, setLastFetched] = useState<string>('');
   
-  const [state, setState] = useState('Uttar Pradesh');
-  const [district, setDistrict] = useState('Agra');
-  const [commodity, setCommodity] = useState('Potato');
+  const [state, setState] = useState(initialFilter?.state || 'Uttar Pradesh');
+  const [district, setDistrict] = useState(initialFilter?.district || 'Agra');
+  const [commodity, setCommodity] = useState(initialFilter?.commodity || 'Potato');
 
-  const fetchData = async () => {
-    setLoading(true);
+  // Stale-While-Revalidate cache key
+  const getCacheKey = useCallback((s: string, d: string, c: string) => {
+    return `nk_mandi_${s.trim().toLowerCase()}_${d.trim().toLowerCase()}_${c.trim().toLowerCase()}`;
+  }, []);
+
+  const fetchData = useCallback(async (isBackgroundRevalidate = false) => {
+    if (!isBackgroundRevalidate) {
+      setLoading(true);
+    }
     setError('');
+
+    const cacheKey = getCacheKey(state, district, commodity);
+
+    // Stale-While-Revalidate: Serve immediate cached records if available
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed.records) && parsed.records.length > 0) {
+          setData(parsed.records);
+          setDataSource('cache');
+          if (parsed.timestamp) {
+            setLastFetched(parsed.timestamp);
+          }
+        }
+      }
+    } catch {
+      // Ignore localStorage parse errors
+    }
     
     try {
       const stateEnc = encodeURIComponent(state.trim());
@@ -66,8 +103,8 @@ export default function MandiWeb() {
 
       // 2. Client fallback via direct Supabase REST read-only view
       if (records.length === 0) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://yxjqseiegwjdfnccdchk.supabase.co';
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4anFzZWllZ3dqZGZuY2NkY2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDU2NTMsImV4cCI6MjEwMTUyMTY1M30.J4swglpV5qu3hRZFll3aqhG1Y2G9mUllvXMjKq6Ikmo';
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
         if (supabaseUrl && supabaseAnonKey) {
           try {
@@ -116,38 +153,96 @@ export default function MandiWeb() {
         }
       }
 
-      setData(records);
-      setDataSource(records.length > 0 ? sourceTag : 'none');
-      setLastFetched(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      const syncTimeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      if (records.length > 0) {
+        setData(records);
+        setDataSource(sourceTag);
+        setLastFetched(syncTimeStr);
+        // Persist fresh response to localStorage for SWR
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            records,
+            timestamp: syncTimeStr
+          }));
+        } catch {
+          // Ignore quota errors
+        }
+      } else {
+        // No records from network; check if we had cached data
+        if (data.length === 0) {
+          setDataSource('none');
+        } else {
+          setDataSource('stale');
+        }
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch verified Mandi rates from network');
+      if (data.length > 0) {
+        setDataSource('stale');
+        showToast({
+          type: 'info',
+          message: 'Displaying verified cached rates. Network synchronization will retry automatically.'
+        });
+      } else {
+        setError(err.message || 'Failed to fetch verified Mandi rates from network');
+        showToast({
+          type: 'error',
+          message: 'Unable to connect to Agmarknet market service.'
+        });
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [state, district, commodity, getCacheKey, data.length, showToast]);
+
+  // Sync when initialFilter prop changes
+  const prevFilterRef = useRef(initialFilter);
+  useEffect(() => {
+    if (initialFilter && (
+      initialFilter.state !== prevFilterRef.current?.state ||
+      initialFilter.district !== prevFilterRef.current?.district ||
+      initialFilter.commodity !== prevFilterRef.current?.commodity
+    )) {
+      prevFilterRef.current = initialFilter;
+      setState(initialFilter.state);
+      setDistrict(initialFilter.district);
+      setCommodity(initialFilter.commodity);
+    }
+  }, [initialFilter]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [state, district, commodity]);
 
   return (
-    <section style={{ padding: '60px 20px', maxWidth: '1000px', margin: '0 auto' }}>
+    <section id="mandi" className="site-container section-spacing" style={{ maxWidth: '1080px', margin: '0 auto' }}>
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '36px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+        <div style={{ display: 'inline-flex', padding: '4px 14px', background: 'rgba(200, 232, 55, 0.1)', border: '1px solid rgba(200, 232, 55, 0.25)', borderRadius: '100px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--nukrop-accent)', fontWeight: '700', letterSpacing: '0.04em' }}>
+            GENUINE GOVERNMENT MARKET INTELLIGENCE
+          </span>
+        </div>
+        <h2 style={{ fontSize: 'clamp(26px, 4vw, 36px)', color: '#FFFFFF', fontWeight: '800', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
           <Activity style={{ color: 'var(--nukrop-accent)', width: '32px', height: '32px' }} />
-          Live Mandi Prices & APMC Quotes
+          Live APMC Mandi Trading Rates
         </h2>
-        <p style={{ color: 'var(--nukrop-text-dim)', maxWidth: '640px', margin: '0 auto' }}>
-          Authentic agricultural trading records from Government of India (Agmarknet / DMI) with zero synthetic values.
+        <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '15.5px', maxWidth: '680px', margin: '0 auto' }}>
+          Authentic daily trading journals ingested twice-daily from Ministry of Agriculture (Agmarknet / DMI). Zero synthetic or simulated prices.
         </p>
       </div>
 
-      <div className="glass-card" style={{ padding: '24px' }}>
+      <div className="glass-card" style={{ padding: 'clamp(20px, 3.5vw, 32px)' }}>
         {/* Search Controls */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '180px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--nukrop-text-dim)', display: 'block', marginBottom: '6px' }}>State</label>
+        <form 
+          onSubmit={(e) => { e.preventDefault(); fetchData(); }}
+          style={{ display: 'flex', gap: '14px', marginBottom: '20px', flexWrap: 'wrap' }}
+        >
+          <div style={{ flex: '1 1 200px' }}>
+            <label htmlFor="mandi-state" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--nukrop-text-dim)', display: 'block', marginBottom: '6px' }}>
+              State
+            </label>
             <input 
+              id="mandi-state"
               type="text" 
               className="nukrop-input" 
               placeholder="State (e.g. Uttar Pradesh)" 
@@ -156,9 +251,13 @@ export default function MandiWeb() {
               style={{ width: '100%' }}
             />
           </div>
-          <div style={{ flex: 1, minWidth: '180px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--nukrop-text-dim)', display: 'block', marginBottom: '6px' }}>District / Market</label>
+
+          <div style={{ flex: '1 1 200px' }}>
+            <label htmlFor="mandi-district" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--nukrop-text-dim)', display: 'block', marginBottom: '6px' }}>
+              District / APMC Market
+            </label>
             <input 
+              id="mandi-district"
               type="text" 
               className="nukrop-input" 
               placeholder="District / APMC (e.g. Agra)" 
@@ -167,9 +266,13 @@ export default function MandiWeb() {
               style={{ width: '100%' }}
             />
           </div>
-          <div style={{ flex: 1, minWidth: '180px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--nukrop-text-dim)', display: 'block', marginBottom: '6px' }}>Commodity</label>
+
+          <div style={{ flex: '1 1 200px' }}>
+            <label htmlFor="mandi-commodity" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--nukrop-text-dim)', display: 'block', marginBottom: '6px' }}>
+              Crop Commodity
+            </label>
             <input 
+              id="mandi-commodity"
               type="text" 
               className="nukrop-input" 
               placeholder="Crop (e.g. Potato, Wheat)" 
@@ -178,17 +281,28 @@ export default function MandiWeb() {
               style={{ width: '100%' }}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', minWidth: '120px' }}>
-            <button className="nukrop-btn" onClick={fetchData} disabled={loading} style={{ width: '100%', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {loading ? <RefreshCw className="animate-spin" style={{ width: '16px', height: '16px' }} /> : <Search style={{ width: '16px', height: '16px' }} />}
-              Search
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', flex: '0 0 auto' }}>
+            <button 
+              type="submit"
+              className="nukrop-btn" 
+              disabled={loading} 
+              style={{ height: '44px', minWidth: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              aria-label="Search Mandi Rates"
+            >
+              {loading ? (
+                <RefreshCw className="animate-spin" style={{ width: '16px', height: '16px' }} />
+              ) : (
+                <Search style={{ width: '16px', height: '16px' }} />
+              )}
+              <span>Search Rates</span>
             </button>
           </div>
-        </div>
+        </form>
 
         {/* Quick Location Shortcuts */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '12px', color: 'var(--nukrop-text-dim)' }}>Quick Filters:</span>
+          <span style={{ fontSize: '12px', color: 'var(--nukrop-text-dim)', fontWeight: 600 }}>Quick Verified Mandis:</span>
           {[
             { label: 'Agra APMC (Potato)', s: 'Uttar Pradesh', d: 'Agra', c: 'Potato' },
             { label: 'Agra APMC (Wheat)', s: 'Uttar Pradesh', d: 'Agra', c: 'Wheat' },
@@ -197,14 +311,19 @@ export default function MandiWeb() {
           ].map((item, idx) => (
             <button
               key={idx}
+              type="button"
               onClick={() => { setState(item.s); setDistrict(item.d); setCommodity(item.c); }}
+              className="touch-target"
               style={{
-                background: 'rgba(200, 232, 55, 0.08)',
-                border: '1px solid rgba(200, 232, 55, 0.25)',
+                background: (state === item.s && district === item.d && commodity === item.c)
+                  ? 'rgba(200, 232, 55, 0.2)'
+                  : 'rgba(200, 232, 55, 0.08)',
+                border: `1px solid ${(state === item.s && district === item.d && commodity === item.c) ? 'var(--nukrop-accent)' : 'rgba(200, 232, 55, 0.25)'}`,
                 color: 'var(--nukrop-text)',
                 borderRadius: '16px',
-                padding: '4px 12px',
-                fontSize: '11px',
+                padding: '6px 14px',
+                fontSize: '12px',
+                fontWeight: 600,
                 cursor: 'pointer'
               }}
             >
@@ -214,126 +333,151 @@ export default function MandiWeb() {
         </div>
 
         {/* Provenance & Status Banner */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 18px',
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          borderRadius: '12px',
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Database style={{ width: '14px', height: '14px', color: 'var(--nukrop-accent)' }} />
-            <span style={{ fontSize: '12px', color: 'var(--nukrop-text)' }}>
-              Source: <strong>Agmarknet / DMI (Govt of India)</strong>
+            <Database style={{ width: '15px', height: '15px', color: 'var(--nukrop-accent)' }} />
+            <span style={{ fontSize: '12.5px', color: 'var(--nukrop-text)' }}>
+              Source: <strong>Agmarknet / DMI (Govt of India Official Journal)</strong>
             </span>
           </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {lastFetched && (
-              <span style={{ fontSize: '11px', color: 'var(--nukrop-text-dim)' }}>
-                Sync time: {lastFetched}
+              <span className="tabular-nums" style={{ fontSize: '11.5px', color: 'var(--nukrop-text-dim)' }}>
+                Sync: {lastFetched}
               </span>
             )}
             <span style={{ 
-              fontSize: '10px', 
-              fontWeight: '700', 
-              padding: '2px 8px', 
-              borderRadius: '4px',
-              background: dataSource === 'live' ? 'rgba(34, 197, 94, 0.2)' : dataSource === 'cache' ? 'rgba(250, 204, 21, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-              color: dataSource === 'live' ? 'var(--nukrop-badge-green)' : dataSource === 'cache' ? 'var(--nukrop-warning)' : 'var(--nukrop-error)',
-              border: `1px solid ${dataSource === 'live' ? 'rgba(34, 197, 94, 0.4)' : dataSource === 'cache' ? 'rgba(250, 204, 21, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
+              fontSize: '10.5px', 
+              fontWeight: '800', 
+              letterSpacing: '0.04em',
+              padding: '3px 10px', 
+              borderRadius: '6px',
+              background: dataSource === 'live' 
+                ? 'rgba(34, 197, 94, 0.18)' 
+                : dataSource === 'cache' 
+                ? 'rgba(250, 204, 21, 0.18)' 
+                : dataSource === 'stale'
+                ? 'rgba(245, 158, 11, 0.18)'
+                : 'rgba(239, 68, 68, 0.18)',
+              color: dataSource === 'live' 
+                ? '#22C55E' 
+                : dataSource === 'cache' 
+                ? '#FACC15' 
+                : dataSource === 'stale'
+                ? '#F59E0B'
+                : '#EF4444',
+              border: `1px solid ${
+                dataSource === 'live' 
+                  ? 'rgba(34, 197, 94, 0.4)' 
+                  : dataSource === 'cache' 
+                  ? 'rgba(250, 204, 21, 0.4)' 
+                  : dataSource === 'stale'
+                  ? 'rgba(245, 158, 11, 0.4)'
+                  : 'rgba(239, 68, 68, 0.4)'
+              }`
             }}>
-              {dataSource === 'live' ? '● LIVE APMC' : dataSource === 'cache' ? '● VERIFIED CACHE' : '● FEED OFFLINE'}
+              {dataSource === 'live' 
+                ? '● LIVE APMC' 
+                : dataSource === 'cache' 
+                ? '● VERIFIED CACHE' 
+                : dataSource === 'stale'
+                ? '● OFFLINE STALE'
+                : '● FEED OFFLINE'}
             </span>
           </div>
         </div>
 
         {/* Dynamic States */}
-        {loading ? (
+        {loading && data.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[1, 2, 3].map(i => (
-              <div 
-                key={i} 
-                style={{ 
-                  padding: '20px', 
-                  borderRadius: '12px', 
-                  background: 'rgba(255,255,255,0.03)', 
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ width: '160px', height: '18px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }}></div>
-                  <div style={{ width: '110px', height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}></div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                  <div style={{ width: '90px', height: '22px', background: 'rgba(200, 232, 55, 0.15)', borderRadius: '4px' }}></div>
-                  <div style={{ width: '80px', height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}></div>
-                </div>
-              </div>
-            ))}
+            <MandiCardSkeleton />
+            <MandiCardSkeleton />
+            <MandiCardSkeleton />
           </div>
-        ) : error ? (
-          <div style={{ padding: '28px', textAlign: 'center', color: 'var(--nukrop-error)', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-            <AlertCircle style={{ width: '32px', height: '32px', margin: '0 auto 12px auto' }} />
-            <strong style={{ display: 'block', marginBottom: '8px', fontSize: '15px' }}>Market Data Stream Offline</strong>
-            <p style={{ fontSize: '13px', color: 'var(--nukrop-text-dim)', marginBottom: '16px' }}>{error}</p>
-            <button className="nukrop-btn" onClick={fetchData} style={{ padding: '8px 20px', fontSize: '13px' }}>
+        ) : error && data.length === 0 ? (
+          <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--nukrop-error)', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '14px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+            <AlertCircle style={{ width: '36px', height: '36px', margin: '0 auto 12px auto' }} />
+            <strong style={{ display: 'block', marginBottom: '8px', fontSize: '16px' }}>Market Data Stream Offline</strong>
+            <p style={{ fontSize: '13.5px', color: 'var(--nukrop-text-dim)', marginBottom: '18px', maxWidth: '480px', margin: '0 auto 18px' }}>
+              {error}
+            </p>
+            <button 
+              className="nukrop-btn" 
+              onClick={() => fetchData()} 
+              style={{ padding: '10px 24px', fontSize: '13px' }}
+            >
               <RefreshCw style={{ width: '14px', height: '14px' }} /> Retry Connection
             </button>
           </div>
         ) : data.length === 0 ? (
           <div style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--nukrop-text-muted)' }}>
-            <Activity style={{ width: '40px', height: '40px', color: 'var(--nukrop-text-dim)', margin: '0 auto 12px auto', opacity: 0.5 }} />
-            <strong style={{ fontSize: '16px', display: 'block', color: 'var(--nukrop-text)', marginBottom: '6px' }}>
+            <Activity style={{ width: '42px', height: '42px', color: 'var(--nukrop-text-dim)', margin: '0 auto 14px auto', opacity: 0.5 }} />
+            <strong style={{ fontSize: '17px', display: 'block', color: 'var(--nukrop-text)', marginBottom: '8px' }}>
               No Mandi Trading Records Found
             </strong>
-            <p style={{ fontSize: '13px', color: 'var(--nukrop-text-dim)', maxWidth: '400px', margin: '0 auto' }}>
-              No daily quotes recorded for <strong>{commodity}</strong> in <strong>{district ? `${district}, ` : ''}{state}</strong> on this trading day. Try selecting a popular market shortcut above.
+            <p style={{ fontSize: '13.5px', color: 'var(--nukrop-text-dim)', maxWidth: '440px', margin: '0 auto' }}>
+              No daily transactions reported for <strong>{commodity}</strong> in <strong>{district ? `${district}, ` : ''}{state}</strong> on this trading cycle. Select a popular market shortcut above.
             </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {data.map((item, idx) => (
               <div 
-                key={idx} 
+                key={`${item.market}-${item.commodity}-${item.arrival_date}-${idx}`} 
                 style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
                   alignItems: 'center',
-                  padding: '20px', 
-                  background: 'rgba(255,255,255,0.02)', 
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.07)',
+                  padding: '20px 24px', 
+                  background: 'rgba(255, 255, 255, 0.02)', 
+                  borderRadius: '14px',
+                  border: '1px solid rgba(255, 255, 255, 0.07)',
                   transition: 'border-color 0.2s',
                   flexWrap: 'wrap',
-                  gap: '12px'
+                  gap: '14px'
                 }}
               >
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <strong style={{ fontSize: '17px', color: 'var(--nukrop-text)' }}>{item.market}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <strong style={{ fontSize: '18px', color: 'var(--nukrop-text)' }}>{item.market}</strong>
                     {item.variety && (
-                      <span style={{ fontSize: '11px', background: 'rgba(200, 232, 55, 0.12)', color: 'var(--nukrop-accent)', padding: '2px 8px', borderRadius: '4px', fontWeight: '600' }}>
+                      <span style={{ fontSize: '11px', background: 'rgba(200, 232, 55, 0.12)', color: 'var(--nukrop-accent)', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>
                         {item.variety}
                       </span>
                     )}
                   </div>
-                  <span style={{ fontSize: '13px', color: 'var(--nukrop-text-dim)' }}>
+                  <span style={{ fontSize: '13.5px', color: 'var(--nukrop-text-dim)' }}>
                     {item.district}, {item.state} • <strong>{item.commodity}</strong>
                   </span>
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end', marginBottom: '4px' }}>
-                    <TrendingUp style={{ color: 'var(--nukrop-accent)', width: '16px', height: '16px' }} />
-                    <strong style={{ fontSize: '22px', color: 'var(--nukrop-accent)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end', marginBottom: '6px' }}>
+                    <TrendingUp style={{ color: 'var(--nukrop-accent)', width: '18px', height: '18px' }} />
+                    <strong className="tabular-nums" style={{ fontSize: '24px', color: 'var(--nukrop-accent)' }}>
                       ₹{item.modal_price.toLocaleString('en-IN')}
                     </strong>
                     <span style={{ fontSize: '12px', color: 'var(--nukrop-text-dim)' }}>/ Qtl</span>
                   </div>
                   
-                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', fontSize: '11px', color: 'var(--nukrop-text-muted)' }}>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', fontSize: '11.5px', color: 'var(--nukrop-text-muted)' }}>
                     {item.min_price && item.max_price && (
-                      <span>Range: ₹{item.min_price} - ₹{item.max_price}</span>
+                      <span className="tabular-nums">Range: ₹{item.min_price} - ₹{item.max_price}</span>
                     )}
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Calendar style={{ width: '11px', height: '11px' }} /> {item.arrival_date}
+                    <span className="tabular-nums" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Calendar style={{ width: '12px', height: '12px' }} /> Reported: {item.arrival_date}
                     </span>
                   </div>
                 </div>

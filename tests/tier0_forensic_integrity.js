@@ -203,7 +203,7 @@ describe('Tier 0.2 — Dynamic Script VM Execution & Network Interception', () =
 
       // Allow async execution to process fetch
       for (let i = 0; i < 20; i++) {
-        if (interceptedUrl) break;
+        if (interceptedUrl && interceptedUrl.includes('/rest/v1/disease_scans')) break;
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 

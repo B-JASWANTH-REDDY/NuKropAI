@@ -8,6 +8,7 @@ on:
 jobs:
   execute-pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Codebase Clone Checkout
         uses: actions/checkout@v4

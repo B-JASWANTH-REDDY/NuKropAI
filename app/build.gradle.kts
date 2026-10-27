@@ -15,9 +15,9 @@ android {
   defaultConfig {
     applicationId = "com.nukrop.app"
     minSdk = 24
-    targetSdk = 34
-    versionCode = 1
-    versionName = "1.0"
+    targetSdk = 36
+    versionCode = 2
+    versionName = "1.1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -34,11 +34,26 @@ android {
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/debug.keystore"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-      keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
-      keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+      val keystorePath = System.getenv("KEYSTORE_PATH")
+      val isStrictSigning = System.getenv("STRICT_RELEASE_SIGNING") == "true" || System.getenv("CI") == "true"
+      if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+        storeFile = file(keystorePath)
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = System.getenv("KEY_ALIAS")
+        keyPassword = System.getenv("KEY_PASSWORD")
+      } else if (isStrictSigning) {
+        throw org.gradle.api.GradleException(
+          "FATAL: Production release signing is enforced (CI or STRICT_RELEASE_SIGNING=true), " +
+          "but KEYSTORE_PATH was not provided or file does not exist ($keystorePath). " +
+          "Refusing to silently sign production release APK with debug keys."
+        )
+      } else {
+        println("⚠️ [Signing Warning] KEYSTORE_PATH not provided or missing. Falling back to debug.keystore for local offline testing only.")
+        storeFile = file("${rootDir}/debug.keystore")
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -50,12 +65,15 @@ android {
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
+      isCrunchPngs = true
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      applicationIdSuffix = ".debug"
+      isDebuggable = true
     }
   }
   compileOptions {
@@ -157,30 +175,34 @@ val projectRootDir = rootDir
 val apkOutputDir = layout.buildDirectory.dir("outputs/apk")
 
 tasks.register("syncApkToWeb") {
-    description = "Syncs the newly built APK directly to the root and web/public directory"
+    description = "Syncs authentic release APK to web public download path (Debug builds cannot overwrite production downloads)"
     notCompatibleWithConfigurationCache("Dynamic file copy to web directory")
     doLast {
         val releaseApk = apkOutputDir.get().file("release/app-release.apk").asFile
-        val debugApk = apkOutputDir.get().file("debug/app-debug.apk").asFile
-        val candidates = listOf(releaseApk, debugApk).filter { it.exists() }
-        val targetApk = candidates.maxByOrNull { it.lastModified() }
-
-        if (targetApk != null && targetApk.exists()) {
+        if (releaseApk.exists()) {
             val rootApk = File(projectRootDir, "NuKropAI.apk")
             val webPublicDir = File(projectRootDir, "web/public")
             webPublicDir.mkdirs()
-            targetApk.copyTo(rootApk, overwrite = true)
-            targetApk.copyTo(File(webPublicDir, "NuKropAI.apk"), overwrite = true)
-            targetApk.copyTo(File(webPublicDir, "NuKropAI_v2.0.apk"), overwrite = true)
-            targetApk.copyTo(File(webPublicDir, "NuKropAI_latest.apk"), overwrite = true)
-            println("✅ [Gradle] Successfully synced ${targetApk.name} (${targetApk.length() / (1024 * 1024)} MB) to NuKropAI.apk and web/public/!")
+            releaseApk.copyTo(rootApk, overwrite = true)
+            releaseApk.copyTo(File(webPublicDir, "NuKropAI.apk"), overwrite = true)
+            releaseApk.copyTo(File(webPublicDir, "NuKropAI_v2.0.apk"), overwrite = true)
+            releaseApk.copyTo(File(webPublicDir, "NuKropAI_latest.apk"), overwrite = true)
+            println("✅ [Gradle] Successfully verified and synced Release APK (${releaseApk.length() / (1024 * 1024)} MB) to public download paths.")
         } else {
-            println("⚠️ [Gradle] No compiled APK found in outputs to sync.")
+            val debugApk = apkOutputDir.get().file("debug/app-debug.apk").asFile
+            if (debugApk.exists()) {
+                val webPublicDir = File(projectRootDir, "web/public")
+                webPublicDir.mkdirs()
+                debugApk.copyTo(File(webPublicDir, "NuKropAI_debug.apk"), overwrite = true)
+                println("ℹ️ [Gradle] Development debug APK built. Synced to NuKropAI_debug.apk. Production downloads preserved.")
+            } else {
+                println("⚠️ [Gradle] No compiled APK found in outputs to sync.")
+            }
         }
     }
 }
 
-tasks.matching { it.name == "assembleRelease" || it.name == "assembleDebug" }.configureEach {
+tasks.matching { it.name == "assembleRelease" }.configureEach {
     finalizedBy("syncApkToWeb")
 }
 

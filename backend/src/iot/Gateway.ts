@@ -65,6 +65,32 @@ export class IoTGateway {
     }
 
     /**
+     * Inspects actual hardware connectivity status
+     */
+    async getDeviceStatus(internalDeviceId: string): Promise<IotDeviceState> {
+        const mapping = this.deviceRegistry.get(internalDeviceId);
+        if (!mapping) {
+            return {
+                status: 'offline',
+                isRunning: false,
+                lastHeartbeat: new Date(0),
+                rawPayload: { error: 'DEVICE_NOT_FOUND_IN_REGISTRY' }
+            };
+        }
+        const provider = this.providers.get(mapping.provider);
+        if (!provider) {
+            return {
+                status: 'offline',
+                isRunning: false,
+                lastHeartbeat: new Date(0),
+                rawPayload: { error: 'PROVIDER_NOT_LOADED' }
+            };
+        }
+        return await provider.getStatus(mapping.providerDeviceId);
+    }
+
+
+    /**
      * Asynchronous Command Pipeline.
      * This pushes a command to the queue, fires it off to the provider, and awaits telemetry verification.
      */

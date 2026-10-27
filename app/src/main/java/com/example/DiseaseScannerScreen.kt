@@ -594,8 +594,9 @@ fun CameraScanner(modifier: Modifier, scanMode: ScanMode, onBack: () -> Unit) {
                         capturedBitmap = bmp
                         val prompt = if (scanMode == ScanMode.CROP) GeminiVisionService.cropScanPrompt() else GeminiVisionService.soilScanPrompt()
                         val resolvedKey = GeminiVisionService.resolveApiKey("")
+                        val compressedBytes = compressAndDownsampleImage(bytes)
                         val res = if (resolvedKey.isNotBlank()) {
-                            GeminiVisionService.analyzeImage(resolvedKey, bytes, prompt)
+                            GeminiVisionService.analyzeImage(resolvedKey, compressedBytes, prompt)
                         } else {
                             Result.failure(Exception("Gemini API key is not configured"))
                         }
@@ -814,8 +815,9 @@ fun CameraScanner(modifier: Modifier, scanMode: ScanMode, onBack: () -> Unit) {
                                         scope.launch {
                                             try {
                                                 val resolvedKey = GeminiVisionService.resolveApiKey("")
+                                                val compressedBytes = compressAndDownsampleImage(bytes)
                                                 val res = if (resolvedKey.isNotBlank()) {
-                                                    GeminiVisionService.analyzeImage(resolvedKey, bytes, prompt)
+                                                    GeminiVisionService.analyzeImage(resolvedKey, compressedBytes, prompt)
                                                 } else {
                                                     Result.failure(Exception("Gemini API key is not configured"))
                                                 }
@@ -953,6 +955,34 @@ fun ScanResultView(modifier: Modifier, raw: String, mode: ScanMode, accent: Colo
     }
 }
 
+fun compressAndDownsampleImage(rawBytes: ByteArray, maxDim: Int = 1024, quality: Int = 85): ByteArray {
+    try {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, options)
+        val width = options.outWidth
+        val height = options.outHeight
+        var sampleSize = 1
+        while (width / (sampleSize * 2) >= maxDim && height / (sampleSize * 2) >= maxDim) {
+            sampleSize *= 2
+        }
+        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        val decoded = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts) ?: return rawBytes
+        val scaled = if (decoded.width > maxDim || decoded.height > maxDim) {
+            val aspect = decoded.width.toFloat() / decoded.height.toFloat()
+            val newW = if (aspect >= 1.0f) maxDim else (maxDim * aspect).toInt()
+            val newH = if (aspect >= 1.0f) (maxDim / aspect).toInt() else maxDim
+            Bitmap.createScaledBitmap(decoded, newW, newH, true)
+        } else {
+            decoded
+        }
+        val out = java.io.ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        return out.toByteArray()
+    } catch (e: Exception) {
+        return rawBytes
+    }
+}
+
 fun saveReportToDownloads(context: android.content.Context, content: String) {
     try {
         val cleanRaw = content.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
@@ -960,7 +990,9 @@ fun saveReportToDownloads(context: android.content.Context, content: String) {
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "NuKropAI_Report_${System.currentTimeMillis()}.json")
             put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
         }
         val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
         if (uri != null) {

@@ -15,6 +15,17 @@
 .cxx
 local.properties
 .env
+.env.*
+*.env
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.jks
+release.keystore
 debug.keystore
 node_modules/
 dist/
@@ -43,6 +54,9 @@ test[0-9]*.js
 test_*.js
 test_*.py
 test_*.mjs
+!tests/**
+tests/**/__pycache__/
+tests/**/*.pyc
 *.txt
 *.png
 !web/public/*.png

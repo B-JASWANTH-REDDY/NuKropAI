@@ -1,0 +1,1314 @@
+Path,Classification,Size,Extension,Findings
+.agents/ORIGINAL_REQUEST.md,Inspected,12083,.md,Not deep-scanned
+.agents/PROJECT.md,Inspected,6797,.md,Not deep-scanned
+.agents/implementer_1/handoff.md,Inspected,2984,.md,Not deep-scanned
+.agents/reviewer_1/handoff.md,Inspected,2051,.md,Not deep-scanned
+.agents/reviewer_2/handoff.md,Inspected,1801,.md,Not deep-scanned
+.agents/reviewer_3/handoff.md,Inspected,3224,.md,Not deep-scanned
+.agents/sentinel/BRIEFING.md,Inspected,1953,.md,Not deep-scanned
+.agents/sentinel_1/BRIEFING.md,Inspected,1076,.md,Not deep-scanned
+.agents/swe_1/BRIEFING.md,Inspected,4337,.md,Not deep-scanned
+.agents/swe_1/DISPATCH.md,Inspected,1480,.md,Not deep-scanned
+.agents/swe_1/progress.md,Inspected,1922,.md,Not deep-scanned
+.agents/teamwork_preview_auditor_1/DISPATCH.md,Inspected,1385,.md,Not deep-scanned
+.agents/teamwork_preview_challenger_api/DISPATCH.md,Inspected,1242,.md,Not deep-scanned
+.agents/teamwork_preview_challenger_ui/BRIEFING.md,Inspected,1756,.md,Not deep-scanned
+.agents/teamwork_preview_challenger_ui/DISPATCH.md,Inspected,1331,.md,Not deep-scanned
+.agents/teamwork_preview_challenger_ui/progress.md,Inspected,651,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_1/BRIEFING.md,Inspected,3052,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_1/DISPATCH.md,Inspected,1222,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_1/handoff.md,Inspected,19606,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_1/progress.md,Inspected,690,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_2/BRIEFING.md,Inspected,2105,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_2/DISPATCH.md,Inspected,2954,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_2/handoff.md,Inspected,33760,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_2/progress.md,Inspected,857,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_3/BRIEFING.md,Inspected,2409,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_3/DISPATCH.md,Inspected,1450,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_3/handoff.md,Inspected,14721,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_3/progress.md,Inspected,838,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/BRIEFING.md,Inspected,2649,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/DISPATCH.md,Inspected,1611,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/api_test_results.txt,Inspected,5372,.txt,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/handoff.md,Inspected,6748,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/progress.md,Inspected,206,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/survey_api_report.md,Inspected,14770,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_api/test_apis.py,Inspected,8478,.py,Clean
+.agents/teamwork_preview_explorer_survey_bugs/BRIEFING.md,Inspected,1261,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs/DISPATCH.md,Inspected,455,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs/progress.md,Inspected,689,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_2/BRIEFING.md,Inspected,1476,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_2/DISPATCH.md,Inspected,1545,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_2/progress.md,Inspected,141,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_3/BRIEFING.md,Inspected,1567,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_3/DISPATCH.md,Inspected,1298,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_3/progress.md,Inspected,586,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_bugs_3/survey_bugs_report.md,Inspected,18895,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_ui/BRIEFING.md,Inspected,2364,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_ui/DISPATCH.md,Inspected,1447,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_ui/handoff.md,Inspected,6701,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_ui/progress.md,Inspected,1675,.md,Not deep-scanned
+.agents/teamwork_preview_explorer_survey_ui/survey_ui_report.md,Inspected,27473,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_1/BRIEFING.md,Inspected,5342,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_1/DISPATCH.md,Inspected,1615,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_1/GATE_STATUS.md,Inspected,779,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_1/plan.md,Inspected,1681,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_1/progress.md,Inspected,1376,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_2/BRIEFING.md,Inspected,4480,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_2/DISPATCH.md,Inspected,1908,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_2/plan.md,Inspected,1591,.md,Not deep-scanned
+.agents/teamwork_preview_orchestrator_2/progress.md,Inspected,787,.md,Not deep-scanned
+.agents/teamwork_preview_reviewer_api/BRIEFING.md,Inspected,2163,.md,Not deep-scanned
+.agents/teamwork_preview_reviewer_api/DISPATCH.md,Inspected,1799,.md,Not deep-scanned
+.agents/teamwork_preview_reviewer_api/progress.md,Inspected,236,.md,Not deep-scanned
+.agents/teamwork_preview_reviewer_ui/BRIEFING.md,Inspected,2505,.md,Not deep-scanned
+.agents/teamwork_preview_reviewer_ui/DISPATCH.md,Inspected,2230,.md,Not deep-scanned
+.agents/teamwork_preview_reviewer_ui/progress.md,Inspected,405,.md,Not deep-scanned
+.agents/teamwork_preview_test_writer_m4/BRIEFING.md,Inspected,2093,.md,Not deep-scanned
+.agents/teamwork_preview_test_writer_m4/DISPATCH.md,Inspected,2816,.md,Not deep-scanned
+.agents/teamwork_preview_test_writer_m4/progress.md,Inspected,166,.md,Not deep-scanned
+.agents/teamwork_preview_worker_api/BRIEFING.md,Inspected,4535,.md,Not deep-scanned
+.agents/teamwork_preview_worker_api/DISPATCH.md,Inspected,2498,.md,Not deep-scanned
+.agents/teamwork_preview_worker_api/handoff.md,Inspected,5552,.md,Not deep-scanned
+.agents/teamwork_preview_worker_api/progress.md,Inspected,861,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1/BRIEFING.md,Inspected,6138,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1/DISPATCH.md,Inspected,6027,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1/handoff.md,Inspected,8199,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1/progress.md,Inspected,1440,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1_ui/BRIEFING.md,Inspected,2886,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1_ui/DISPATCH.md,Inspected,4279,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m1_ui/progress.md,Inspected,1425,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2/BRIEFING.md,Inspected,3592,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2/DISPATCH.md,Inspected,5050,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2/handoff.md,Inspected,3896,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2/progress.md,Inspected,979,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2_backend/BRIEFING.md,Inspected,2654,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2_backend/DISPATCH.md,Inspected,4313,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m2_backend/progress.md,Inspected,990,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m3/BRIEFING.md,Inspected,4230,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m3/DISPATCH.md,Inspected,6689,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m3/handoff.md,Inspected,7384,.md,Not deep-scanned
+.agents/teamwork_preview_worker_m3/progress.md,Inspected,1117,.md,Not deep-scanned
+.agents/teamwork_preview_worker_ui/BRIEFING.md,Inspected,5405,.md,Not deep-scanned
+.agents/teamwork_preview_worker_ui/DISPATCH.md,Inspected,2976,.md,Not deep-scanned
+.agents/teamwork_preview_worker_ui/handoff.md,Inspected,12961,.md,Not deep-scanned
+.agents/teamwork_preview_worker_ui/progress.md,Inspected,1482,.md,Not deep-scanned
+.agents/victory_auditor_1/BRIEFING.md,Inspected,2244,.md,Not deep-scanned
+.agents/victory_auditor_1/DISPATCH.md,Inspected,718,.md,Not deep-scanned
+.agents/victory_auditor_1/progress.md,Inspected,371,.md,Not deep-scanned
+.env.example,Inspected,2137,.example,Clean
+.gemini/rules/nukrop-development-guidelines.md,Inspected,2344,.md,Not deep-scanned
+.github/workflows/android.yml,Inspected,677,.yml,Not deep-scanned
+.github/workflows/backend.yml,Inspected,773,.yml,Not deep-scanned
+.github/workflows/mandi_scheduler.yml,Inspected,972,.yml,Not deep-scanned
+.gitignore,Inspected,715,,Not deep-scanned
+CHANGELOG_SUPERBASE_AND_UI_UPGRADES.md,Inspected,6086,.md,Not deep-scanned
+LICENSE,Inspected,1074,,Not deep-scanned
+NuKropAI-debug.apk,Test or build artifact,60758981,.apk,Binary/Asset (.apk)
+NuKropAI.apk,Test or build artifact,64601143,.apk,Binary/Asset (.apk)
+ORIGINAL_REQUEST.md,Inspected,7685,.md,Not deep-scanned
+PROJECT.md,Inspected,6718,.md,Not deep-scanned
+README.md,Inspected,8536,.md,Not deep-scanned
+TEST_INFRA.md,Inspected,17190,.md,Not deep-scanned
+TEST_READY.md,Inspected,15234,.md,Not deep-scanned
+add_camera.py,Inspected,3410,.py,Clean
+analysis.py,Inspected,2773,.py,Clean
+analyze_logic.js,Inspected,1842,.js,Clean
+app-debug.apk,Test or build artifact,52435511,.apk,Binary/Asset (.apk)
+app/.agents/teamwork_preview_worker_ui/BRIEFING.md,Inspected,5405,.md,Not deep-scanned
+app/.gitignore,Inspected,8,,Not deep-scanned
+app/build.gradle.kts,Inspected,7603,.kts,Clean
+app/proguard-rules.pro,Inspected,4804,.pro,Not deep-scanned
+app/src/androidTest/java/com/example/ExampleInstrumentedTest.kt,Test or build artifact,652,.kt,Not deep-scanned
+app/src/main/AndroidManifest.xml,Inspected,3924,.xml,Clean
+app/src/main/assets/crop-icons/acorn-squash.svg,Inspected,3778,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/adjuma-pepper.svg,Inspected,5092,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/aji-dulce-pepper.svg,Inspected,3858,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/aleppo-pepper.svg,Inspected,3537,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/almond.svg,Inspected,7562,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/anaheim-pepper.svg,Inspected,3151,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/apricot.svg,Inspected,4826,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/arugula.svg,Inspected,11442,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/asian-pear.svg,Inspected,130667,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/asparagus.svg,Inspected,8122,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/atrichoke.svg,Inspected,16107,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/bajra.svg,Inspected,947,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/banana-pepper.svg,Inspected,3939,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/banana.svg,Inspected,1131,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/barley.svg,Inspected,10964,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/basil.svg,Inspected,15064,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/beet.svg,Inspected,2904,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/belgian-endive.svg,Inspected,2625,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/bhindi.svg,Inspected,5735,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/bibb-lettuce.svg,Inspected,9982,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/bing-cherry.svg,Inspected,4430,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/birds-eye-chili.svg,Inspected,3768,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/bishops-crown-pepper.svg,Inspected,4956,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/black-habanero.svg,Inspected,4692,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/black-prince-tomato.svg,Inspected,3506,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/black-salsify.svg,Inspected,6351,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/blackberry.svg,Inspected,11976,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/blackgram.svg,Inspected,701,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/blackpepper.svg,Inspected,1179,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/blue-lake-bean.svg,Inspected,7223,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/blue-oyster.svg,Inspected,35534,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/blueberry.svg,Inspected,10629,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/bok-choy.svg,Inspected,4167,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/borage.svg,Inspected,15909,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/brazilian-starfish-pepper.svg,Inspected,5138,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/brinjal.svg,Inspected,2667,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/broad-bean.svg,Inspected,12219,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/broccoli.svg,Inspected,7267,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/brussel-sprout.svg,Inspected,9596,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/butternut-squash.svg,Inspected,2310,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/california-poppy.svg,Inspected,8224,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cannabis.svg,Inspected,29701,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cantaloupe.svg,Inspected,28670,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/capsicum.svg,Inspected,956,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cardamom.svg,Inspected,832,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/carrot.svg,Inspected,5344,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cascabel-chili.svg,Inspected,6690,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cashew.svg,Inspected,853,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/castor.svg,Inspected,824,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cauliflower.svg,Inspected,6362,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cayenne-pepper.svg,Inspected,2499,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/celeriac-root.svg,Inspected,4887,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/celery.svg,Inspected,6344,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/chamomile.svg,Inspected,11413,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/chantrelle.svg,Inspected,8655,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cheongyang-pepper.svg,Inspected,3004,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cherokee-purple-tomato.svg,Inspected,3894,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cherry-bell-radish.svg,Inspected,3270,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cherry-stuffer-pepper.svg,Inspected,2821,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cherry-tomato.svg,Inspected,3738,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/chickpea.svg,Inspected,781,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/chile-de-aborol-pepper.svg,Inspected,4914,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/chili.svg,Inspected,3768,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/chilli.svg,Inspected,3768,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cilantro.svg,Inspected,4014,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cinnamon-cap.svg,Inspected,14549,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/claytonia.svg,Inspected,9638,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/coconut.svg,Inspected,834,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/coffee.svg,Inspected,981,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/collard-greens.svg,Inspected,16172,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/coriander.svg,Inspected,808,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/corn.svg,Inspected,11778,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cotton.svg,Inspected,1884,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cremini.svg,Inspected,3474,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cubanelle-pepper.svg,Inspected,3905,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cucumber.svg,Inspected,3597,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/cumin.svg,Inspected,711,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/curly-endive.svg,Inspected,34111,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/curly-kale.svg,Inspected,17529,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/dandelion.svg,Inspected,11293,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/datil-pepper.svg,Inspected,3976,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/delicata-squash.svg,Inspected,6314,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/diablito-pepper.svg,Inspected,5873,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/dill.svg,Inspected,7278,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/dundicut-pepper.svg,Inspected,6807,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/echinacea.svg,Inspected,18678,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/eggplant.svg,Inspected,2667,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/facing-heaven-pepper.svg,Inspected,2808,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/fatilii-pepper.svg,Inspected,4492,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/fennel.svg,Inspected,10140,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/french-breakfast-radish.svg,Inspected,4112,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/fresno-pepper.svg,Inspected,3042,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/fuji-apple.svg,Inspected,4850,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/gala-apple.svg,Inspected,6557,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/galangal.svg,Inspected,8181,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/garlic-chive.svg,Inspected,4248,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/garlic.svg,Inspected,4439,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/generic-apple.svg,Inspected,2863,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/generic-flower.svg,Inspected,8118,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/generic-melon.svg,Inspected,2545,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/generic-mushroom.svg,Inspected,2987,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/generic-plant.svg,Inspected,3874,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/german-chamomile.svg,Inspected,19412,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/ghost-pepper.svg,Inspected,4375,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/ginger.svg,Inspected,11415,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/golden-beet.svg,Inspected,2943,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/golden-delicious-apple.svg,Inspected,4926,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/granny-smith-apple.svg,Inspected,4926,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-anjou-pear.svg,Inspected,31254,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-bartlett-pear.svg,Inspected,26094,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-bell-pepper.svg,Inspected,3094,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-birds-eye-chili.svg,Inspected,2116,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-cabbage.svg,Inspected,4100,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-onion.svg,Inspected,2693,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-serrano-pepper.svg,Inspected,3628,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-tabasco-pepper.svg,Inspected,2147,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/green-zebra-tomato.svg,Inspected,9932,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/greengram.svg,Inspected,796,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/groundnut.svg,Inspected,9939,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/guajillo-pepper.svg,Inspected,3524,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/guava.svg,Inspected,952,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/habanero-pepper.svg,Inspected,4219,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/hemp.svg,Inspected,18108,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/hillbilly-tomato.svg,Inspected,7096,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/honeydew.svg,Inspected,4189,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/hop.svg,Inspected,14234,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/hungarian-wax-pepper.svg,Inspected,3654,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/iceberg.svg,Inspected,5237,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/icicle-radish.svg,Inspected,2647,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/indigo.svg,Inspected,21626,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/jalapeno.svg,Inspected,2500,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/japanese-yam.svg,Inspected,3890,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/jowar.svg,Inspected,933,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/kabocha-squash.svg,Inspected,21082,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/kohlrabi.svg,Inspected,6107,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lacianto-kale.svg,Inspected,6827,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lavender.svg,Inspected,11936,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/leek.svg,Inspected,3666,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lemon-balm.svg,Inspected,15667,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lemon-drop-pepper.svg,Inspected,7598,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lemon-verbena.svg,Inspected,10570,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lemon.svg,Inspected,708,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lemongrass.svg,Inspected,3564,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lima-bean.svg,Inspected,5926,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lions-mane.svg,Inspected,26258,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/loose-leaf-lettuce.svg,Inspected,8029,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/lovage.svg,Inspected,10875,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/madame-jeanette-pepper.svg,Inspected,4792,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/maize.svg,Inspected,11778,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/majoram.svg,Inspected,9177,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/malagueta-pepper.svg,Inspected,9049,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/mango.svg,Inspected,1266,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/marshmallow.svg,Inspected,20888,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/medusa-pepper.svg,Inspected,6656,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/mint.svg,Inspected,16513,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/money-tree.svg,Inspected,13408,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/mugwort.svg,Inspected,19048,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/mustard.svg,Inspected,1446,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/napa-cabbage.svg,Inspected,5952,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/nectratine.svg,Inspected,4057,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/oat.svg,Inspected,6246,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/okra.svg,Inspected,5735,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/onion-chive.svg,Inspected,3643,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/onion.svg,Inspected,3986,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/orange-bell-pepper.svg,Inspected,3118,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/orange-scotch-bonnet.svg,Inspected,4338,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/oregano.svg,Inspected,17988,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/ornamental-gourd.svg,Inspected,5816,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/paddy.svg,Inspected,13055,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/papaya.svg,Inspected,1210,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/parsley.svg,Inspected,3321,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/parsnip.svg,Inspected,4549,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pattypan-squash.svg,Inspected,3579,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/peach.svg,Inspected,3640,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/peanut.svg,Inspected,9939,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/peppadew-pepper.svg,Inspected,3523,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pequin-pepper.svg,Inspected,6445,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/peter-pepper.svg,Inspected,6436,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pimento-pepper.svg,Inspected,4698,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pineapple-tomato.svg,Inspected,5935,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pink-oyster.svg,Inspected,34077,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/plantain.svg,Inspected,4584,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/plum.svg,Inspected,5396,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/poblano-pepper.svg,Inspected,3808,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pointed-cabbage.svg,Inspected,3760,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pomegranate.svg,Inspected,1000,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/porcino.svg,Inspected,4900,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/portabello.svg,Inspected,3729,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/potato.svg,Inspected,2077,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/psilocybin.svg,Inspected,6467,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/pumpkin.svg,Inspected,6024,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/purple-carrot.svg,Inspected,5346,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/purple-cauliflower.svg,Inspected,6371,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/purple-pod-bean.svg,Inspected,7242,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/purple-potato.svg,Inspected,4163,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/radicchio.svg,Inspected,9991,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/ragi.svg,Inspected,786,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rainbow-chard.svg,Inspected,10480,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rainier-cherry.svg,Inspected,6997,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/raspberry.svg,Inspected,16560,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-anjou-pear.svg,Inspected,29500,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-bartlett-pear.svg,Inspected,26100,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-bell-pepper.svg,Inspected,3118,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-cabbage.svg,Inspected,4129,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-carrot.svg,Inspected,5226,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-chard.svg,Inspected,9901,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-curly-kale.svg,Inspected,17510,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-giant-mustard.svg,Inspected,31468,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-gold-potato.svg,Inspected,3447,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-kuri-squash.svg,Inspected,8882,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-onion.svg,Inspected,3986,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-pointed-cabbage.svg,Inspected,3777,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-russian-kale.svg,Inspected,18265,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-savina-pepper.svg,Inspected,3843,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-scotch-bonnet.svg,Inspected,4334,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-serrano-pepper.svg,Inspected,3668,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/red-tabasco-pepper.svg,Inspected,2264,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/redgram.svg,Inspected,1018,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rice.svg,Inspected,13055,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rocoto-pepper.svg,Inspected,5143,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/romaine.svg,Inspected,4394,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rosemary.svg,Inspected,18242,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rubber.svg,Inspected,686,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/runner-bean.svg,Inspected,5357,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/russet-potato.svg,Inspected,2077,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rutabaga.svg,Inspected,4417,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/rye.svg,Inspected,10511,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sage.svg,Inspected,5080,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/salsify.svg,Inspected,6376,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/santa-fe-grande-pepper.svg,Inspected,3875,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/savoy-cabbage.svg,Inspected,15661,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sesame.svg,Inspected,707,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/shallot.svg,Inspected,4654,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/shiitake.svg,Inspected,3432,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/shishito-pepper.svg,Inspected,3760,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/siling-labuyo-pepper.svg,Inspected,9247,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/snap-pea.svg,Inspected,2730,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sorghum-millet.svg,Inspected,48699,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/soy-bean.svg,Inspected,7769,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/soybean.svg,Inspected,7769,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/spaghetti-squash.svg,Inspected,6379,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/spinach.svg,Inspected,4426,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/spring-onion.svg,Inspected,4007,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/st-johns-wort.svg,Inspected,16203,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/stevia.svg,Inspected,10701,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/strawberry.svg,Inspected,11298,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/striped-cavern-tomato.svg,Inspected,5570,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sugar-cane.svg,Inspected,9443,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sugarcane.svg,Inspected,9443,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sunflower.svg,Inspected,25596,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sunray-tomato.svg,Inspected,3489,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sweet-italian-pepper.svg,Inspected,5493,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sweet-potato.svg,Inspected,3814,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/sweetlime.svg,Inspected,571,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/swiss-chard.svg,Inspected,9928,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/taro.svg,Inspected,17306,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/tea.svg,Inspected,762,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/thyme.svg,Inspected,25042,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/tobacco.svg,Inspected,827,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/tomatillo.svg,Inspected,2483,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/tomato.svg,Inspected,2486,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/trinidad-moruga-scorpion-pepper.svg,Inspected,12989,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/trinidad-scorpion-butch-t-pepper.svg,Inspected,5932,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/trumpet.svg,Inspected,6088,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/tulsi.svg,Inspected,17394,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/turmeric.svg,Inspected,9884,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/turnip.svg,Inspected,4589,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/watercress.svg,Inspected,12588,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/watermelon-radish.svg,Inspected,4384,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/watermelon.svg,Inspected,18179,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/wax-bean.svg,Inspected,7242,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/wheat.svg,Inspected,19335,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/white-button.svg,Inspected,2712,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/white-carrot.svg,Inspected,5224,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/white-onion.svg,Inspected,3857,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/white-oyster.svg,Inspected,35488,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/wormwood.svg,Inspected,16330,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-bell-pepper.svg,Inspected,3108,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-carrot.svg,Inspected,5344,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-cauliflower.svg,Inspected,6371,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-onion.svg,Inspected,3992,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-oyster.svg,Inspected,35534,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-scotch-bonnet.svg,Inspected,4331,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/yellow-squash.svg,Inspected,3043,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/youkon-gold-potato.svg,Inspected,3706,.svg,Binary/Asset (.svg)
+app/src/main/assets/crop-icons/zucchini.svg,Inspected,7608,.svg,Binary/Asset (.svg)
+app/src/main/assets/images/onboard_agristack_tech.jpg,Inspected,956191,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/onboard_ai_voice_weather.jpg,Inspected,867036,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/onboard_community_machinery.jpg,Inspected,930587,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/onboard_crop_doctor.jpg,Inspected,866072,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/onboard_farm_logistics.jpg,Inspected,779575,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/onboard_mandi_prices.jpg,Inspected,1150960,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/perm_bg_camera.jpg,Inspected,666473,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/perm_bg_location.jpg,Inspected,659282,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/perm_bg_notification.jpg,Inspected,525154,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/perm_camera_scan.jpg,Inspected,666473,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/perm_location_gps.jpg,Inspected,659282,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/images/perm_notification_bell.jpg,Inspected,525154,.jpg,Binary/Asset (.jpg)
+app/src/main/assets/index.html,Inspected,1709186,.html,67 mock/fake/simulation references
+app/src/main/assets/js/agristack_dpi_service.js,Inspected,14853,.js,5 mock/fake/simulation references
+app/src/main/assets/js/geo_tracking_service.js,Inspected,21613,.js,Clean
+app/src/main/assets/js/supabase_integration.js,Inspected,50248,.js,Clean
+app/src/main/java/com/example/AgentsScreen.kt,Inspected,3199,.kt,Clean
+app/src/main/java/com/example/AgriStackPassportScreen.kt,Inspected,11660,.kt,Clean
+app/src/main/java/com/example/AiApplication.kt,Inspected,2001,.kt,Clean
+app/src/main/java/com/example/AlertWorker.kt,Inspected,5544,.kt,Clean
+app/src/main/java/com/example/AppStrings.kt,Inspected,57521,.kt,Clean
+app/src/main/java/com/example/AuthViewModel.kt,Inspected,12170,.kt,Clean
+app/src/main/java/com/example/BioRxScreen.kt,Inspected,8350,.kt,Clean
+app/src/main/java/com/example/BioShieldRadarScreen.kt,Inspected,10068,.kt,Clean
+app/src/main/java/com/example/CalculatorsScreen.kt,Inspected,17860,.kt,Clean
+app/src/main/java/com/example/ChatScreen.kt,Inspected,16262,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/ChatViewModel.kt,Inspected,8882,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/CommunityScreen.kt,Inspected,18504,.kt,Clean
+app/src/main/java/com/example/DevicePairingScreen.kt,Inspected,4722,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/DiseaseAggregationService.kt,Inspected,16188,.kt,Clean
+app/src/main/java/com/example/DiseaseScannerScreen.kt,Inspected,62392,.kt,Clean
+app/src/main/java/com/example/DroneOpsScreen.kt,Inspected,11613,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/EquipmentRentalScreen.kt,Inspected,18534,.kt,Clean
+app/src/main/java/com/example/FarmDigitalTwinScreen.kt,Inspected,21823,.kt,3 mock/fake/simulation references
+app/src/main/java/com/example/FarmKhataScreen.kt,Inspected,16864,.kt,Clean
+app/src/main/java/com/example/FarmMapScreen.kt,Inspected,9458,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/FieldNavigationScreen.kt,Inspected,7117,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/FoodSecurityScreen.kt,Inspected,3384,.kt,Clean
+app/src/main/java/com/example/GeminiApi.kt,Inspected,2350,.kt,Clean
+app/src/main/java/com/example/GeminiVisionService.kt,Inspected,11360,.kt,Clean
+app/src/main/java/com/example/GramHaulScreen.kt,Inspected,10343,.kt,Clean
+app/src/main/java/com/example/HomeScreen.kt,Inspected,35093,.kt,Clean
+app/src/main/java/com/example/KnowledgeScreen.kt,Inspected,3610,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/LanguageManager.kt,Inspected,1901,.kt,Clean
+app/src/main/java/com/example/LoanScreen.kt,Inspected,8752,.kt,Clean
+app/src/main/java/com/example/LocationHelper.kt,Inspected,3223,.kt,Clean
+app/src/main/java/com/example/LoginScreen.kt,Inspected,16869,.kt,6 mock/fake/simulation references
+app/src/main/java/com/example/MainActivity.kt,Inspected,31490,.kt,Clean
+app/src/main/java/com/example/MandiApiService.kt,Inspected,10281,.kt,Clean
+app/src/main/java/com/example/MandiPilotScreen.kt,Inspected,13754,.kt,Clean
+app/src/main/java/com/example/MarketScreen.kt,Inspected,30848,.kt,3 mock/fake/simulation references
+app/src/main/java/com/example/PeerChatScreen.kt,Inspected,13730,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/PriceTickerService.kt,Inspected,3577,.kt,Clean
+app/src/main/java/com/example/PriceTracker.kt,Inspected,2065,.kt,Clean
+app/src/main/java/com/example/ProfileScreen.kt,Inspected,21185,.kt,Clean
+app/src/main/java/com/example/RegionalIntelligenceScreen.kt,Inspected,19945,.kt,Clean
+app/src/main/java/com/example/SavedReportsScreen.kt,Inspected,10337,.kt,Clean
+app/src/main/java/com/example/ScientificValidationScreen.kt,Inspected,3812,.kt,Clean
+app/src/main/java/com/example/SoilScreen.kt,Inspected,15471,.kt,1 TODO/FIXME markers
+app/src/main/java/com/example/SplashScreen.kt,Inspected,9150,.kt,Clean
+app/src/main/java/com/example/SubsidiesApiService.kt,Inspected,2867,.kt,Clean
+app/src/main/java/com/example/SupabaseClient.kt,Inspected,21658,.kt,Clean
+app/src/main/java/com/example/TractorAutopilotScreen.kt,Inspected,6210,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/UpdateManager.kt,Inspected,8154,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/WeatherService.kt,Inspected,14689,.kt,Clean
+app/src/main/java/com/example/YantraShareScreen.kt,Inspected,8439,.kt,Clean
+app/src/main/java/com/example/agristack/AgriStackPassportEngine.kt,Inspected,10100,.kt,Clean
+app/src/main/java/com/example/agronomy/AutonomousAgronomist.kt,Inspected,846,.kt,Clean
+app/src/main/java/com/example/biorx/BioRxEngine.kt,Inspected,7825,.kt,Clean
+app/src/main/java/com/example/bioshield/BioShieldRadarEngine.kt,Inspected,6819,.kt,Clean
+app/src/main/java/com/example/data/AppDatabase.kt,Inspected,321,.kt,Clean
+app/src/main/java/com/example/data/ChatDao.kt,Inspected,534,.kt,Clean
+app/src/main/java/com/example/data/ChatMessageEntity.kt,Inspected,335,.kt,Clean
+app/src/main/java/com/example/data/ChatRepository.kt,Inspected,388,.kt,Clean
+app/src/main/java/com/example/data/FarmDao.kt,Inspected,746,.kt,Clean
+app/src/main/java/com/example/data/FarmEntity.kt,Inspected,944,.kt,Clean
+app/src/main/java/com/example/data/SupabaseApi.kt,Inspected,2147,.kt,Clean
+app/src/main/java/com/example/gramhaul/GramHaulEngine.kt,Inspected,9041,.kt,Clean
+app/src/main/java/com/example/mandipilot/MandiPilotEngine.kt,Inspected,11990,.kt,Clean
+app/src/main/java/com/example/market/MarketImpactCalculator.kt,Inspected,17071,.kt,Clean
+app/src/main/java/com/example/market/MarketImpactModels.kt,Inspected,3610,.kt,Clean
+app/src/main/java/com/example/market/MarketImpactRepository.kt,Inspected,8425,.kt,Clean
+app/src/main/java/com/example/ml/DiseaseDetector.kt,Inspected,26097,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/model/DiseaseScanModels.kt,Inspected,3121,.kt,Clean
+app/src/main/java/com/example/satellite/SatelliteTelemetryManager.kt,Inspected,369,.kt,Clean
+app/src/main/java/com/example/telemetry/NuKropIotManager.kt,Inspected,8610,.kt,2 mock/fake/simulation references
+app/src/main/java/com/example/telemetry/ObservabilityLayer.kt,Inspected,597,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/ui/CropSelectionDialog.kt,Inspected,23778,.kt,Clean
+app/src/main/java/com/example/ui/PlantixBottomBar.kt,Inspected,7909,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/ui/VoiceOsOverlay.kt,Inspected,8984,.kt,1 mock/fake/simulation references
+app/src/main/java/com/example/ui/onboarding/OnboardingFlow.kt,Inspected,29545,.kt,Clean
+app/src/main/java/com/example/ui/theme/Color.kt,Inspected,2719,.kt,Clean
+app/src/main/java/com/example/ui/theme/Theme.kt,Inspected,1141,.kt,Clean
+app/src/main/java/com/example/ui/theme/Type.kt,Inspected,1030,.kt,Clean
+app/src/main/java/com/example/voice/VoiceOsEngine.kt,Inspected,7492,.kt,Clean
+app/src/main/java/com/example/yantra/YantraShareEngine.kt,Inspected,5435,.kt,Clean
+app/src/main/res/drawable/farm_bg.jpg,Inspected,1101255,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/feature_advisor.jpg,Inspected,926596,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/feature_mandi.jpg,Inspected,849069,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/feature_scan.jpg,Inspected,848421,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/feature_soil.jpg,Inspected,936267,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/feature_subsidy.jpg,Inspected,964927,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/feature_weather.jpg,Inspected,802636,.jpg,Binary/Asset (.jpg)
+app/src/main/res/drawable/ic_launcher_background.xml,Inspected,339,.xml,Clean
+app/src/main/res/drawable/ic_launcher_foreground.xml,Inspected,1243,.xml,Clean
+app/src/main/res/drawable/ic_notification_leaf.xml,Inspected,1022,.xml,Clean
+app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml,Inspected,350,.xml,Clean
+app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml,Inspected,350,.xml,Clean
+app/src/main/res/values/colors.xml,Inspected,389,.xml,Clean
+app/src/main/res/values/strings.xml,Inspected,74,.xml,Clean
+app/src/main/res/values/themes.xml,Inspected,553,.xml,Clean
+app/src/main/res/xml/backup_rules.xml,Inspected,492,.xml,Clean
+app/src/main/res/xml/data_extraction_rules.xml,Inspected,571,.xml,1 TODO/FIXME markers
+app/src/main/res/xml/network_security_config.xml,Inspected,253,.xml,Clean
+app/src/main/res/xml/provider_paths.xml,Inspected,473,.xml,Clean
+app/src/test/java/com/example/CalculatorsAndOnboardingTest.kt,Test or build artifact,3614,.kt,Not deep-scanned
+app/src/test/java/com/example/DiseaseAggregationTest.kt,Test or build artifact,25786,.kt,Not deep-scanned
+app/src/test/java/com/example/DiseaseDetectorTest.kt,Test or build artifact,3596,.kt,Not deep-scanned
+app/src/test/java/com/example/EmpiricalChallengeM1_2Test.kt,Test or build artifact,17623,.kt,Not deep-scanned
+app/src/test/java/com/example/EnterpriseAgriTechTest.kt,Test or build artifact,9087,.kt,Not deep-scanned
+app/src/test/java/com/example/ExampleRobolectricTest.kt,Test or build artifact,1256,.kt,Not deep-scanned
+app/src/test/java/com/example/ExampleUnitTest.kt,Test or build artifact,341,.kt,Not deep-scanned
+app/src/test/java/com/example/MarketImpactCalculatorTest.kt,Test or build artifact,34706,.kt,Not deep-scanned
+app/src/test/java/com/example/ProductionReadinessTest.kt,Test or build artifact,9841,.kt,Not deep-scanned
+app/src/test/java/com/example/ScanTelemetryIntegrationTest.kt,Test or build artifact,20986,.kt,Not deep-scanned
+app/src/test/java/com/example/SingleLanguageCropTest.kt,Test or build artifact,2291,.kt,Not deep-scanned
+app/src/test/java/com/example/SoilScannerFallbackTest.kt,Test or build artifact,3953,.kt,Not deep-scanned
+app/src/test/java/com/example/SprayAdvisoryCalculatorTest.kt,Test or build artifact,4676,.kt,Not deep-scanned
+app/src/test/java/com/example/SprayAdvisoryStressTest.kt,Test or build artifact,8658,.kt,Not deep-scanned
+app/src/test/java/com/example/Views176MatrixTest.kt,Test or build artifact,3005,.kt,Not deep-scanned
+apply_accurate_purity.js,Inspected,15660,.js,Clean
+apply_clean_views.js,Inspected,17756,.js,Clean
+apply_complete_gramhaul_uber_suite.py,Inspected,28743,.py,Clean
+apply_complete_system_update.py,Inspected,41948,.py,4 mock/fake/simulation references
+apply_final_polishing.js,Inspected,10750,.js,Clean
+apply_full_rapido_patch.py,Inspected,17289,.py,Clean
+apply_full_ui_perfection.py,Inspected,3439,.py,Clean
+apply_full_v4_patch.py,Inspected,53255,.py,3 mock/fake/simulation references
+apply_language_purity.js,Inspected,46655,.js,Clean
+apply_master_nukrop_suite.py,Inspected,38167,.py,6 mock/fake/simulation references
+apply_onboarding_perfection.py,Inspected,4067,.py,Clean
+apply_perfection_v3.py,Inspected,35736,.py,3 mock/fake/simulation references
+apply_pixel_perfection_fixes.py,Inspected,5708,.py,Clean
+apply_supabase_realtime_patch.py,Inspected,44942,.py,Clean
+backend/Dockerfile,Inspected,369,,Not deep-scanned
+backend/docker-compose.yml,Inspected,1340,.yml,Not deep-scanned
+backend/infra/db/schema.sql,Inspected,3958,.sql,Clean
+backend/k8s-deployment.yaml,Inspected,1212,.yaml,Not deep-scanned
+backend/k8s-production-cluster.yaml,Inspected,1304,.yaml,Not deep-scanned
+backend/mandi_pipeline_sync.py,Inspected,5653,.py,Clean
+backend/migrations/001_disease_scans_and_outbreak_alerts.sql,Inspected,16775,.sql,Clean
+backend/migrations/002_enterprise_agritech_expansion.sql,Inspected,6135,.sql,Clean
+backend/migrations/003_gramhaul_truck_listings.sql,Inspected,3950,.sql,Clean
+backend/migrations/004_community_interactive.sql,Inspected,6676,.sql,Clean
+backend/package-lock.json,Inspected,250620,.json,Clean
+backend/package.json,Inspected,1257,.json,Clean
+backend/prometheus.yml,Inspected,189,.yml,Not deep-scanned
+backend/requirements.txt,Inspected,40,.txt,Not deep-scanned
+backend/schema.sql,Inspected,43617,.sql,1 mock/fake/simulation references
+backend/src/config/Tracing.ts,Inspected,1088,.ts,Clean
+backend/src/config/db.ts,Inspected,8722,.ts,2 mock/fake/simulation references
+backend/src/config/redis.ts,Inspected,594,.ts,Clean
+backend/src/controllers/ai.controller.ts,Inspected,3068,.ts,1 mock/fake/simulation references
+backend/src/controllers/auth.controller.ts,Inspected,6767,.ts,Clean
+backend/src/controllers/contract.controller.ts,Inspected,2933,.ts,Clean
+backend/src/controllers/otaController.ts,Inspected,2158,.ts,Clean
+backend/src/controllers/pest.controller.ts,Inspected,1438,.ts,Clean
+backend/src/controllers/simulation.controller.ts,Inspected,1964,.ts,4 mock/fake/simulation references
+backend/src/controllers/soil.controller.ts,Inspected,1768,.ts,Clean
+backend/src/controllers/valve.controller.ts,Inspected,1386,.ts,Clean
+backend/src/iot/Gateway.ts,Inspected,9368,.ts,Clean
+backend/src/iot/engine/AiPredictor.ts,Inspected,1357,.ts,Clean
+backend/src/iot/engine/EdgeSyncEngine.ts,Inspected,2145,.ts,Clean
+backend/src/iot/engine/EdgeWatchdog.ts,Inspected,1797,.ts,Clean
+backend/src/iot/engine/ITelemetryStore.ts,Inspected,996,.ts,Clean
+backend/src/iot/engine/IrrigationWorkflow.ts,Inspected,3305,.ts,Clean
+backend/src/iot/engine/PowerIntelligenceEngine.ts,Inspected,2941,.ts,Clean
+backend/src/iot/engine/PredictiveMaintenanceAI.ts,Inspected,1576,.ts,Clean
+backend/src/iot/engine/ProviderCircuitBreaker.ts,Inspected,2218,.ts,Clean
+backend/src/iot/engine/RuleEngine.ts,Inspected,2221,.ts,Clean
+backend/src/iot/engine/TopologyEngine.ts,Inspected,1901,.ts,Clean
+backend/src/iot/providers/BaseDeviceProvider.ts,Inspected,1384,.ts,Clean
+backend/src/iot/providers/GsmProvider.ts,Inspected,2046,.ts,Clean
+backend/src/iot/providers/MqttProvider.ts,Inspected,2884,.ts,3 mock/fake/simulation references
+backend/src/iot/providers/ShellyProvider.ts,Inspected,1712,.ts,Clean
+backend/src/iot/providers/TuyaProvider.ts,Inspected,2261,.ts,Clean
+backend/src/middleware/auth.ts,Inspected,1445,.ts,Clean
+backend/src/middleware/validation.ts,Inspected,2520,.ts,Clean
+backend/src/routes/ai.routes.ts,Inspected,605,.ts,Clean
+backend/src/routes/auth.routes.ts,Inspected,342,.ts,Clean
+backend/src/routes/contract.routes.ts,Inspected,556,.ts,Clean
+backend/src/routes/geo.routes.ts,Inspected,4048,.ts,Clean
+backend/src/routes/index.ts,Inspected,1345,.ts,1 mock/fake/simulation references
+backend/src/routes/iot.routes.ts,Inspected,3668,.ts,Clean
+backend/src/routes/mandi.routes.ts,Inspected,1468,.ts,Clean
+backend/src/routes/navigation.routes.ts,Inspected,2141,.ts,Clean
+backend/src/routes/pest.routes.ts,Inspected,386,.ts,Clean
+backend/src/routes/simulation.routes.ts,Inspected,397,.ts,1 mock/fake/simulation references
+backend/src/routes/soil.routes.ts,Inspected,413,.ts,Clean
+backend/src/routes/valve.routes.ts,Inspected,569,.ts,Clean
+backend/src/server.ts,Inspected,3732,.ts,Clean
+backend/src/services/MandiSyncService.ts,Inspected,3560,.ts,Clean
+backend/src/services/SubsidyEngine.ts,Inspected,1747,.ts,Clean
+backend/src/tracing.ts,Inspected,1108,.ts,Clean
+backend/src/workers/jobs/mandiIngestion.ts,Inspected,2801,.ts,1 mock/fake/simulation references
+backend/src/workers/orchestrator.ts,Inspected,1727,.ts,Clean
+backend/supabase_setup.sql,Inspected,27964,.sql,Clean
+backend/tsconfig.json,Inspected,249,.json,Clean
+build.gradle.kts,Inspected,431,.kts,Clean
+build_gramhaul_real_interactive_system.py,Inspected,82615,.py,3 mock/fake/simulation references
+build_output.txt,Inspected,2526,.txt,Not deep-scanned
+cap.py,Inspected,897,.py,Clean
+cap2.py,Inspected,1063,.py,Clean
+cap3.py,Inspected,1137,.py,Clean
+cap5.py,Inspected,849,.py,Clean
+cap_full.py,Inspected,1147,.py,Clean
+capture_all_screens_verified.py,Inspected,6991,.py,Clean
+capture_complete_gallery.py,Inspected,5759,.py,Clean
+capture_emulator_gallery.py,Inspected,8570,.py,Clean
+capture_gramhaul_gallery.py,Inspected,1294,.py,Clean
+capture_rapido_v7.py,Inspected,3076,.py,Clean
+capture_v10.py,Inspected,1359,.py,Clean
+capture_v7_clean.py,Inspected,3220,.py,Clean
+capture_v8.py,Inspected,3111,.py,Clean
+clean_and_localize.js,Inspected,20957,.js,Clean
+clean_html_tail.py,Inspected,794,.py,Clean
+clean_website.py,Inspected,1017,.py,Clean
+copy_perm_bgs.py,Inspected,907,.py,Clean
+crop-icons/acorn-squash.svg,Inspected,3778,.svg,Binary/Asset (.svg)
+crop-icons/adjuma-pepper.svg,Inspected,5092,.svg,Binary/Asset (.svg)
+crop-icons/aji-dulce-pepper.svg,Inspected,3858,.svg,Binary/Asset (.svg)
+crop-icons/aleppo-pepper.svg,Inspected,3537,.svg,Binary/Asset (.svg)
+crop-icons/almond.svg,Inspected,7562,.svg,Binary/Asset (.svg)
+crop-icons/anaheim-pepper.svg,Inspected,3151,.svg,Binary/Asset (.svg)
+crop-icons/apricot.svg,Inspected,4826,.svg,Binary/Asset (.svg)
+crop-icons/arugula.svg,Inspected,11442,.svg,Binary/Asset (.svg)
+crop-icons/asian-pear.svg,Inspected,130667,.svg,Binary/Asset (.svg)
+crop-icons/asparagus.svg,Inspected,8122,.svg,Binary/Asset (.svg)
+crop-icons/atrichoke.svg,Inspected,16107,.svg,Binary/Asset (.svg)
+crop-icons/bajra.svg,Inspected,947,.svg,Binary/Asset (.svg)
+crop-icons/banana-pepper.svg,Inspected,3939,.svg,Binary/Asset (.svg)
+crop-icons/banana.svg,Inspected,1131,.svg,Binary/Asset (.svg)
+crop-icons/barley.svg,Inspected,10964,.svg,Binary/Asset (.svg)
+crop-icons/basil.svg,Inspected,15064,.svg,Binary/Asset (.svg)
+crop-icons/beet.svg,Inspected,2904,.svg,Binary/Asset (.svg)
+crop-icons/belgian-endive.svg,Inspected,2625,.svg,Binary/Asset (.svg)
+crop-icons/bhindi.svg,Inspected,5735,.svg,Binary/Asset (.svg)
+crop-icons/bibb-lettuce.svg,Inspected,9982,.svg,Binary/Asset (.svg)
+crop-icons/bing-cherry.svg,Inspected,4430,.svg,Binary/Asset (.svg)
+crop-icons/birds-eye-chili.svg,Inspected,3768,.svg,Binary/Asset (.svg)
+crop-icons/bishops-crown-pepper.svg,Inspected,4956,.svg,Binary/Asset (.svg)
+crop-icons/black-habanero.svg,Inspected,4692,.svg,Binary/Asset (.svg)
+crop-icons/black-prince-tomato.svg,Inspected,3506,.svg,Binary/Asset (.svg)
+crop-icons/black-salsify.svg,Inspected,6351,.svg,Binary/Asset (.svg)
+crop-icons/blackberry.svg,Inspected,11976,.svg,Binary/Asset (.svg)
+crop-icons/blackgram.svg,Inspected,701,.svg,Binary/Asset (.svg)
+crop-icons/blackpepper.svg,Inspected,1179,.svg,Binary/Asset (.svg)
+crop-icons/blue-lake-bean.svg,Inspected,7223,.svg,Binary/Asset (.svg)
+crop-icons/blue-oyster.svg,Inspected,35534,.svg,Binary/Asset (.svg)
+crop-icons/blueberry.svg,Inspected,10629,.svg,Binary/Asset (.svg)
+crop-icons/bok-choy.svg,Inspected,4167,.svg,Binary/Asset (.svg)
+crop-icons/borage.svg,Inspected,15909,.svg,Binary/Asset (.svg)
+crop-icons/brazilian-starfish-pepper.svg,Inspected,5138,.svg,Binary/Asset (.svg)
+crop-icons/brinjal.svg,Inspected,2667,.svg,Binary/Asset (.svg)
+crop-icons/broad-bean.svg,Inspected,12219,.svg,Binary/Asset (.svg)
+crop-icons/broccoli.svg,Inspected,7267,.svg,Binary/Asset (.svg)
+crop-icons/brussel-sprout.svg,Inspected,9596,.svg,Binary/Asset (.svg)
+crop-icons/butternut-squash.svg,Inspected,2310,.svg,Binary/Asset (.svg)
+crop-icons/california-poppy.svg,Inspected,8224,.svg,Binary/Asset (.svg)
+crop-icons/cannabis.svg,Inspected,29701,.svg,Binary/Asset (.svg)
+crop-icons/cantaloupe.svg,Inspected,28670,.svg,Binary/Asset (.svg)
+crop-icons/capsicum.svg,Inspected,956,.svg,Binary/Asset (.svg)
+crop-icons/cardamom.svg,Inspected,832,.svg,Binary/Asset (.svg)
+crop-icons/carrot.svg,Inspected,5344,.svg,Binary/Asset (.svg)
+crop-icons/cascabel-chili.svg,Inspected,6690,.svg,Binary/Asset (.svg)
+crop-icons/cashew.svg,Inspected,853,.svg,Binary/Asset (.svg)
+crop-icons/castor.svg,Inspected,824,.svg,Binary/Asset (.svg)
+crop-icons/cauliflower.svg,Inspected,6362,.svg,Binary/Asset (.svg)
+crop-icons/cayenne-pepper.svg,Inspected,2499,.svg,Binary/Asset (.svg)
+crop-icons/celeriac-root.svg,Inspected,4887,.svg,Binary/Asset (.svg)
+crop-icons/celery.svg,Inspected,6344,.svg,Binary/Asset (.svg)
+crop-icons/chamomile.svg,Inspected,11413,.svg,Binary/Asset (.svg)
+crop-icons/chantrelle.svg,Inspected,8655,.svg,Binary/Asset (.svg)
+crop-icons/cheongyang-pepper.svg,Inspected,3004,.svg,Binary/Asset (.svg)
+crop-icons/cherokee-purple-tomato.svg,Inspected,3894,.svg,Binary/Asset (.svg)
+crop-icons/cherry-bell-radish.svg,Inspected,3270,.svg,Binary/Asset (.svg)
+crop-icons/cherry-stuffer-pepper.svg,Inspected,2821,.svg,Binary/Asset (.svg)
+crop-icons/cherry-tomato.svg,Inspected,3738,.svg,Binary/Asset (.svg)
+crop-icons/chickpea.svg,Inspected,781,.svg,Binary/Asset (.svg)
+crop-icons/chile-de-aborol-pepper.svg,Inspected,4914,.svg,Binary/Asset (.svg)
+crop-icons/chili.svg,Inspected,3768,.svg,Binary/Asset (.svg)
+crop-icons/chilli.svg,Inspected,3768,.svg,Binary/Asset (.svg)
+crop-icons/cilantro.svg,Inspected,4014,.svg,Binary/Asset (.svg)
+crop-icons/cinnamon-cap.svg,Inspected,14549,.svg,Binary/Asset (.svg)
+crop-icons/claytonia.svg,Inspected,9638,.svg,Binary/Asset (.svg)
+crop-icons/coconut.svg,Inspected,834,.svg,Binary/Asset (.svg)
+crop-icons/coffee.svg,Inspected,981,.svg,Binary/Asset (.svg)
+crop-icons/collard-greens.svg,Inspected,16172,.svg,Binary/Asset (.svg)
+crop-icons/coriander.svg,Inspected,808,.svg,Binary/Asset (.svg)
+crop-icons/corn.svg,Inspected,11778,.svg,Binary/Asset (.svg)
+crop-icons/cotton.svg,Inspected,1884,.svg,Binary/Asset (.svg)
+crop-icons/cremini.svg,Inspected,3474,.svg,Binary/Asset (.svg)
+crop-icons/cubanelle-pepper.svg,Inspected,3905,.svg,Binary/Asset (.svg)
+crop-icons/cucumber.svg,Inspected,3597,.svg,Binary/Asset (.svg)
+crop-icons/cumin.svg,Inspected,711,.svg,Binary/Asset (.svg)
+crop-icons/curly-endive.svg,Inspected,34111,.svg,Binary/Asset (.svg)
+crop-icons/curly-kale.svg,Inspected,17529,.svg,Binary/Asset (.svg)
+crop-icons/dandelion.svg,Inspected,11293,.svg,Binary/Asset (.svg)
+crop-icons/datil-pepper.svg,Inspected,3976,.svg,Binary/Asset (.svg)
+crop-icons/delicata-squash.svg,Inspected,6314,.svg,Binary/Asset (.svg)
+crop-icons/diablito-pepper.svg,Inspected,5873,.svg,Binary/Asset (.svg)
+crop-icons/dill.svg,Inspected,7278,.svg,Binary/Asset (.svg)
+crop-icons/dundicut-pepper.svg,Inspected,6807,.svg,Binary/Asset (.svg)
+crop-icons/echinacea.svg,Inspected,18678,.svg,Binary/Asset (.svg)
+crop-icons/eggplant.svg,Inspected,2667,.svg,Binary/Asset (.svg)
+crop-icons/facing-heaven-pepper.svg,Inspected,2808,.svg,Binary/Asset (.svg)
+crop-icons/fatilii-pepper.svg,Inspected,4492,.svg,Binary/Asset (.svg)
+crop-icons/fennel.svg,Inspected,10140,.svg,Binary/Asset (.svg)
+crop-icons/french-breakfast-radish.svg,Inspected,4112,.svg,Binary/Asset (.svg)
+crop-icons/fresno-pepper.svg,Inspected,3042,.svg,Binary/Asset (.svg)
+crop-icons/fuji-apple.svg,Inspected,4850,.svg,Binary/Asset (.svg)
+crop-icons/gala-apple.svg,Inspected,6557,.svg,Binary/Asset (.svg)
+crop-icons/galangal.svg,Inspected,8181,.svg,Binary/Asset (.svg)
+crop-icons/garlic-chive.svg,Inspected,4248,.svg,Binary/Asset (.svg)
+crop-icons/garlic.svg,Inspected,4439,.svg,Binary/Asset (.svg)
+crop-icons/generic-apple.svg,Inspected,2863,.svg,Binary/Asset (.svg)
+crop-icons/generic-flower.svg,Inspected,8118,.svg,Binary/Asset (.svg)
+crop-icons/generic-melon.svg,Inspected,2545,.svg,Binary/Asset (.svg)
+crop-icons/generic-mushroom.svg,Inspected,2987,.svg,Binary/Asset (.svg)
+crop-icons/generic-plant.svg,Inspected,3874,.svg,Binary/Asset (.svg)
+crop-icons/german-chamomile.svg,Inspected,19412,.svg,Binary/Asset (.svg)
+crop-icons/ghost-pepper.svg,Inspected,4375,.svg,Binary/Asset (.svg)
+crop-icons/ginger.svg,Inspected,11415,.svg,Binary/Asset (.svg)
+crop-icons/golden-beet.svg,Inspected,2943,.svg,Binary/Asset (.svg)
+crop-icons/golden-delicious-apple.svg,Inspected,4926,.svg,Binary/Asset (.svg)
+crop-icons/granny-smith-apple.svg,Inspected,4926,.svg,Binary/Asset (.svg)
+crop-icons/green-anjou-pear.svg,Inspected,31254,.svg,Binary/Asset (.svg)
+crop-icons/green-bartlett-pear.svg,Inspected,26094,.svg,Binary/Asset (.svg)
+crop-icons/green-bell-pepper.svg,Inspected,3094,.svg,Binary/Asset (.svg)
+crop-icons/green-birds-eye-chili.svg,Inspected,2116,.svg,Binary/Asset (.svg)
+crop-icons/green-cabbage.svg,Inspected,4100,.svg,Binary/Asset (.svg)
+crop-icons/green-onion.svg,Inspected,2693,.svg,Binary/Asset (.svg)
+crop-icons/green-serrano-pepper.svg,Inspected,3628,.svg,Binary/Asset (.svg)
+crop-icons/green-tabasco-pepper.svg,Inspected,2147,.svg,Binary/Asset (.svg)
+crop-icons/green-zebra-tomato.svg,Inspected,9932,.svg,Binary/Asset (.svg)
+crop-icons/greengram.svg,Inspected,796,.svg,Binary/Asset (.svg)
+crop-icons/groundnut.svg,Inspected,9939,.svg,Binary/Asset (.svg)
+crop-icons/guajillo-pepper.svg,Inspected,3524,.svg,Binary/Asset (.svg)
+crop-icons/guava.svg,Inspected,952,.svg,Binary/Asset (.svg)
+crop-icons/habanero-pepper.svg,Inspected,4219,.svg,Binary/Asset (.svg)
+crop-icons/hemp.svg,Inspected,18108,.svg,Binary/Asset (.svg)
+crop-icons/hillbilly-tomato.svg,Inspected,7096,.svg,Binary/Asset (.svg)
+crop-icons/honeydew.svg,Inspected,4189,.svg,Binary/Asset (.svg)
+crop-icons/hop.svg,Inspected,14234,.svg,Binary/Asset (.svg)
+crop-icons/hungarian-wax-pepper.svg,Inspected,3654,.svg,Binary/Asset (.svg)
+crop-icons/iceberg.svg,Inspected,5237,.svg,Binary/Asset (.svg)
+crop-icons/icicle-radish.svg,Inspected,2647,.svg,Binary/Asset (.svg)
+crop-icons/indigo.svg,Inspected,21626,.svg,Binary/Asset (.svg)
+crop-icons/jalapeno.svg,Inspected,2500,.svg,Binary/Asset (.svg)
+crop-icons/japanese-yam.svg,Inspected,3890,.svg,Binary/Asset (.svg)
+crop-icons/jowar.svg,Inspected,933,.svg,Binary/Asset (.svg)
+crop-icons/kabocha-squash.svg,Inspected,21082,.svg,Binary/Asset (.svg)
+crop-icons/kohlrabi.svg,Inspected,6107,.svg,Binary/Asset (.svg)
+crop-icons/lacianto-kale.svg,Inspected,6827,.svg,Binary/Asset (.svg)
+crop-icons/lavender.svg,Inspected,11936,.svg,Binary/Asset (.svg)
+crop-icons/leek.svg,Inspected,3666,.svg,Binary/Asset (.svg)
+crop-icons/lemon-balm.svg,Inspected,15667,.svg,Binary/Asset (.svg)
+crop-icons/lemon-drop-pepper.svg,Inspected,7598,.svg,Binary/Asset (.svg)
+crop-icons/lemon-verbena.svg,Inspected,10570,.svg,Binary/Asset (.svg)
+crop-icons/lemon.svg,Inspected,708,.svg,Binary/Asset (.svg)
+crop-icons/lemongrass.svg,Inspected,3564,.svg,Binary/Asset (.svg)
+crop-icons/lima-bean.svg,Inspected,5926,.svg,Binary/Asset (.svg)
+crop-icons/lions-mane.svg,Inspected,26258,.svg,Binary/Asset (.svg)
+crop-icons/loose-leaf-lettuce.svg,Inspected,8029,.svg,Binary/Asset (.svg)
+crop-icons/lovage.svg,Inspected,10875,.svg,Binary/Asset (.svg)
+crop-icons/madame-jeanette-pepper.svg,Inspected,4792,.svg,Binary/Asset (.svg)
+crop-icons/maize.svg,Inspected,11778,.svg,Binary/Asset (.svg)
+crop-icons/majoram.svg,Inspected,9177,.svg,Binary/Asset (.svg)
+crop-icons/malagueta-pepper.svg,Inspected,9049,.svg,Binary/Asset (.svg)
+crop-icons/mango.svg,Inspected,1266,.svg,Binary/Asset (.svg)
+crop-icons/marshmallow.svg,Inspected,20888,.svg,Binary/Asset (.svg)
+crop-icons/medusa-pepper.svg,Inspected,6656,.svg,Binary/Asset (.svg)
+crop-icons/mint.svg,Inspected,16513,.svg,Binary/Asset (.svg)
+crop-icons/money-tree.svg,Inspected,13408,.svg,Binary/Asset (.svg)
+crop-icons/mugwort.svg,Inspected,19048,.svg,Binary/Asset (.svg)
+crop-icons/mustard.svg,Inspected,1446,.svg,Binary/Asset (.svg)
+crop-icons/napa-cabbage.svg,Inspected,5952,.svg,Binary/Asset (.svg)
+crop-icons/nectratine.svg,Inspected,4057,.svg,Binary/Asset (.svg)
+crop-icons/oat.svg,Inspected,6246,.svg,Binary/Asset (.svg)
+crop-icons/okra.svg,Inspected,5735,.svg,Binary/Asset (.svg)
+crop-icons/onion-chive.svg,Inspected,3643,.svg,Binary/Asset (.svg)
+crop-icons/onion.svg,Inspected,3986,.svg,Binary/Asset (.svg)
+crop-icons/orange-bell-pepper.svg,Inspected,3118,.svg,Binary/Asset (.svg)
+crop-icons/orange-scotch-bonnet.svg,Inspected,4338,.svg,Binary/Asset (.svg)
+crop-icons/oregano.svg,Inspected,17988,.svg,Binary/Asset (.svg)
+crop-icons/ornamental-gourd.svg,Inspected,5816,.svg,Binary/Asset (.svg)
+crop-icons/paddy.svg,Inspected,13055,.svg,Binary/Asset (.svg)
+crop-icons/papaya.svg,Inspected,1210,.svg,Binary/Asset (.svg)
+crop-icons/parsley.svg,Inspected,3321,.svg,Binary/Asset (.svg)
+crop-icons/parsnip.svg,Inspected,4549,.svg,Binary/Asset (.svg)
+crop-icons/pattypan-squash.svg,Inspected,3579,.svg,Binary/Asset (.svg)
+crop-icons/peach.svg,Inspected,3640,.svg,Binary/Asset (.svg)
+crop-icons/peanut.svg,Inspected,9939,.svg,Binary/Asset (.svg)
+crop-icons/peppadew-pepper.svg,Inspected,3523,.svg,Binary/Asset (.svg)
+crop-icons/pequin-pepper.svg,Inspected,6445,.svg,Binary/Asset (.svg)
+crop-icons/peter-pepper.svg,Inspected,6436,.svg,Binary/Asset (.svg)
+crop-icons/pimento-pepper.svg,Inspected,4698,.svg,Binary/Asset (.svg)
+crop-icons/pineapple-tomato.svg,Inspected,5935,.svg,Binary/Asset (.svg)
+crop-icons/pink-oyster.svg,Inspected,34077,.svg,Binary/Asset (.svg)
+crop-icons/plantain.svg,Inspected,4584,.svg,Binary/Asset (.svg)
+crop-icons/plum.svg,Inspected,5396,.svg,Binary/Asset (.svg)
+crop-icons/poblano-pepper.svg,Inspected,3808,.svg,Binary/Asset (.svg)
+crop-icons/pointed-cabbage.svg,Inspected,3760,.svg,Binary/Asset (.svg)
+crop-icons/pomegranate.svg,Inspected,1000,.svg,Binary/Asset (.svg)
+crop-icons/porcino.svg,Inspected,4900,.svg,Binary/Asset (.svg)
+crop-icons/portabello.svg,Inspected,3729,.svg,Binary/Asset (.svg)
+crop-icons/potato.svg,Inspected,2077,.svg,Binary/Asset (.svg)
+crop-icons/psilocybin.svg,Inspected,6467,.svg,Binary/Asset (.svg)
+crop-icons/pumpkin.svg,Inspected,6024,.svg,Binary/Asset (.svg)
+crop-icons/purple-carrot.svg,Inspected,5346,.svg,Binary/Asset (.svg)
+crop-icons/purple-cauliflower.svg,Inspected,6371,.svg,Binary/Asset (.svg)
+crop-icons/purple-pod-bean.svg,Inspected,7242,.svg,Binary/Asset (.svg)
+crop-icons/purple-potato.svg,Inspected,4163,.svg,Binary/Asset (.svg)
+crop-icons/radicchio.svg,Inspected,9991,.svg,Binary/Asset (.svg)
+crop-icons/ragi.svg,Inspected,786,.svg,Binary/Asset (.svg)
+crop-icons/rainbow-chard.svg,Inspected,10480,.svg,Binary/Asset (.svg)
+crop-icons/rainier-cherry.svg,Inspected,6997,.svg,Binary/Asset (.svg)
+crop-icons/raspberry.svg,Inspected,16560,.svg,Binary/Asset (.svg)
+crop-icons/red-anjou-pear.svg,Inspected,29500,.svg,Binary/Asset (.svg)
+crop-icons/red-bartlett-pear.svg,Inspected,26100,.svg,Binary/Asset (.svg)
+crop-icons/red-bell-pepper.svg,Inspected,3118,.svg,Binary/Asset (.svg)
+crop-icons/red-cabbage.svg,Inspected,4129,.svg,Binary/Asset (.svg)
+crop-icons/red-carrot.svg,Inspected,5226,.svg,Binary/Asset (.svg)
+crop-icons/red-chard.svg,Inspected,9901,.svg,Binary/Asset (.svg)
+crop-icons/red-curly-kale.svg,Inspected,17510,.svg,Binary/Asset (.svg)
+crop-icons/red-giant-mustard.svg,Inspected,31468,.svg,Binary/Asset (.svg)
+crop-icons/red-gold-potato.svg,Inspected,3447,.svg,Binary/Asset (.svg)
+crop-icons/red-kuri-squash.svg,Inspected,8882,.svg,Binary/Asset (.svg)
+crop-icons/red-onion.svg,Inspected,3986,.svg,Binary/Asset (.svg)
+crop-icons/red-pointed-cabbage.svg,Inspected,3777,.svg,Binary/Asset (.svg)
+crop-icons/red-russian-kale.svg,Inspected,18265,.svg,Binary/Asset (.svg)
+crop-icons/red-savina-pepper.svg,Inspected,3843,.svg,Binary/Asset (.svg)
+crop-icons/red-scotch-bonnet.svg,Inspected,4334,.svg,Binary/Asset (.svg)
+crop-icons/red-serrano-pepper.svg,Inspected,3668,.svg,Binary/Asset (.svg)
+crop-icons/red-tabasco-pepper.svg,Inspected,2264,.svg,Binary/Asset (.svg)
+crop-icons/redgram.svg,Inspected,1018,.svg,Binary/Asset (.svg)
+crop-icons/rice.svg,Inspected,13055,.svg,Binary/Asset (.svg)
+crop-icons/rocoto-pepper.svg,Inspected,5143,.svg,Binary/Asset (.svg)
+crop-icons/romaine.svg,Inspected,4394,.svg,Binary/Asset (.svg)
+crop-icons/rosemary.svg,Inspected,18242,.svg,Binary/Asset (.svg)
+crop-icons/rubber.svg,Inspected,686,.svg,Binary/Asset (.svg)
+crop-icons/runner-bean.svg,Inspected,5357,.svg,Binary/Asset (.svg)
+crop-icons/russet-potato.svg,Inspected,2077,.svg,Binary/Asset (.svg)
+crop-icons/rutabaga.svg,Inspected,4417,.svg,Binary/Asset (.svg)
+crop-icons/rye.svg,Inspected,10511,.svg,Binary/Asset (.svg)
+crop-icons/sage.svg,Inspected,5080,.svg,Binary/Asset (.svg)
+crop-icons/salsify.svg,Inspected,6376,.svg,Binary/Asset (.svg)
+crop-icons/santa-fe-grande-pepper.svg,Inspected,3875,.svg,Binary/Asset (.svg)
+crop-icons/savoy-cabbage.svg,Inspected,15661,.svg,Binary/Asset (.svg)
+crop-icons/sesame.svg,Inspected,707,.svg,Binary/Asset (.svg)
+crop-icons/shallot.svg,Inspected,4654,.svg,Binary/Asset (.svg)
+crop-icons/shiitake.svg,Inspected,3432,.svg,Binary/Asset (.svg)
+crop-icons/shishito-pepper.svg,Inspected,3760,.svg,Binary/Asset (.svg)
+crop-icons/siling-labuyo-pepper.svg,Inspected,9247,.svg,Binary/Asset (.svg)
+crop-icons/snap-pea.svg,Inspected,2730,.svg,Binary/Asset (.svg)
+crop-icons/sorghum-millet.svg,Inspected,48699,.svg,Binary/Asset (.svg)
+crop-icons/soy-bean.svg,Inspected,7769,.svg,Binary/Asset (.svg)
+crop-icons/soybean.svg,Inspected,7769,.svg,Binary/Asset (.svg)
+crop-icons/spaghetti-squash.svg,Inspected,6379,.svg,Binary/Asset (.svg)
+crop-icons/spinach.svg,Inspected,4426,.svg,Binary/Asset (.svg)
+crop-icons/spring-onion.svg,Inspected,4007,.svg,Binary/Asset (.svg)
+crop-icons/st-johns-wort.svg,Inspected,16203,.svg,Binary/Asset (.svg)
+crop-icons/stevia.svg,Inspected,10701,.svg,Binary/Asset (.svg)
+crop-icons/strawberry.svg,Inspected,11298,.svg,Binary/Asset (.svg)
+crop-icons/striped-cavern-tomato.svg,Inspected,5570,.svg,Binary/Asset (.svg)
+crop-icons/sugar-cane.svg,Inspected,9443,.svg,Binary/Asset (.svg)
+crop-icons/sugarcane.svg,Inspected,9443,.svg,Binary/Asset (.svg)
+crop-icons/sunflower.svg,Inspected,25596,.svg,Binary/Asset (.svg)
+crop-icons/sunray-tomato.svg,Inspected,3489,.svg,Binary/Asset (.svg)
+crop-icons/sweet-italian-pepper.svg,Inspected,5493,.svg,Binary/Asset (.svg)
+crop-icons/sweet-potato.svg,Inspected,3814,.svg,Binary/Asset (.svg)
+crop-icons/sweetlime.svg,Inspected,571,.svg,Binary/Asset (.svg)
+crop-icons/swiss-chard.svg,Inspected,9928,.svg,Binary/Asset (.svg)
+crop-icons/taro.svg,Inspected,17306,.svg,Binary/Asset (.svg)
+crop-icons/tea.svg,Inspected,762,.svg,Binary/Asset (.svg)
+crop-icons/thyme.svg,Inspected,25042,.svg,Binary/Asset (.svg)
+crop-icons/tobacco.svg,Inspected,827,.svg,Binary/Asset (.svg)
+crop-icons/tomatillo.svg,Inspected,2483,.svg,Binary/Asset (.svg)
+crop-icons/tomato.svg,Inspected,2486,.svg,Binary/Asset (.svg)
+crop-icons/trinidad-moruga-scorpion-pepper.svg,Inspected,12989,.svg,Binary/Asset (.svg)
+crop-icons/trinidad-scorpion-butch-t-pepper.svg,Inspected,5932,.svg,Binary/Asset (.svg)
+crop-icons/trumpet.svg,Inspected,6088,.svg,Binary/Asset (.svg)
+crop-icons/tulsi.svg,Inspected,17394,.svg,Binary/Asset (.svg)
+crop-icons/turmeric.svg,Inspected,9884,.svg,Binary/Asset (.svg)
+crop-icons/turnip.svg,Inspected,4589,.svg,Binary/Asset (.svg)
+crop-icons/watercress.svg,Inspected,12588,.svg,Binary/Asset (.svg)
+crop-icons/watermelon-radish.svg,Inspected,4384,.svg,Binary/Asset (.svg)
+crop-icons/watermelon.svg,Inspected,18179,.svg,Binary/Asset (.svg)
+crop-icons/wax-bean.svg,Inspected,7242,.svg,Binary/Asset (.svg)
+crop-icons/wheat.svg,Inspected,19335,.svg,Binary/Asset (.svg)
+crop-icons/white-button.svg,Inspected,2712,.svg,Binary/Asset (.svg)
+crop-icons/white-carrot.svg,Inspected,5224,.svg,Binary/Asset (.svg)
+crop-icons/white-onion.svg,Inspected,3857,.svg,Binary/Asset (.svg)
+crop-icons/white-oyster.svg,Inspected,35488,.svg,Binary/Asset (.svg)
+crop-icons/wormwood.svg,Inspected,16330,.svg,Binary/Asset (.svg)
+crop-icons/yellow-bell-pepper.svg,Inspected,3108,.svg,Binary/Asset (.svg)
+crop-icons/yellow-carrot.svg,Inspected,5344,.svg,Binary/Asset (.svg)
+crop-icons/yellow-cauliflower.svg,Inspected,6371,.svg,Binary/Asset (.svg)
+crop-icons/yellow-onion.svg,Inspected,3992,.svg,Binary/Asset (.svg)
+crop-icons/yellow-oyster.svg,Inspected,35534,.svg,Binary/Asset (.svg)
+crop-icons/yellow-scotch-bonnet.svg,Inspected,4331,.svg,Binary/Asset (.svg)
+crop-icons/yellow-squash.svg,Inspected,3043,.svg,Binary/Asset (.svg)
+crop-icons/youkon-gold-potato.svg,Inspected,3706,.svg,Binary/Asset (.svg)
+crop-icons/zucchini.svg,Inspected,7608,.svg,Binary/Asset (.svg)
+debug_driver_view.py,Inspected,797,.py,Clean
+debug_driver_view2.py,Inspected,927,.py,Clean
+debug_driver_view3.py,Inspected,946,.py,Clean
+debug_header.py,Inspected,1221,.py,Clean
+debug_polygon.py,Inspected,449,.py,Clean
+docker-compose.yml,Inspected,1273,.yml,Not deep-scanned
+docs/EXACT_EXISTING_PRODUCT_INVENTORY.md,Inspected,39824,.md,Not deep-scanned
+docs/EXACT_UI_RECOVERY_REPORT.md,Inspected,13291,.md,Not deep-scanned
+docs/FINAL_PRODUCTION_BACKEND_VERIFICATION.md,Inspected,11866,.md,Not deep-scanned
+docs/NUKROPAI_BACKEND_ARCHITECTURE.md,Inspected,6828,.md,Not deep-scanned
+docs/NUKROPAI_CURRENT_STATE_AUDIT.md,Inspected,5809,.md,Not deep-scanned
+docs/NUKROPAI_FINAL_ENGINEERING_REPORT.md,Inspected,6968,.md,Not deep-scanned
+docs/NUKROPAI_PERFORMANCE_AUDIT.md,Inspected,2552,.md,Not deep-scanned
+docs/NUKROPAI_RELEASE_ARCHITECTURE.md,Inspected,2746,.md,Not deep-scanned
+docs/NUKROPAI_SECURITY_AUDIT.md,Inspected,3838,.md,Not deep-scanned
+docs/NUKROPAI_UI_REGRESSION.md,Inspected,4569,.md,Not deep-scanned
+docs/REAL_GOVERNMENT_MANDI_DATA_VERIFICATION.md,Inspected,9649,.md,Not deep-scanned
+docs/REAL_PRODUCTION_DATABASE_AUDIT.md,Inspected,12714,.md,Not deep-scanned
+edge/docker-compose.yml,Inspected,686,.yml,Not deep-scanned
+edge/edge-controller/Dockerfile,Inspected,155,,Not deep-scanned
+edge/edge-controller/main.py,Inspected,3479,.py,Clean
+edge/edge-controller/requirements.txt,Inspected,17,.txt,Not deep-scanned
+edge/mosquitto.conf,Inspected,43,.conf,Not deep-scanned
+extract_app_views.py,Inspected,608,.py,Clean
+extract_gh.py,Inspected,422,.py,Clean
+extract_js.py,Inspected,264,.py,Clean
+extract_plantix_cases.js,Inspected,411,.js,Clean
+extracted_script.js,Inspected,1224519,.js,41 mock/fake/simulation references
+find_all_open_screen.py,Inspected,364,.py,Clean
+find_app_views.py,Inspected,378,.py,Clean
+find_app_views_decl.py,Inspected,363,.py,Clean
+find_bilingual.js,Inspected,482,.js,Clean
+find_crop_fns.js,Inspected,261,.js,Clean
+find_dock_selector.py,Inspected,477,.py,Clean
+find_gh.py,Inspected,358,.py,Clean
+find_home_bak.py,Inspected,338,.py,Clean
+find_mixed_lines.js,Inspected,857,.js,Clean
+find_open_screen_bak.py,Inspected,383,.py,Clean
+find_open_screen_decl.py,Inspected,321,.py,Clean
+find_profile.py,Inspected,1880,.py,Clean
+find_startup_elem.py,Inspected,325,.py,Clean
+find_ticks.py,Inspected,239,.py,Clean
+find_ticks2.py,Inspected,334,.py,Clean
+fix_ai.py,Inspected,772,.py,Clean
+fix_analytics_guard.py,Inspected,809,.py,Clean
+fix_auth_vars.py,Inspected,1198,.py,Clean
+fix_avatar.py,Inspected,499,.py,Clean
+fix_backtick_escapes.py,Inspected,803,.py,Clean
+fix_blank_screen.py,Inspected,739,.py,Clean
+fix_boot.py,Inspected,1662,.py,Clean
+fix_center_fab_and_emulator.py,Inspected,8184,.py,Clean
+fix_comma.py,Inspected,641,.py,Clean
+fix_const_var.py,Inspected,506,.py,Clean
+fix_critical.py,Inspected,1856,.py,Clean
+fix_driver_banner_overlap.py,Inspected,3099,.py,Clean
+fix_driver_interpolations.py,Inspected,1589,.py,Clean
+fix_driver_interpolations_binary.py,Inspected,1245,.py,Clean
+fix_driver_ui.py,Inspected,1161,.py,Clean
+fix_fleet.js,Inspected,971,.js,1 mock/fake/simulation references
+fix_flow.js,Inspected,1942,.js,Clean
+fix_flows.py,Inspected,4643,.py,Clean
+fix_layout.py,Inspected,1215,.py,Clean
+fix_login.py,Inspected,1801,.py,Clean
+fix_notif.js,Inspected,893,.js,Clean
+fix_profiles.js,Inspected,2528,.js,Clean
+fix_quotes.js,Inspected,615,.js,Clean
+fix_redecl.py,Inspected,1694,.py,Clean
+fix_render_login_scope.py,Inspected,1464,.py,Clean
+fix_scoping.py,Inspected,919,.py,Clean
+fix_syntax.py,Inspected,971,.py,Clean
+fix_viewport.py,Inspected,506,.py,Clean
+fix_web.js,Inspected,890,.js,Clean
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/.filecache,Generated or vendored file,164262,,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/_composite.stamp,Generated or vendored file,26,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/android_aot_bundle_release_android-arm.stamp,Generated or vendored file,296,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/android_aot_bundle_release_android-arm64.stamp,Generated or vendored file,292,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/android_aot_bundle_release_android-x64.stamp,Generated or vendored file,286,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/android_aot_release_android-arm.stamp,Generated or vendored file,527,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/android_aot_release_android-arm64.stamp,Generated or vendored file,525,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/android_aot_release_android-x64.stamp,Generated or vendored file,522,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/aot_android_asset_bundle.stamp,Generated or vendored file,10381,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/app.dill,Generated or vendored file,30791016,.dill,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/arm64-v8a/app.so,Generated or vendored file,7478480,.so,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/armeabi-v7a/app.so,Generated or vendored file,7628880,.so,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/dart_build.d,Generated or vendored file,147,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/dart_build.stamp,Generated or vendored file,510,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/dart_build_result.json,Generated or vendored file,137,.json,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_android_aot_bundle_release_android-arm.d,Generated or vendored file,2,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_android_aot_bundle_release_android-arm64.d,Generated or vendored file,2,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_android_aot_bundle_release_android-x64.d,Generated or vendored file,2,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_android_aot_release_android-arm.d,Generated or vendored file,2,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_android_aot_release_android-arm64.d,Generated or vendored file,2,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_android_aot_release_android-x64.d,Generated or vendored file,2,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/flutter_assets.d,Generated or vendored file,9689,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/gen_dart_plugin_registrant.stamp,Generated or vendored file,237,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/gen_localizations.stamp,Generated or vendored file,26,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/install_code_assets.d,Generated or vendored file,143,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/install_code_assets.stamp,Generated or vendored file,649,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/kernel_snapshot_program.d,Generated or vendored file,92640,.d,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/kernel_snapshot_program.stamp,Generated or vendored file,95216,.stamp,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/native_assets.json,Generated or vendored file,45,.json,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/outputs.json,Generated or vendored file,1584,.json,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/072d3078442c1991eff87781ee5a0d36/x86_64/app.so,Generated or vendored file,7544288,.so,Not deep-scanned
+flutter_app/.dart_tool/flutter_build/dart_plugin_registrant.dart,Generated or vendored file,5665,.dart,Not deep-scanned
+flutter_app/.dart_tool/package_config.json,Generated or vendored file,18973,.json,Not deep-scanned
+flutter_app/.dart_tool/package_graph.json,Generated or vendored file,16226,.json,Not deep-scanned
+flutter_app/.dart_tool/version,Generated or vendored file,6,,Not deep-scanned
+flutter_app/.flutter-plugins-dependencies,Unused or potentially obsolete,6005,,Not deep-scanned
+flutter_app/.idea/libraries/Dart_SDK.xml,Unused or potentially obsolete,970,.xml,Not deep-scanned
+flutter_app/.idea/libraries/KotlinJavaRuntime.xml,Unused or potentially obsolete,614,.xml,Not deep-scanned
+flutter_app/.idea/modules.xml,Unused or potentially obsolete,405,.xml,Not deep-scanned
+flutter_app/.idea/runConfigurations/main_dart.xml,Unused or potentially obsolete,276,.xml,Not deep-scanned
+flutter_app/.idea/workspace.xml,Unused or potentially obsolete,1553,.xml,Not deep-scanned
+flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java,Unused or potentially obsolete,1323,.java,Not deep-scanned
+flutter_app/android/gradle/wrapper/gradle-wrapper.jar,Test or build artifact,53636,.jar,Binary/Asset (.jar)
+flutter_app/android/gradlew,Unused or potentially obsolete,5131,,Not deep-scanned
+flutter_app/android/gradlew.bat,Unused or potentially obsolete,2404,.bat,Not deep-scanned
+gen_test.mjs,Inspected,156,.mjs,Not deep-scanned
+generate_truck_svgs.py,Inspected,4767,.py,Clean
+gradle.properties,Inspected,1516,.properties,Not deep-scanned
+gradle/libs.versions.toml,Inspected,8358,.toml,Not deep-scanned
+gradle/wrapper/gradle-wrapper.jar,Test or build artifact,43764,.jar,Binary/Asset (.jar)
+gradle/wrapper/gradle-wrapper.properties,Inspected,259,.properties,Not deep-scanned
+gradlew,Inspected,8984,,Not deep-scanned
+gradlew.bat,Inspected,2937,.bat,Not deep-scanned
+harden_supabase.js,Inspected,2566,.js,Clean
+images/onboard_agristack_tech.jpg,Inspected,956191,.jpg,Binary/Asset (.jpg)
+images/onboard_ai_voice_weather.jpg,Inspected,867036,.jpg,Binary/Asset (.jpg)
+images/onboard_community_machinery.jpg,Inspected,930587,.jpg,Binary/Asset (.jpg)
+images/onboard_crop_doctor.jpg,Inspected,866072,.jpg,Binary/Asset (.jpg)
+images/onboard_farm_logistics.jpg,Inspected,779575,.jpg,Binary/Asset (.jpg)
+images/onboard_mandi_prices.jpg,Inspected,1150960,.jpg,Binary/Asset (.jpg)
+images/perm_bg_camera.jpg,Inspected,666473,.jpg,Binary/Asset (.jpg)
+images/perm_bg_location.jpg,Inspected,659282,.jpg,Binary/Asset (.jpg)
+images/perm_bg_notification.jpg,Inspected,525154,.jpg,Binary/Asset (.jpg)
+images/perm_camera_scan.jpg,Inspected,666473,.jpg,Binary/Asset (.jpg)
+images/perm_location_gps.jpg,Inspected,659282,.jpg,Binary/Asset (.jpg)
+images/perm_notification_bell.jpg,Inspected,525154,.jpg,Binary/Asset (.jpg)
+inject_listeners.py,Inspected,1945,.py,Clean
+inject_supabase.py,Inspected,757,.py,Clean
+inline_extracted.js,Inspected,1190754,.js,40 mock/fake/simulation references
+inspect_agristack_syntax.py,Inspected,274,.py,Clean
+inspect_app.py,Inspected,717,.py,Clean
+inspect_app_views_gramhaul.py,Inspected,332,.py,Clean
+inspect_auth.py,Inspected,652,.py,Clean
+inspect_crop_name_fn.js,Inspected,233,.js,Clean
+inspect_crop_trans.js,Inspected,228,.js,Clean
+inspect_dispatch_modal.js,Inspected,237,.js,Clean
+inspect_driver_and_gramhaul.py,Inspected,686,.py,Clean
+inspect_driver_dash.js,Inspected,283,.js,Clean
+inspect_driver_earntab.js,Inspected,331,.js,Clean
+inspect_driver_maptab.js,Inspected,317,.js,Clean
+inspect_driver_maptab2.js,Inspected,288,.js,Clean
+inspect_driver_tabs.js,Inspected,262,.js,Clean
+inspect_emulator.py,Inspected,453,.py,Clean
+inspect_err_line.py,Inspected,375,.py,Clean
+inspect_exact_blocks.js,Inspected,935,.js,Clean
+inspect_farmer_login.py,Inspected,326,.py,Clean
+inspect_gramhaul.py,Inspected,379,.py,Clean
+inspect_gramhaul_screen.py,Inspected,527,.py,Clean
+inspect_gramhaul_view.js,Inspected,218,.js,Clean
+inspect_gramhaul_view2.js,Inspected,225,.js,Clean
+inspect_lifecycle.py,Inspected,637,.py,Clean
+inspect_login.py,Inspected,347,.py,Clean
+inspect_login_completion.py,Inspected,451,.py,Clean
+inspect_market_tab.py,Inspected,322,.py,Clean
+inspect_ob_defs.py,Inspected,414,.py,Clean
+inspect_ob_tl.js,Inspected,218,.js,Clean
+inspect_onboarding.py,Inspected,545,.py,Clean
+inspect_onboarding_i18n.js,Inspected,226,.js,Clean
+inspect_open_screen.py,Inspected,333,.py,Clean
+inspect_overlays.py,Inspected,1212,.py,Clean
+inspect_perm_block.js,Inspected,356,.js,Clean
+inspect_perms.js,Inspected,480,.js,Clean
+inspect_render_plantix_crops.js,Inspected,237,.js,Clean
+inspect_render_plantix_crops2.js,Inspected,244,.js,Clean
+inspect_sections.py,Inspected,644,.py,Clean
+inspect_startup_overlay.py,Inspected,318,.py,Clean
+inspect_tl.js,Inspected,452,.js,Clean
+inventory_scanner.js,Inspected,3345,.js,Clean
+js/agristack_dpi_service.js,Inspected,14853,.js,5 mock/fake/simulation references
+js/geo_tracking_service.js,Inspected,21613,.js,Clean
+js/supabase_integration.js,Inspected,50248,.js,Clean
+make_fullscreen.py,Inspected,2492,.py,Clean
+metadata.json,Inspected,259,.json,Clean
+nginx.conf,Inspected,1247,.conf,Not deep-scanned
+nukrop_emulator.html,Inspected,1650111,.html,67 mock/fake/simulation references
+old_home.kt,Inspected,56056,.kt,Clean
+old_main.kt,Inspected,15906,.kt,Clean
+onboarding_preview.html,Inspected,897087,.html,29 mock/fake/simulation references
+onboarding_showcase.html,Inspected,45709,.html,1 mock/fake/simulation references
+onboarding_steps_preview.html,Inspected,47938,.html,Clean
+package-lock.json,Inspected,724,.json,Clean
+package.json,Inspected,1760,.json,Clean
+patch_clean_auth_lifecycle.py,Inspected,14523,.py,3 mock/fake/simulation references
+patch_crop_and_community.py,Inspected,13305,.py,Clean
+patch_dock_and_clean_home.py,Inspected,8598,.py,Clean
+patch_fullstack.py,Inspected,23604,.py,2 mock/fake/simulation references
+patch_gramhaul_exact_3phase_flow.py,Inspected,36075,.py,1 mock/fake/simulation references
+patch_gramhaul_rapido.py,Inspected,32,.py,Clean
+patch_master_onboarding_auth_suite.py,Inspected,42233,.py,4 mock/fake/simulation references
+patch_potea_and_gramhaul_uber_white.py,Inspected,65091,.py,6 mock/fake/simulation references
+patch_real_gramhaul_v4.py,Inspected,47596,.py,3 mock/fake/simulation references
+patch_screen2_tracking.py,Inspected,25037,.py,Clean
+patch_startup_overlay_fix.py,Inspected,2660,.py,Clean
+patch_ui.js,Inspected,4003,.js,1 mock/fake/simulation references
+prepare_js_module.py,Inspected,20279,.py,Clean
+print_gramhaul_view.py,Inspected,224,.py,Clean
+put_open_screen_top.py,Inspected,3348,.py,Clean
+read_auth.py,Inspected,224,.py,Clean
+remove_fake_data.py,Inspected,1503,.py,2 mock/fake/simulation references
+restore_and_perfect_gramhaul.py,Inspected,31493,.py,1 mock/fake/simulation references
+restore_and_protect_open_screen.py,Inspected,3494,.py,Clean
+scan_modals_and_tabs.js,Inspected,1832,.js,Clean
+scratch/__pycache__/upgrade_functions.cpython-312.pyc,Test or build artifact,37279,.pyc,Not deep-scanned
+scratch/apply_complete_fix_and_leaf.py,Unused or potentially obsolete,10567,.py,Not deep-scanned
+scratch/apply_complete_polish.py,Unused or potentially obsolete,16107,.py,Not deep-scanned
+scratch/apply_exact_gramhaul_polish.py,Unused or potentially obsolete,50899,.py,Not deep-scanned
+scratch/apply_updates.py,Unused or potentially obsolete,43770,.py,Not deep-scanned
+scratch/capture_scrolled.py,Unused or potentially obsolete,1824,.py,Not deep-scanned
+scratch/clean_all_categories_and_screens.py,Unused or potentially obsolete,4435,.py,Not deep-scanned
+scratch/clean_all_modals_and_screens.py,Unused or potentially obsolete,8889,.py,Not deep-scanned
+scratch/deep_scan_gramhaul.py,Unused or potentially obsolete,2127,.py,Not deep-scanned
+scratch/exact_gh_views.py,Unused or potentially obsolete,1356,.py,Not deep-scanned
+scratch/execute_gramhaul_full_upgrade.py,Unused or potentially obsolete,29174,.py,Not deep-scanned
+scratch/find_app_views.py,Unused or potentially obsolete,512,.py,Not deep-scanned
+scratch/find_farm_markers.py,Unused or potentially obsolete,350,.py,Not deep-scanned
+scratch/find_finish_onboarding.py,Unused or potentially obsolete,426,.py,Not deep-scanned
+scratch/find_gh_fns.py,Unused or potentially obsolete,382,.py,Not deep-scanned
+scratch/find_onboarding.py,Unused or potentially obsolete,303,.py,Not deep-scanned
+scratch/find_ready.py,Unused or potentially obsolete,236,.py,Not deep-scanned
+scratch/find_targets.py,Unused or potentially obsolete,629,.py,Not deep-scanned
+scratch/find_views.py,Unused or potentially obsolete,901,.py,Not deep-scanned
+scratch/fix_ready_badge.py,Unused or potentially obsolete,916,.py,Not deep-scanned
+scratch/fix_sql_on_conflict.py,Unused or potentially obsolete,14840,.py,Not deep-scanned
+scratch/fix_syntax.py,Unused or potentially obsolete,406,.py,Not deep-scanned
+scratch/fix_toast_alignment.py,Unused or potentially obsolete,7189,.py,Not deep-scanned
+scratch/generate_premium_crop_icons.py,Unused or potentially obsolete,29392,.py,Not deep-scanned
+scratch/grabcut_trucks.py,Unused or potentially obsolete,2237,.py,Not deep-scanned
+scratch/gramhaul_views_upgrade.py,Unused or potentially obsolete,35979,.py,Not deep-scanned
+scratch/inspect_accept_lang.py,Unused or potentially obsolete,228,.py,Not deep-scanned
+scratch/inspect_call_chat.py,Unused or potentially obsolete,655,.py,Not deep-scanned
+scratch/inspect_crop_card.py,Unused or potentially obsolete,236,.py,Not deep-scanned
+scratch/inspect_crop_card2.py,Unused or potentially obsolete,225,.py,Not deep-scanned
+scratch/inspect_crop_icon_img.py,Unused or potentially obsolete,226,.py,Not deep-scanned
+scratch/inspect_crop_modal.py,Unused or potentially obsolete,336,.py,Not deep-scanned
+scratch/inspect_crop_section.py,Unused or potentially obsolete,225,.py,Not deep-scanned
+scratch/inspect_finish_fn.py,Unused or potentially obsolete,226,.py,Not deep-scanned
+scratch/inspect_gh_js_emojis.py,Unused or potentially obsolete,904,.py,Not deep-scanned
+scratch/inspect_gramhaul.py,Unused or potentially obsolete,1991,.py,Not deep-scanned
+scratch/inspect_invoice_modal.py,Unused or potentially obsolete,560,.py,Not deep-scanned
+scratch/inspect_mandi_select.py,Unused or potentially obsolete,219,.py,Not deep-scanned
+scratch/inspect_open_screen.py,Unused or potentially obsolete,219,.py,Not deep-scanned
+scratch/inspect_s1_buttons.py,Unused or potentially obsolete,384,.py,Not deep-scanned
+scratch/inspect_s1_details.py,Unused or potentially obsolete,671,.py,Not deep-scanned
+scratch/inspect_s1_scroll.py,Unused or potentially obsolete,208,.py,Not deep-scanned
+scratch/make_clean_cutouts.py,Unused or potentially obsolete,3701,.py,Not deep-scanned
+scratch/prepare_svgs.py,Unused or potentially obsolete,9563,.py,Not deep-scanned
+scratch/print_tier_prices.py,Unused or potentially obsolete,446,.py,Not deep-scanned
+scratch/print_tiers.py,Unused or potentially obsolete,334,.py,Not deep-scanned
+scratch/process_all_clean_cutouts.py,Unused or potentially obsolete,3926,.py,Not deep-scanned
+scratch/process_truck_pngs.py,Unused or potentially obsolete,3059,.py,Not deep-scanned
+scratch/replace_canonical_on_conflict.py,Unused or potentially obsolete,12115,.py,Not deep-scanned
+scratch/scan_driver_dash.py,Unused or potentially obsolete,691,.py,Not deep-scanned
+scratch/scan_gh_views.py,Unused or potentially obsolete,1837,.py,Not deep-scanned
+scratch/scan_modals.py,Unused or potentially obsolete,868,.py,Not deep-scanned
+scratch/scan_navs.py,Unused or potentially obsolete,916,.py,Not deep-scanned
+scratch/update_crop_img_fn.py,Unused or potentially obsolete,5582,.py,Not deep-scanned
+scratch/upgrade_all_ui_icons.py,Unused or potentially obsolete,66953,.py,Not deep-scanned
+scratch/upgrade_farm_pins.py,Unused or potentially obsolete,1946,.py,Not deep-scanned
+scratch/upgrade_functions.py,Unused or potentially obsolete,36143,.py,Not deep-scanned
+scratch/verify_all_screens_and_icons.py,Unused or potentially obsolete,2267,.py,Not deep-scanned
+scratch/verify_complete_ui.py,Unused or potentially obsolete,4718,.py,Not deep-scanned
+scratch/verify_real_rapido_flow.py,Unused or potentially obsolete,8273,.py,Not deep-scanned
+scratch_compose.py,Inspected,560,.py,Clean
+scratch_compose_jaeger.py,Inspected,362,.py,Clean
+scratch_observability.py,Inspected,1838,.py,Clean
+scratch_priority_queue.py,Inspected,2973,.py,Clean
+scratch_refactor_soil.py,Inspected,4822,.py,1 TODO/FIXME markers
+scratch_schema_certs.py,Inspected,1164,.py,Clean
+scratch_schema_events.py,Inspected,770,.py,Clean
+scratch_schema_iot.py,Inspected,2775,.py,Clean
+scratch_schema_saas.py,Inspected,2476,.py,Clean
+scratch_sre_android.py,Inspected,4424,.py,1 mock/fake/simulation references
+scratch_sre_gateway.py,Inspected,6963,.py,Clean
+scratch_test.py,Inspected,338,.py,Clean
+scratch_test_homescreen.py,Inspected,6362,.py,Clean
+scratch_test_irrigation.py,Inspected,6860,.py,Clean
+scratch_test_mandi.py,Inspected,655,.py,Clean
+scratch_test_marketscreen.py,Inspected,4506,.py,Clean
+scripts/audit_m2_reviewer.js,Inspected,5338,.js,4 mock/fake/simulation references
+scripts/audit_modals.py,Inspected,698,.py,Clean
+scripts/find_warangal_fallbacks.js,Inspected,555,.js,Clean
+search_assets.py,Inspected,662,.py,Clean
+secure_ai_layer.js,Inspected,7451,.js,Clean
+settings.gradle.kts,Inspected,628,.kts,Clean
+supabase/CANONICAL_PRODUCTION_SETUP.sql,Inspected,69609,.sql,Clean
+supabase/COMPLETE_PRODUCTION_DATABASE.sql,Inspected,16643,.sql,Clean
+supabase/FIX_GEOM_AND_FULL_SCHEMA.sql,Inspected,16034,.sql,Clean
+supabase/FULL_NUKROPAI_SCHEMA.sql,Inspected,57667,.sql,Potential exposed API secret / service token
+supabase/FULL_PRODUCTION_SCHEMA_AND_TRIGGERS.sql,Inspected,19776,.sql,1 mock/fake/simulation references
+supabase/UNIFIED_PRODUCTION_CONSOLIDATION.sql,Inspected,38895,.sql,Clean
+supabase/functions/ai-agronomist/index.ts,Inspected,4206,.ts,Clean
+supabase/functions/mandi-sync/index.ts,Inspected,9448,.ts,Clean
+supabase/migrations/20260901000001_initial_schema_and_rls.sql,Inspected,9066,.sql,Clean
+supabase/migrations/20261003000001_haul_logistics_and_realtime.sql,Inspected,4073,.sql,Clean
+supabase/migrations/20261003010000_production_mandi_and_rls.sql,Inspected,57667,.sql,Potential exposed API secret / service token
+supabase/migrations/20261004020000_postgis_driver_tracking_osrm.sql,Inspected,5295,.sql,Potential exposed API secret / service token
+supabase/migrations/20261004030000_agristack_cadastral_dcs.sql,Inspected,8179,.sql,Clean
+supabase/migrations/20261004040000_agristack_relational_search.sql,Inspected,9887,.sql,Clean
+supabase/migrations/20261004050000_authentic_agristack_registry.sql,Inspected,5613,.sql,Clean
+supabase/seed/demo_data.sql,Inspected,5361,.sql,Clean
+supabase_clean_drop.sql,Inspected,1054,.sql,Clean
+supabase_enterprise_v41.sql,Inspected,18047,.sql,Clean
+supabase_master_production_v41.sql,Inspected,38895,.sql,Clean
+supabase_nukrop_schema.sql,Inspected,9748,.sql,Clean
+supabase_realtime_setup.sql,Inspected,26274,.sql,Potential exposed API secret / service token; 1 mock/fake/simulation references
+supabase_schema.sql,Inspected,19330,.sql,Potential exposed API secret / service token
+supabase_setup.sql,Inspected,4622,.sql,Clean
+surgical_fix_state.py,Inspected,2233,.py,Clean
+test.js,Inspected,1500960,.js,37 mock/fake/simulation references
+tests/adversarial_runtime_live_eval.js,Test or build artifact,13485,.js,Not deep-scanned
+tests/adversarial_stress_r1_r3.js,Test or build artifact,17021,.js,Not deep-scanned
+tests/adversarial_stress_r2_r4.js,Test or build artifact,16058,.js,Not deep-scanned
+tests/find_44_ids.py,Test or build artifact,910,.py,Not deep-scanned
+tests/run_e2e_tests.js,Test or build artifact,960,.js,Not deep-scanned
+tests/tier0_forensic_integrity.js,Test or build artifact,9387,.js,Not deep-scanned
+tests/tier1_feature_coverage.js,Test or build artifact,67723,.js,Not deep-scanned
+tests/tier2_boundary_cases.js,Test or build artifact,44732,.js,Not deep-scanned
+tests/tier3_cross_feature.js,Test or build artifact,16561,.js,Not deep-scanned
+tests/tier4_real_world.js,Test or build artifact,21645,.js,Not deep-scanned
+tests/verify_milestone1_gramhaul.js,Test or build artifact,11904,.js,Not deep-scanned
+tests/verify_milestone2_pest_alerts.js,Test or build artifact,13296,.js,Not deep-scanned
+tests/verify_milestone3_community.js,Test or build artifact,23563,.js,Not deep-scanned
+tweak_driver_ui.py,Inspected,3330,.py,Clean
+tweak_farmer_profile.py,Inspected,5336,.py,Clean
+tweak_farmer_ui.py,Inspected,4544,.py,Clean
+update.py,Inspected,1916,.py,1 mock/fake/simulation references
+update2.py,Inspected,3384,.py,Clean
+update_flow.py,Inspected,7826,.py,Clean
+update_patch_script.py,Inspected,2230,.py,Clean
+update_rapido_gramhaul.py,Inspected,60,.py,Clean
+update_walkthrough.py,Inspected,1477,.py,Clean
+update_walkthrough2.py,Inspected,2187,.py,Clean
+upgrade_all_icons_to_high_end_svg.py,Inspected,20292,.py,Clean
+upgrade_driver_v6_uber_grade.py,Inspected,56451,.py,Clean
+upgrade_gramhaul_view.py,Inspected,18467,.py,Clean
+upgrade_rapido_captain_v7.py,Inspected,50798,.py,Clean
+upgrade_to_enterprise_supabase.py,Inspected,13614,.py,Clean
+upgrade_uber_driver_full.py,Inspected,37806,.py,Clean
+upgrade_uis.py,Inspected,9372,.py,Clean
+verify_all_interactive_features.py,Inspected,3749,.py,Clean
+verify_all_screens.py,Inspected,3697,.py,Clean
+verify_and_capture_all_flows.py,Inspected,4470,.py,Clean
+verify_and_capture_all_flows_v2.py,Inspected,4919,.py,Clean
+verify_and_capture_master_gallery.py,Inspected,4338,.py,Clean
+verify_eicher_pro.py,Inspected,2736,.py,Clean
+verify_exact_chain.py,Inspected,7944,.py,Clean
+verify_patch.py,Inspected,1052,.py,Clean
+verify_rapido_flow.py,Inspected,6808,.py,Clean
+verify_rapido_gramhaul_flow.py,Inspected,5807,.py,Clean
+verify_screen1_and_interactions.py,Inspected,5980,.py,1 mock/fake/simulation references
+verify_screen2_tracking.py,Inspected,5274,.py,Clean
+verify_truck_markers_and_driver.py,Inspected,4469,.py,Clean
+verify_uber_driver_suite.py,Inspected,4589,.py,Clean
+web/Dockerfile,Inspected,286,,Not deep-scanned
+web/index.html,Inspected,803,.html,Clean
+web/package-lock.json,Inspected,44656,.json,Clean
+web/package.json,Inspected,547,.json,Clean
+web/public/NuKropAI.apk,Test or build artifact,64601143,.apk,Binary/Asset (.apk)
+web/public/NuKropAI_latest.apk,Test or build artifact,64601143,.apk,Binary/Asset (.apk)
+web/public/NuKropAI_v1.0.apk,Test or build artifact,47015947,.apk,Binary/Asset (.apk)
+web/public/NuKropAI_v2.0.apk,Test or build artifact,64601143,.apk,Binary/Asset (.apk)
+web/public/farm_bg.jpg,Inspected,1101255,.jpg,Binary/Asset (.jpg)
+web/public/feature_advisor.jpg,Inspected,926596,.jpg,Binary/Asset (.jpg)
+web/public/feature_mandi.jpg,Inspected,849069,.jpg,Binary/Asset (.jpg)
+web/public/feature_scan.jpg,Inspected,848421,.jpg,Binary/Asset (.jpg)
+web/public/feature_soil.jpg,Inspected,936267,.jpg,Binary/Asset (.jpg)
+web/public/feature_subsidy.jpg,Inspected,964927,.jpg,Binary/Asset (.jpg)
+web/public/feature_weather.jpg,Inspected,802636,.jpg,Binary/Asset (.jpg)
+web/src/App.tsx,Inspected,39962,.tsx,Clean
+web/src/api/client.ts,Inspected,3963,.ts,Clean
+web/src/components/Hero.tsx,Inspected,2718,.tsx,Clean
+web/src/components/MandiWeb.tsx,Inspected,4827,.tsx,Clean
+web/src/components/ScannerWeb.tsx,Inspected,3069,.tsx,Clean
+web/src/index.css,Inspected,9574,.css,Not deep-scanned
+web/src/main.tsx,Inspected,241,.tsx,Clean
+web/sync-apk.js,Inspected,2143,.js,Clean
+web/tsconfig.json,Inspected,582,.json,Clean
+web/vercel.json,Inspected,96,.json,Clean
+web/vite.config.ts,Inspected,188,.ts,Clean

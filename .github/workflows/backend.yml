@@ -33,8 +33,16 @@ jobs:
     - name: Build
       run: npm run build
       
-    - name: Run tests
-      run: echo "No tests specified yet"
+    - name: Set up Python for test assertions
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python test requirements
+      run: pip install requests psycopg2-binary
+
+    - name: Run Backend Automated Tests
+      run: npm test
       
     - name: Build Docker Image
       run: docker build -t ai-enterprise-backend .

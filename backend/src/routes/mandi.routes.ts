@@ -29,7 +29,13 @@ export default async function mandiRoutes(fastify: FastifyInstance) {
             return reply.send({ success: true, records, cached: false });
         } catch (error: any) {
             request.log.error(error);
-            return reply.status(500).send({ error: error.message });
+            return reply.status(502).send({ 
+                success: false, 
+                code: 'UPSTREAM_PROVIDER_OUTAGE',
+                error: 'Upstream Ministry of Agriculture / data.gov.in provider failure', 
+                details: error.message 
+            });
         }
+
     });
 }

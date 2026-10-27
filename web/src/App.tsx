@@ -16,13 +16,50 @@ import {
   Download, 
   Menu, 
   X, 
-  Radio
+  Radio,
+  Search,
+  FileText,
+  Cookie,
+  SlidersHorizontal,
+  AlertCircle
 } from 'lucide-react';
+import { ToastProvider, useToast } from './components/Toast';
+import { CommandMenu } from './components/CommandMenu';
+import { LegalModal, LegalTab } from './components/LegalModal';
+import { LegalPage } from './components/LegalPages';
+import { NotFound } from './components/NotFound';
+import { CookieConsent } from './components/CookieConsent';
+import { ContactForm } from './components/ContactForm';
+import { analytics } from './utils/analytics';
 
-export default function App() {
+function AppContent() {
+  const { showToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [scrollProgress, setScrollProgress] = useState(0);
+
+  // Client Routing State
+  const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname.toLowerCase());
+
+  // Command Menu & Legal Modal States
+  const [commandMenuOpen, setCommandMenuOpen] = useState(false);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [activeLegalTab, setActiveLegalTab] = useState<LegalTab>('privacy');
+
+  // Sync with browser history popstate
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentPath(window.location.pathname.toLowerCase());
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigate = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path.toLowerCase());
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Scroll Progress Tracker
   useEffect(() => {
@@ -38,6 +75,35 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Custom Event Listener to open command menu
+  useEffect(() => {
+    const handleOpenCmd = () => setCommandMenuOpen(true);
+    window.addEventListener('open-nukrop-command-menu', handleOpenCmd);
+    return () => window.removeEventListener('open-nukrop-command-menu', handleOpenCmd);
+  }, []);
+
+  const openLegal = (tab: LegalTab) => {
+    setActiveLegalTab(tab);
+    setLegalModalOpen(true);
+  };
+
+  // Dedicated Route Handlers
+  if (currentPath === '/privacy' || currentPath === '/privacy.html') {
+    return <LegalPage page="privacy" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath === '/terms' || currentPath === '/terms.html') {
+    return <LegalPage page="terms" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath === '/cookies' || currentPath === '/cookies.html') {
+    return <LegalPage page="cookies" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath === '/refund' || currentPath === '/refund.html') {
+    return <LegalPage page="refund" onNavigateHome={() => navigate('/')} onOpenOtherLegal={(p) => navigate('/' + p)} />;
+  }
+  if (currentPath !== '/' && !currentPath.startsWith('/#') && !currentPath.startsWith('/index.html')) {
+    return <NotFound onNavigateHome={() => navigate('/')} onOpenCommandMenu={() => setCommandMenuOpen(true)} />;
+  }
+
   const faqs = [
     {
       q: 'How do I install the NuKropAI APK on my Android smartphone?',
@@ -49,7 +115,7 @@ export default function App() {
     },
     {
       q: 'How are live Mandi rates sourced and verified?',
-      a: 'Rates are fetched in real-time directly from the Government of India Ministry of Agriculture (Agmarknet) APMC daily trading journals and PJTSAU / ICAR agronomy nodes. No middlemen or traders can manipulate the quoted rates.'
+      a: 'Rates are fetched directly from the Government of India Ministry of Agriculture (Agmarknet / DMI) APMC daily trading journals. Our twice-daily automated data pipeline validates price ranges, arrival timestamps, and market identity before persisting records to Supabase.'
     },
     {
       q: 'What languages are supported for voice consultation?',
@@ -61,7 +127,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       
       {/* ── TOP SCROLL PROGRESS ANIMATION BAR ── */}
-      <div className="scroll-progress-container">
+      <div className="scroll-progress-container" aria-hidden="true">
         <div 
           className="scroll-progress-bar" 
           style={{ width: `${scrollProgress}%` }}
@@ -69,15 +135,15 @@ export default function App() {
       </div>
 
       {/* Background Layers */}
-      <div className="dynamic-bg"></div>
-      <div className="dynamic-overlay"></div>
+      <div className="dynamic-bg" aria-hidden="true"></div>
+      <div className="dynamic-overlay" aria-hidden="true"></div>
       
       {/* ── FLOATING LUXURY PILL NAVBAR ── */}
-      <header className="site-header">
+      <header className="site-header safe-area-top">
         <div className="nav-pill-wrapper">
           
           {/* Logo */}
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }}>
+          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="nav-brand" aria-label="NuKropAI Homepage">
             <div style={{ 
               padding: '6px', 
               background: 'linear-gradient(135deg, rgba(200, 232, 55, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%)', 
@@ -95,33 +161,46 @@ export default function App() {
           </a>
 
           {/* Desktop Navigation Links */}
-          <nav className="nav-links">
+          <nav className="nav-links" aria-label="Primary Navigation">
             <a href="#features" className="nav-link">Features</a>
-            <a href="#architecture" className="nav-link">AgriTech Suite</a>
+            <a href="#architecture" className="nav-link">Architecture</a>
             <a href="#languages" className="nav-link">Languages</a>
             <a href="#faq" className="nav-link">FAQ</a>
-            
+            <a href="#contact" className="nav-link">Support</a>
+          </nav>
+
+          {/* Desktop Actions */}
+          <div className="nav-actions">
+            <button
+              onClick={() => setCommandMenuOpen(true)}
+              className="nav-search-btn"
+              aria-label="Open Quick Actions (Ctrl+K or Cmd+K)"
+            >
+              <Search style={{ width: '13px', height: '13px', color: 'var(--nukrop-accent)' }} />
+              <span>Quick Actions</span>
+              <kbd className="nav-search-kbd">⌘K</kbd>
+            </button>
+
             <a 
               href="/NuKropAI.apk" 
               download="NuKropAI.apk"
-              className="nukrop-btn" 
-              style={{ 
-                padding: '8px 18px', 
-                fontSize: '12.5px', 
-                borderRadius: '100px',
-                boxShadow: '0 4px 14px rgba(200, 232, 55, 0.3)'
+              onClick={() => {
+                analytics.track('download_apk_click', { source: 'navbar_pill', version: '2.0' });
+                showToast({ type: 'info', message: 'Starting NuKropAI APK download (~52 MB)...' });
               }}
+              className="nukrop-btn nav-download-btn"
             >
               <Download style={{ width: '14px', height: '14px' }} />
               <span>Get APK (v2.0)</span>
             </a>
-          </nav>
+          </div>
 
           {/* Mobile Menu Toggle Button */}
           <button 
-            className="nav-mobile-toggle"
+            className="nav-mobile-toggle touch-target"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             aria-label="Toggle Navigation Menu"
+            aria-expanded={mobileMenuOpen}
           >
             {mobileMenuOpen ? <X style={{ width: '20px', height: '20px' }} /> : <Menu style={{ width: '20px', height: '20px' }} />}
           </button>
@@ -129,16 +208,44 @@ export default function App() {
       </header>
 
       {/* Mobile Nav Drawer */}
-      <div className={`nav-mobile-drawer ${mobileMenuOpen ? 'open' : ''}`}>
-        <a href="#features" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '6px 0' }}>Features</a>
-        <a href="#architecture" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '6px 0' }}>AgriTech Suite</a>
-        <a href="#languages" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '6px 0' }}>Languages</a>
-        <a href="#faq" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '6px 0' }}>FAQ</a>
+      <div className={`nav-mobile-drawer ${mobileMenuOpen ? 'open' : ''}`} role="dialog" aria-label="Mobile Navigation Menu">
+        <a href="#features" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Features</a>
+        <a href="#architecture" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>AgriTech Architecture</a>
+        <a href="#languages" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Languages</a>
+        <a href="#faq" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>FAQ & Manual</a>
+        <a href="#contact" className="nav-link" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: '15px', padding: '10px 0' }}>Support & Grievance</a>
+        
+        <button
+          onClick={() => { setMobileMenuOpen(false); setCommandMenuOpen(true); }}
+          className="touch-target"
+          style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
+            padding: '12px',
+            color: '#FFFFFF',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            margin: '6px 0'
+          }}
+        >
+          <Search style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />
+          <span>Quick Actions (Ctrl+K)</span>
+        </button>
+
         <a 
           href="/NuKropAI.apk" 
           download="NuKropAI.apk"
           className="nukrop-btn" 
-          onClick={() => setMobileMenuOpen(false)}
+          onClick={() => {
+            setMobileMenuOpen(false);
+            analytics.track('download_apk_click', { source: 'mobile_drawer', version: '2.0' });
+            showToast({ type: 'info', message: 'Downloading NuKropAI APK...' });
+          }}
           style={{ width: '100%', padding: '12px 20px', fontSize: '14px', marginTop: '6px', borderRadius: '12px' }}
         >
           <Download style={{ width: '16px', height: '16px' }} />
@@ -205,6 +312,10 @@ export default function App() {
             <a
               href="/NuKropAI.apk"
               download="NuKropAI.apk"
+              onClick={() => {
+                analytics.track('download_apk_click', { source: 'hero_primary', version: '2.0' });
+                showToast({ type: 'info', message: 'Downloading NuKropAI APK (~52 MB)...' });
+              }}
               className="nukrop-btn"
               style={{
                 padding: '16px 36px',
@@ -215,7 +326,7 @@ export default function App() {
             >
               <Download style={{ width: '20px', height: '20px' }} />
               <span>Download NuKropAI App</span>
-              <span style={{
+              <span className="tabular-nums" style={{
                 background: 'rgba(0,0,0,0.18)',
                 borderRadius: '6px',
                 padding: '3px 8px',
@@ -256,25 +367,25 @@ export default function App() {
             gap: '16px'
           }}>
             <div className="stat-item" style={{ textAlign: 'center' }}>
-              <strong style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: '#FFFFFF', display: 'block' }}>1.2M+</strong>
+              <strong className="tabular-nums" style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: '#FFFFFF', display: 'block' }}>1.2M+</strong>
               <span style={{ fontSize: '12px', color: 'var(--nukrop-text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>Crops Diagnosed</span>
             </div>
             <div className="stat-divider" style={{ width: '1px', height: '36px', background: 'rgba(255,255,255,0.1)' }}></div>
             
             <div className="stat-item" style={{ textAlign: 'center' }}>
-              <strong style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: 'var(--nukrop-accent)', display: 'block' }}>1,400+</strong>
+              <strong className="tabular-nums" style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: 'var(--nukrop-accent)', display: 'block' }}>1,400+</strong>
               <span style={{ fontSize: '12px', color: 'var(--nukrop-text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>APMC Mandis Synced</span>
             </div>
             <div className="stat-divider" style={{ width: '1px', height: '36px', background: 'rgba(255,255,255,0.1)' }}></div>
             
             <div className="stat-item" style={{ textAlign: 'center' }}>
-              <strong style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: '#FFFFFF', display: 'block' }}>99.9%</strong>
+              <strong className="tabular-nums" style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: '#FFFFFF', display: 'block' }}>99.9%</strong>
               <span style={{ fontSize: '12px', color: 'var(--nukrop-text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>Vision AI Accuracy</span>
             </div>
             <div className="stat-divider" style={{ width: '1px', height: '36px', background: 'rgba(255,255,255,0.1)' }}></div>
 
             <div className="stat-item" style={{ textAlign: 'center' }}>
-              <strong style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: '#10B981', display: 'block' }}>100%</strong>
+              <strong className="tabular-nums" style={{ fontSize: 'clamp(20px, 3vw, 28px)', color: '#10B981', display: 'block' }}>100%</strong>
               <span style={{ fontSize: '12px', color: 'var(--nukrop-text-muted)', textTransform: 'uppercase', fontWeight: '600' }}>Offline Ready</span>
             </div>
           </div>
@@ -312,9 +423,9 @@ export default function App() {
                 NuKropAI equips farmers with a sovereign digital companion powered by <strong>Llama 3.2 11B Vision</strong> and live government data feeds.
               </p>
               <ul style={{ paddingLeft: '18px', margin: 0, color: 'var(--nukrop-text-dim)', fontSize: '14px', lineHeight: 1.8 }}>
-                <li>Instant leaf diagnosis with exact ICAR-calibrated chemical & organic dosages.</li>
+                <li>Instant leaf diagnosis with exact ICAR-calibrated chemical &amp; organic dosages.</li>
                 <li>GPS-based real-time Agmarknet prices directly from your nearest Mandi.</li>
-                <li>Automated scheme matchmaking for instant credit scoring & subsidy discovery.</li>
+                <li>Automated scheme matchmaking for instant credit scoring &amp; subsidy discovery.</li>
               </ul>
             </div>
 
@@ -337,7 +448,11 @@ export default function App() {
             
             {/* Feature 1: AI Scanner */}
             <div className="glass-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: '190px', backgroundImage: 'url("/feature_scan.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div 
+                role="img"
+                aria-label="Crop disease scanning sample"
+                style={{ height: '190px', backgroundImage: 'url("/feature_scan.webp"), url("/feature_scan.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+              ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
                   <ScanLine style={{ color: 'var(--nukrop-accent)', width: '20px', height: '20px', flexShrink: 0 }} />
@@ -351,7 +466,11 @@ export default function App() {
 
             {/* Feature 2: Mandi Prices */}
             <div className="glass-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: '190px', backgroundImage: 'url("/feature_mandi.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div 
+                role="img"
+                aria-label="Mandi trading market"
+                style={{ height: '190px', backgroundImage: 'url("/feature_mandi.webp"), url("/feature_mandi.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+              ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
                   <TrendingUp style={{ color: 'var(--nukrop-accent)', width: '20px', height: '20px', flexShrink: 0 }} />
@@ -366,11 +485,15 @@ export default function App() {
 
             {/* Feature 3: Subsidy Matcher */}
             <div className="glass-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: '190px', backgroundImage: 'url("/feature_subsidy.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div 
+                role="img"
+                aria-label="Government agricultural scheme verification"
+                style={{ height: '190px', backgroundImage: 'url("/feature_subsidy.webp"), url("/feature_subsidy.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+              ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
                   <Landmark style={{ color: '#60A5FA', width: '20px', height: '20px', flexShrink: 0 }} />
-                  Loan & Subsidy Matcher
+                  Loan &amp; Subsidy Matcher
                 </h3>
                 <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13.5px', lineHeight: 1.6, margin: 0 }}>
                   Automated discovery for PM-KISAN, Rythu Bandhu, solar pump subsidies, and zero-interest KCC crop credit matching based on your land size.
@@ -380,7 +503,11 @@ export default function App() {
 
             {/* Feature 4: Weather Alerts */}
             <div className="glass-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: '190px', backgroundImage: 'url("/feature_weather.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div 
+                role="img"
+                aria-label="Hyperlocal weather radar preview"
+                style={{ height: '190px', backgroundImage: 'url("/feature_weather.webp"), url("/feature_weather.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+              ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
                   <CloudRain style={{ color: 'var(--nukrop-warning)', width: '20px', height: '20px', flexShrink: 0 }} />
@@ -395,7 +522,11 @@ export default function App() {
 
             {/* Feature 5: Soil Scanner */}
             <div className="glass-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: '190px', backgroundImage: 'url("/feature_soil.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div 
+                role="img"
+                aria-label="Soil testing and nutrient profile"
+                style={{ height: '190px', backgroundImage: 'url("/feature_soil.webp"), url("/feature_soil.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+              ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
                   <Layers style={{ color: '#A78BFA', width: '20px', height: '20px', flexShrink: 0 }} />
@@ -409,7 +540,11 @@ export default function App() {
 
             {/* Feature 6: AI Farm Advisor */}
             <div className="glass-card" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: '190px', backgroundImage: 'url("/feature_advisor.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div 
+                role="img"
+                aria-label="Vernacular agronomy copilot"
+                style={{ height: '190px', backgroundImage: 'url("/feature_advisor.webp"), url("/feature_advisor.jpg")', backgroundSize: 'cover', backgroundPosition: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+              ></div>
               <div style={{ padding: '24px' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', color: '#FFFFFF', marginBottom: '8px' }}>
                   <MessageCircle style={{ color: '#34D399', width: '20px', height: '20px', flexShrink: 0 }} />
@@ -423,6 +558,7 @@ export default function App() {
             
           </div>
         </section>
+
 
 
         {/* ═════════════════ 7 SOVEREIGN ENTERPRISE MODULES ═════════════════ */}
@@ -443,7 +579,7 @@ export default function App() {
             
             {/* 1. Vernacular VoiceOS */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>🎙️</div>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">🎙️</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>Vernacular VoiceOS</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 Sub-800ms bidirectional speech AI in 11 Indian languages with acoustic field-noise filtering tailored for rural dialects.
@@ -452,7 +588,7 @@ export default function App() {
 
             {/* 2. BioShield Radar */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>🛡️</div>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">🛡️</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>BioShield Outbreak Radar</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 Spatial-temporal epidemic cluster detection triggering geo-fenced community alerts and preemptive bio-barrier spray protocols.
@@ -461,7 +597,7 @@ export default function App() {
 
             {/* 3. MandiPilot Arbitrage */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>📊</div>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">📊</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>MandiPilot Arbitrage</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 Multi-mandi net revenue calculator deducting transit freight, APMC market cess, and humidity spoilage to maximize profits.
@@ -470,7 +606,7 @@ export default function App() {
 
             {/* 4. GramHaul Logistics */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>🚚</div>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">🚚</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>GramHaul Freight Pooling</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 Village produce pooling saving up to 70% logistics cost versus hiring solo mini-trucks, with verified driver ratings.
@@ -479,7 +615,7 @@ export default function App() {
 
             {/* 5. AgriStack Passport */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>🪪</div>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">🪪</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>AgriStack Health Passport</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 Sovereign digital farmer ID, digitized Soil Health Card (NPK, pH), and algorithmic credit scoring (300-900) for instant KCC underwriting.
@@ -488,7 +624,7 @@ export default function App() {
 
             {/* 6. YantraShare Hub */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>🚜</div>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">🚜</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>YantraShare Machinery Hub</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 P2P farm machinery rental network for tractors, spray drones, and combine harvesters with milestone-protected booking.
@@ -496,8 +632,8 @@ export default function App() {
             </div>
 
             {/* 7. BioRx Formulator */}
-            <div className="glass-card" style={{ padding: '24px', gridColumn: 'span 1' }}>
-              <div style={{ fontSize: '26px', marginBottom: '12px' }}>🌿</div>
+            <div className="glass-card" style={{ padding: '24px' }}>
+              <div style={{ fontSize: '26px', marginBottom: '12px' }} aria-hidden="true">🌿</div>
               <h3 style={{ fontSize: '17px', color: '#FFFFFF', marginBottom: '6px' }}>BioRx Organic Formulator</h3>
               <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
                 Indigenous natural recipes (Jeevamrutha, Neemastra, Dashaparni Ark) with exact acreage-calibrated ingredient ratios.
@@ -551,6 +687,10 @@ export default function App() {
         </section>
 
 
+        {/* ═════════════════ CONTACT & DPDP GRIEVANCE FORM ═════════════════ */}
+        <ContactForm />
+
+
         {/* ═════════════════ FAQ ACCORDION ═════════════════ */}
         <section id="faq" className="site-container section-spacing">
           <div style={{ textAlign: 'center', marginBottom: '36px' }}>
@@ -575,6 +715,15 @@ export default function App() {
                     borderColor: isOpen ? 'var(--nukrop-border-accent)' : 'var(--nukrop-border)'
                   }}
                   onClick={() => setOpenFaq(isOpen ? null : index)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setOpenFaq(isOpen ? null : index);
+                    }
+                  }}
+                  aria-expanded={isOpen}
                 >
                   <div style={{ padding: '18px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
                     <span style={{ fontSize: '15.5px', fontWeight: '700', color: isOpen ? 'var(--nukrop-accent)' : '#FFFFFF' }}>
@@ -603,7 +752,7 @@ export default function App() {
       </main>
 
       {/* ── BALANCED & STRUCTURED FOOTER ── */}
-      <footer style={{ 
+      <footer className="safe-area-bottom" style={{ 
         padding: '56px 0 32px 0', 
         borderTop: '1px solid rgba(255,255,255,0.08)', 
         background: 'rgba(5, 8, 3, 0.95)', 
@@ -630,41 +779,109 @@ export default function App() {
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--nukrop-text-muted)', fontSize: '12px' }}>
                 <Radio style={{ width: '13px', height: '13px', color: '#22C55E' }} />
-                <span>ICAR & Agmarknet Government Protocol Compliant</span>
+                <span>ICAR &amp; Agmarknet Government Protocol Compliant</span>
               </div>
             </div>
 
-            {/* Column 2: Quick Links */}
+            {/* Column 2: Platform Links */}
             <div>
               <h4 style={{ fontSize: '14px', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px' }}>
-                Platform
+                Platform &amp; Tools
               </h4>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <li><a href="#features" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>6 Core Pillars</a></li>
-                <li><a href="#architecture" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>AgriTech Suite</a></li>
-                <li><a href="#languages" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>Vernacular Languages</a></li>
-                <li><a href="#faq" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px' }}>FAQ & Manual</a></li>
-                <li><a href="/NuKropAI.apk" download="NuKropAI.apk" style={{ color: 'var(--nukrop-accent)', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700' }}>Download APK (v2.0 Latest)</a></li>
+                <li><a href="#features" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>6 Core Pillars</a></li>
+                <li><a href="#mandi" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>Live Mandi Rates</a></li>
+                <li><a href="#scanner" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>AI Disease Scanner</a></li>
+                <li><a href="#architecture" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>AgriTech Suite</a></li>
+                <li><a href="#contact" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>Farmer Support Desk</a></li>
+                <li><a href="#faq" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>FAQ &amp; Manual</a></li>
+                <li>
+                  <a 
+                    href="/NuKropAI.apk" 
+                    download="NuKropAI.apk" 
+                    onClick={() => {
+                      analytics.track('download_apk_click', { source: 'footer_link', version: '2.0' });
+                      showToast({ type: 'info', message: 'Downloading NuKropAI APK...' });
+                    }}
+                    className="touch-target"
+                    style={{ color: 'var(--nukrop-accent)', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center' }}
+                  >
+                    Download APK (v2.0 Latest)
+                  </a>
+                </li>
               </ul>
             </div>
 
-            {/* Column 3: Live System Infrastructure Status */}
+            {/* Column 3: Legal & Privacy */}
             <div>
               <h4 style={{ fontSize: '14px', color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '16px' }}>
-                Infrastructure Status
+                Legal &amp; Compliance
               </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="live-pulse" style={{ width: '6px', height: '6px' }}></span>
-                  <span style={{ fontSize: '12px', color: 'var(--nukrop-text)' }}>Supabase Cloud Grid: <strong>Operational</strong></span>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <li>
+                  <button 
+                    onClick={() => navigate('/privacy')}
+                    className="touch-target"
+                    style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <FileText style={{ width: '13px', height: '13px' }} />
+                    <span>Privacy Policy (DPDP Act)</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => navigate('/terms')}
+                    className="touch-target"
+                    style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <FileText style={{ width: '13px', height: '13px' }} />
+                    <span>Terms of Service</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => navigate('/cookies')}
+                    className="touch-target"
+                    style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Cookie style={{ width: '13px', height: '13px' }} />
+                    <span>Cookie &amp; Storage Policy</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => navigate('/refund')}
+                    className="touch-target"
+                    style={{ background: 'none', border: 'none', color: 'var(--nukrop-text-dim)', fontSize: '13.5px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <AlertCircle style={{ width: '13px', height: '13px' }} />
+                    <span>Refund Policy Notice</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={() => {
+                      const event = new CustomEvent('open-cookie-preferences');
+                      window.dispatchEvent(event);
+                    }}
+                    className="touch-target"
+                    style={{ background: 'none', border: 'none', color: 'var(--nukrop-accent)', fontSize: '13px', cursor: 'pointer', padding: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+                  >
+                    <SlidersHorizontal style={{ width: '13px', height: '13px' }} />
+                    <span>Cookie Preferences</span>
+                  </button>
+                </li>
+              </ul>
+
+              {/* Infrastructure live checks */}
+              <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--nukrop-text-muted)' }}>
+                  <span className="live-pulse" style={{ width: '5px', height: '5px' }}></span>
+                  <span>Supabase Database: <strong>Connected</strong></span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="live-pulse" style={{ width: '6px', height: '6px' }}></span>
-                  <span style={{ fontSize: '12px', color: 'var(--nukrop-text)' }}>Groq 20B AI Inference: <strong>Active</strong></span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="live-pulse" style={{ width: '6px', height: '6px' }}></span>
-                  <span style={{ fontSize: '12px', color: 'var(--nukrop-text)' }}>Agmarknet APMC Sync: <strong>100%</strong></span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: 'var(--nukrop-text-muted)' }}>
+                  <span className="live-pulse" style={{ width: '5px', height: '5px' }}></span>
+                  <span>Agmarknet Pipeline: <strong>Twice-Daily (IST)</strong></span>
                 </div>
               </div>
             </div>
@@ -674,16 +891,44 @@ export default function App() {
           {/* Bottom Row Divider & Centered Copyright */}
           <div className="footer-bottom-row">
             <p style={{ color: 'var(--nukrop-text-muted)', fontSize: '13px', margin: 0 }}>
-              © 2026 NuKropAI by B. JASWANTH REDDY. All rights reserved.
+              © 2026 NuKropAI by B. JASWANTH REDDY. All rights reserved. Sovereign Open Source Agrarian Initiative.
             </p>
-            <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '13px', margin: 0 }}>
-              Built with ❤️ for Indian Farmers.
+            <p style={{ color: 'var(--nukrop-text-dim)', fontSize: '12.5px', margin: 0 }}>
+              Free public utility for smallholders · Notice: Non-commercial; monetary refund policy not applicable.
             </p>
           </div>
 
         </div>
       </footer>
 
+      {/* ── COMMAND MENU (CTRL+K / CMD+K) ── */}
+      <CommandMenu
+        isOpen={commandMenuOpen}
+        onClose={() => setCommandMenuOpen(false)}
+        onOpenLegal={openLegal}
+      />
+
+      {/* ── LEGAL MODAL ── */}
+      <LegalModal
+        isOpen={legalModalOpen}
+        activeTab={activeLegalTab}
+        onClose={() => setLegalModalOpen(false)}
+        onSelectTab={(tab) => setActiveLegalTab(tab)}
+      />
+
+      {/* ── COOKIE CONSENT BANNER ── */}
+      <CookieConsent
+        onOpenPolicy={() => openLegal('cookies')}
+      />
+
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 }

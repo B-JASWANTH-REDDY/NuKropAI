@@ -1,14 +1,15 @@
 import axios from 'axios';
-import { redisClient } from '../config/db';
+import { redisClient } from '../config/redis';
 
 export class MandiSyncService {
-    private readonly API_KEYS = [
-        "579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b",
-        "579b464db66ec23bdd0000011c7fae98f0294e7769efce5b804245cc",
-        "579b464db66ec23bdd000001f6e0ad50e20d4fbb6c5a17de5e50abcc"
-    ];
     private keyIndex = 0;
     private readonly BASE_URL = "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070";
+
+    private getApiKeys(): string[] {
+        const raw = process.env.DATA_GOV_IN_API_KEY || process.env.GOVT_API_KEYS || process.env.GOVT_API_KEY || '';
+        return raw.split(',').map(k => k.trim()).filter(Boolean);
+    }
+
 
     /**
      * Fetches Mandi Rates from Redis (Instant). If missing, queries Gov API and caches.
@@ -17,27 +18,36 @@ export class MandiSyncService {
         const cacheKey = `mandi_rates:${state.toLowerCase()}:${commodity.toLowerCase()}`;
         
         // 1. Check Redis Cache
-        const cachedData = await redisClient.get(cacheKey);
-        if (cachedData) {
-            console.log(`[MandiSyncService] ⚡ CACHE HIT: Served ${state}-${commodity} instantly from Redis.`);
-            return JSON.parse(cachedData);
+        try {
+            const cachedData = await redisClient.get(cacheKey);
+            if (cachedData) {
+                console.log(`[MandiSyncService] ⚡ CACHE HIT: Served ${state}-${commodity} instantly from Redis.`);
+                return JSON.parse(cachedData);
+            }
+        } catch (e) {
+            console.warn('[MandiSyncService] Redis cache lookup failed, falling back to provider:', e);
         }
 
         console.log(`[MandiSyncService] 🐌 CACHE MISS: Fetching ${state}-${commodity} from Gov API...`);
+
+        const apiKeys = this.getApiKeys();
+        if (apiKeys.length === 0) {
+            throw new Error('GOVT_API_KEY is not configured on server.');
+        }
 
         // 2. Fetch from Government API
         let attempt = 0;
         let lastError = "";
 
-        while (attempt < this.API_KEYS.length) {
-            const apiKey = this.API_KEYS[(this.keyIndex + attempt) % this.API_KEYS.length];
+        while (attempt < apiKeys.length) {
+            const apiKey = apiKeys[(this.keyIndex + attempt) % apiKeys.length];
             
             try {
                 const response = await axios.get(this.BASE_URL, {
                     params: {
                         'api-key': apiKey,
                         'format': 'json',
-                        'limit': 50, // Only fetch 50 for speed
+                        'limit': 50,
                         'filters[state]': state,
                         'filters[commodity]': commodity
                     },
@@ -58,20 +68,21 @@ export class MandiSyncService {
                     }));
 
                     // 3. Save to Redis with a 15-minute expiration
-                    await redisClient.set(cacheKey, JSON.stringify(parsedRecords), {
-                        EX: 900 // 15 mins
-                    });
+                    try {
+                        await redisClient.set(cacheKey, JSON.stringify(parsedRecords), 'EX', 900);
+                    } catch (cacheErr) {
+                        console.warn('[MandiSyncService] Redis cache write failed:', cacheErr);
+                    }
 
                     // Update rolling key index on success
-                    this.keyIndex = (this.keyIndex + attempt) % this.API_KEYS.length;
+                    this.keyIndex = (this.keyIndex + attempt) % apiKeys.length;
                     return parsedRecords;
                 }
 
             } catch (error: any) {
                 lastError = error.message;
                 if (error.response?.status === 429) {
-                    // Rate limit hit on this key, advance key index
-                    this.keyIndex = (this.keyIndex + 1) % this.API_KEYS.length;
+                    this.keyIndex = (this.keyIndex + 1) % apiKeys.length;
                 }
                 attempt++;
             }

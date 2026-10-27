@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
+import * as crypto from 'crypto';
 
 dotenv.config();
 
@@ -39,30 +40,17 @@ export async function getDbStatus(): Promise<boolean> {
   }
 }
 
-// In-Memory Database Storage
+// In-Memory Database Storage (Starts empty - Zero Fabricated Data)
 export const memoryStore = {
   users: [] as any[],
   refreshTokens: [] as any[],
   pestOutbreaks: [] as any[],
-  soilTelemetry: [
-    {
-      nitrogen: 45,
-      phosphorus: 22,
-      potassium: 37,
-      ph: 6.7,
-      organic_carbon: 1.35,
-      moisture: 44,
-      logged_at: new Date()
-    }
-  ] as any[],
-  valveOperations: [
-    { valve_name: 'Valve 01 (Northeast)', state: 'CLOSED', flow_rate: 0.0, triggered_by: 'manual', logged_at: new Date() },
-    { valve_name: 'Valve 02 (Northwest)', state: 'CLOSED', flow_rate: 0.0, triggered_by: 'manual', logged_at: new Date() },
-    { valve_name: 'Valve 03 (South Field)', state: 'CLOSED', flow_rate: 0.0, triggered_by: 'manual', logged_at: new Date() }
-  ] as any[],
+  soilTelemetry: [] as any[],
+  valveOperations: [] as any[],
   escrowContracts: [] as any[],
   cropSimulations: [] as any[]
 };
+
 
 // SQL query parser/simulator
 export async function query(text: string, params: any[] = []): Promise<{ rows: any[] }> {
@@ -81,7 +69,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 1. Users Operations
   if (queryStr.includes('insert into public.users')) {
     const newUser = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       email: params[0],
       password_hash: params[1],
       role: params[2] || 'buyer',
@@ -104,7 +92,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 2. Refresh Tokens Operations
   if (queryStr.includes('insert into public.refresh_tokens')) {
     const newToken = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       token_hash: params[0],
       user_id: params[1],
       expires_at: params[2],
@@ -139,7 +127,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 3. Telemetry Operations
   if (queryStr.includes('insert into public.soil_telemetry')) {
     const telemetry = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       user_id: params[0],
       nitrogen: params[1],
       phosphorus: params[2],
@@ -170,7 +158,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     const triggeredBy = params[3];
 
     const newOp = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       valve_name: valveName,
       state: state,
       flow_rate: flowRate,
@@ -191,7 +179,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 5. Contracts Operations
   if (queryStr.includes('insert into public.escrow_contracts')) {
     const contract = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       contract_address: params[0],
       buyer_name: params[1],
       commodity: params[2],
@@ -232,7 +220,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 6. Pest Outbreaks
   if (queryStr.includes('insert into public.pest_outbreaks')) {
     const outbreak = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       pest_name: params[0],
       latitude: params[1],
       longitude: params[2],
@@ -252,7 +240,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 7. Simulations
   if (queryStr.includes('insert into public.crop_simulations')) {
     const sim = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       user_id: params[0],
       crop_name: params[1],
       field_size: params[2],

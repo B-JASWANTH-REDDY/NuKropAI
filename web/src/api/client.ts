@@ -1,4 +1,8 @@
-const API_BASE = 'http://localhost:3000/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api/v1` 
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+      ? '/api/v1' 
+      : 'http://localhost:3000/api/v1');
 
 class APIClient {
   private static instance: APIClient;
@@ -128,5 +132,8 @@ class APIClient {
 }
 
 export const api = APIClient.getInstance();
-export const API_ROOT = 'http://localhost:3000';
+export const API_ROOT = import.meta.env.VITE_API_URL || 
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+    ? '' 
+    : 'http://localhost:3000');
 export const API_BASE_URL = API_BASE;

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.animation.core.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -163,14 +164,21 @@ fun MarketScreen(modifier: Modifier = Modifier) {
             Text(AppStrings.get("market_rates", lang), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = NuKropText)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                // Live Cached Badge
+                // Dynamic Freshness Badge
+                val (badgeText, badgeColor) = when {
+                    loading -> Pair("Updating...", NuKropAccent)
+                    mandiState is MandiState.Success -> Pair("Live APMC", NuKropBadgeGreen)
+                    mandiState is MandiState.Error && !mandiState.staleData.isNullOrEmpty() -> Pair("Cached Offline", Color(0xFFFFA500))
+                    mandiState is MandiState.Error -> Pair("Feed Offline", Color(0xFFFF5252))
+                    else -> Pair("Ready", NuKropTextMuted)
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(NuKropBadgeGreen.copy(alpha=0.15f)).border(1.dp, NuKropBadgeGreen.copy(alpha=0.3f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 4.dp)
+                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(badgeColor.copy(alpha=0.15f)).border(1.dp, badgeColor.copy(alpha=0.3f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
-                    Icon(Icons.Filled.Bolt, null, tint = NuKropBadgeGreen, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Bolt, null, tint = badgeColor, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Live Cached", fontSize = 10.sp, color = NuKropBadgeGreen, fontWeight = FontWeight.Bold)
+                    Text(badgeText, fontSize = 10.sp, color = badgeColor, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.weight(1f))
                 
@@ -304,7 +312,14 @@ fun MarketScreen(modifier: Modifier = Modifier) {
             if (activeSearchQuery.isEmpty() || activeSearchState.isEmpty()) {
                 // Empty state handled naturally
             } else if (loading && records.isNullOrEmpty()) {
-                CircularProgressIndicator(color = NuKropAccent, modifier = Modifier.align(Alignment.Center))
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MandiRecordSkeletonCard()
+                    MandiRecordSkeletonCard()
+                    MandiRecordSkeletonCard()
+                }
             } else if (!records.isNullOrEmpty()) {
                 Column(Modifier.verticalScroll(scrollState).padding(bottom = 120.dp)) {
                     
@@ -314,9 +329,16 @@ fun MarketScreen(modifier: Modifier = Modifier) {
                         Spacer(Modifier.height(16.dp))
                     }
 
-                    // 7-Day AI Price Forecast Card
+                    // Market Trend & Econometric Estimate Card
                     val avgModal = records.map { it.modalPrice }.average()
-                    val forecastPeak = if (marketImpact != null) marketImpact!!.predictedModalPrice.toInt() else (avgModal * 1.054).toInt()
+                    val maxReported = records.maxOfOrNull { it.maxPrice } ?: (avgModal * 1.02)
+                    val estimatedPeak = if (marketImpact != null) marketImpact!!.predictedModalPrice.toInt() else maxReported.toInt()
+                    val badgeSellTag = if (marketImpact != null) "IMPACT MODEL ACTIVE" else "ESTIMATED RANGE"
+                    val forecastText = if (marketImpact != null) {
+                        "Econometric Outbreak Impact: Regional pest alerts indicate supply constraints. Projected price peak estimate around ₹$estimatedPeak / Qtl based on historical outbreak models and APMC arrivals."
+                    } else {
+                        "APMC Trend Baseline: Active rates for $activeSearchQuery across $activeSearchState average ₹${avgModal.toInt()} / Qtl, with observed mandi peaks reaching ₹$estimatedPeak / Qtl. Estimates are indicative and depend on daily arrival volumes."
+                    }
 
                     Box(
                         modifier = Modifier
@@ -330,7 +352,7 @@ fun MarketScreen(modifier: Modifier = Modifier) {
                             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Icon(Icons.Filled.AutoGraph, null, tint = NuKropAccent, modifier = Modifier.size(20.dp))
-                                    Text("7-Day AI Price Forecast", color = NuKropText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text("Market Trend & Estimates", color = NuKropText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Box(
                                     modifier = Modifier
@@ -338,12 +360,12 @@ fun MarketScreen(modifier: Modifier = Modifier) {
                                         .background(NuKropBadgeGreen.copy(alpha = 0.18f))
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
-                                    Text("BEST DAY TO SELL: THURSDAY", color = NuKropBadgeGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(badgeSellTag, color = NuKropBadgeGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "AI Market Trend Analysis: Prices for $activeSearchQuery in $activeSearchState are projected to peak at ₹$forecastPeak / Qtl on Thursday based on regional demand and supply volume.",
+                                forecastText,
                                 color = NuKropTextMuted,
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp
@@ -380,7 +402,31 @@ fun MarketScreen(modifier: Modifier = Modifier) {
                     }
                 }
             } else if (error != null) {
-                Text(error, color = NuKropWarning, modifier = Modifier.align(Alignment.Center))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxSize().padding(24.dp)
+                ) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = NuKropWarning, modifier = Modifier.size(44.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = error,
+                        color = NuKropWarning,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            MandiApiService.forceRefresh(activeSearchState, activeSearchQuery)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NuKropAccent),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Retry Connection", color = Color(0xFF0D1208), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
             } else {
                 // Not loading, but records are empty
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center)) {
@@ -612,3 +658,64 @@ fun MandiRecordCard(record: MandiRecord) {
         }
     }
 }
+
+@Composable
+fun MandiRecordSkeletonCard() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+    val shimmerColor = Color.White.copy(alpha = alpha * 0.15f)
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(NuKropCard)
+            .border(1.dp, Color(0x20FFFFFF), RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(shimmerColor))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Box(Modifier.width(140.dp).height(16.dp).clip(RoundedCornerShape(4.dp)).background(shimmerColor))
+                        Spacer(Modifier.height(6.dp))
+                        Box(Modifier.width(100.dp).height(12.dp).clip(RoundedCornerShape(4.dp)).background(shimmerColor))
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.width(80.dp).height(20.dp).clip(RoundedCornerShape(4.dp)).background(shimmerColor))
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Box(Modifier.width(50.dp).height(10.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor))
+                    Spacer(Modifier.height(4.dp))
+                    Box(Modifier.width(65.dp).height(14.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor))
+                }
+                Column {
+                    Box(Modifier.width(50.dp).height(10.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor))
+                    Spacer(Modifier.height(4.dp))
+                    Box(Modifier.width(55.dp).height(14.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor))
+                }
+                Column {
+                    Box(Modifier.width(50.dp).height(10.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor))
+                    Spacer(Modifier.height(4.dp))
+                    Box(Modifier.width(55.dp).height(14.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.width(90.dp).height(10.dp).clip(RoundedCornerShape(3.dp)).background(shimmerColor).align(Alignment.End))
+        }
+    }
+}
+

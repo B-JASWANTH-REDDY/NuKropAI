@@ -291,6 +291,9 @@ class MainActivity : ComponentActivity() {
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
             fetchAndSendLocationToWebView()
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && permissions[Manifest.permission.POST_NOTIFICATIONS] == true) {
+            webView.evaluateJavascript("if (typeof onNativeNotificationPermissionGranted === 'function') onNativeNotificationPermissionGranted();", null)
+        }
     }
 
     fun fetchAndSendLocationToWebView() {
@@ -365,11 +368,15 @@ class MainActivity : ComponentActivity() {
                 databaseEnabled = true
                 allowFileAccess = true
                 allowContentAccess = true
-                allowFileAccessFromFileURLs = true
-                allowUniversalAccessFromFileURLs = true
+                // Security: disable cross-origin file access for production
+                @Suppress("DEPRECATION")
+                allowFileAccessFromFileURLs = false
+                @Suppress("DEPRECATION")
+                allowUniversalAccessFromFileURLs = false
                 mediaPlaybackRequiresUserGesture = false
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                cacheMode = WebSettings.LOAD_NO_CACHE
+                // Required for loading local assets that may reference HTTPS resources
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                cacheMode = WebSettings.LOAD_DEFAULT
                 useWideViewPort = true
                 loadWithOverviewMode = true
                 setSupportZoom(false)
@@ -380,8 +387,10 @@ class MainActivity : ComponentActivity() {
                 javaScriptCanOpenWindowsAutomatically = true
             }
 
-            WebView.setWebContentsDebuggingEnabled(true)
-            clearCache(true)
+            // Only enable WebView debugging in debug builds
+            if (android.os.Build.TYPE == "eng" || BuildConfig.DEBUG) {
+                WebView.setWebContentsDebuggingEnabled(true)
+            }
 
             // Expose native bridge to Javascript
             addJavascriptInterface(WebAppInterface(), "AndroidBridge")
@@ -665,6 +674,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        webView.stopLoading()
+        webView.clearHistory()
+        webView.removeAllViews()
         webView.destroy()
         super.onDestroy()
     }

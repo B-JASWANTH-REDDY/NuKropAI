@@ -9,10 +9,10 @@ const logger = pino({
 });
 
 // Setup queues
-export const DataIngestionQueue = new Queue('DataIngestion', { connection: redisClient });
-export const AIOrchestrationQueue = new Queue('AIOrchestration', { connection: redisClient });
+export const DataIngestionQueue = new Queue('DataIngestion', { connection: redisClient as any });
+export const AIOrchestrationQueue = new Queue('AIOrchestration', { connection: redisClient as any });
 
-// Import jobs (we'll implement mandiIngestion next)
+// Import jobs
 import { handleMandiIngestion } from './jobs/mandiIngestion';
 
 // Orchestrator Worker
@@ -35,7 +35,7 @@ export function startOrchestrator() {
       default:
         throw new Error(`Unknown job name: ${job.name}`);
     }
-  }, { connection: redisClient, concurrency: 5 });
+  }, { connection: redisClient as any, concurrency: 5 });
 
   dataWorker.on('completed', (job) => {
     logger.info(`Job ${job.id} completed successfully`);

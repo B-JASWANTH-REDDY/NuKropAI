@@ -7,9 +7,12 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/run_e2e_tests.js && python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py && python tests/test_rls_multi_role_adversarial.py && python tests/test_real_world_production_verification.py",
+    "test:unit": "python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py",
+    "test:e2e": "node tests/run_e2e_tests.js",
     "sync-apk": "node web/sync-apk.js",
-    "build:web": "cd web && npm run build"
+    "build:web": "cd web && npm run build",
+    "build:backend": "cd backend && npm run build"
   },
   "repository": {
     "type": "git",

@@ -11,18 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 data class MandiRecord(
     val state: String,
@@ -38,32 +27,30 @@ data class MandiRecord(
 
 sealed class MandiState {
     object Loading : MandiState()
-    data class Success(val records: List<MandiRecord>, val totalFetched: Int) : MandiState()
-    data class Error(val message: String, val staleData: List<MandiRecord>? = null) : MandiState()
+    data class Success(
+        val records: List<MandiRecord>,
+        val totalFetched: Int,
+        val isLive: Boolean = true,
+        val source: String = "Supabase APMC / Agmarknet",
+        val fetchedAtMillis: Long = System.currentTimeMillis()
+    ) : MandiState()
+    data class Error(
+        val message: String,
+        val staleData: List<MandiRecord>? = null,
+        val isStale: Boolean = false,
+        val lastUpdatedMillis: Long = 0L
+    ) : MandiState()
 }
 
 object MandiApiService {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    // Fast 5s timeout — if backend or gov API doesn't respond in 5s, fail fast and show stale
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(false)
-        .build()
-
-    // Authorized Government Agmarknet API Primary Key (Key 1)
-    private const val PRIMARY_AUTHORIZED_KEY = "579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b"
-    private const val GOV_BASE_URL = "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070"
-
     private const val POLL_INTERVAL_MS = 3 * 60 * 1000L // 3 minutes
-
-    private val json = Json { ignoreUnknownKeys = true }
 
     private val activeFlows = ConcurrentHashMap<String, MutableStateFlow<MandiState>>()
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val lastGoodData = ConcurrentHashMap<String, List<MandiRecord>>()
+    private val lastFetchTimes = ConcurrentHashMap<String, Long>()
 
     fun watchLiveMandiPrices(state: String, commodity: String): StateFlow<MandiState> {
         if (state.isBlank() || commodity.isBlank()) {
@@ -78,16 +65,28 @@ object MandiApiService {
 
         val job = serviceScope.launch {
             while (isActive) {
-                val result = fetchWithFallback(state, commodity)
+                val result = fetchFromSupabase(state, commodity)
                 result.fold(
                     onSuccess = { records ->
+                        val now = System.currentTimeMillis()
                         lastGoodData[key] = records
-                        flow.value = MandiState.Success(records, records.size)
+                        lastFetchTimes[key] = now
+                        flow.value = MandiState.Success(
+                            records = records,
+                            totalFetched = records.size,
+                            isLive = true,
+                            source = "Supabase Verified Mandi Rates",
+                            fetchedAtMillis = now
+                        )
                     },
                     onFailure = { error ->
+                        val cached = lastGoodData[key]
+                        val cachedTime = lastFetchTimes[key] ?: 0L
                         flow.value = MandiState.Error(
-                            message = error.message ?: "Live Mandi data connection error",
-                            staleData = lastGoodData[key]
+                            message = error.message ?: "Live Mandi database connection unavailable",
+                            staleData = cached,
+                            isStale = !cached.isNullOrEmpty(),
+                            lastUpdatedMillis = cachedTime
                         )
                     }
                 )
@@ -105,6 +104,7 @@ object MandiApiService {
         activeJobs.remove(key)
         activeFlows.remove(key)
         lastGoodData.remove(key)
+        lastFetchTimes.remove(key)
     }
 
     fun forceRefresh(state: String, commodity: String) {
@@ -116,128 +116,33 @@ object MandiApiService {
     }
 
     /**
-     * Dual-path fetch:
-     * 1. Try local backend (Redis cache) — instant if server is running
-     * 2. Fall back to direct government API with key rotation
+     * Authenticated backend fetch:
+     * Queries authoritative APMC records stored in Supabase `mandi_live_rates`.
+     * Private credentials remain strictly server-side.
      */
-    private suspend fun fetchWithFallback(
+    private suspend fun fetchFromSupabase(
         state: String,
         commodity: String
     ): Result<List<MandiRecord>> = withContext(Dispatchers.IO) {
-        // 1. Query Real Data from Supabase Database
         try {
-            val supabaseRecords = SupabaseApi.fetchMandiRates(state, commodity)
-            if (supabaseRecords.isNotEmpty()) {
-                return@withContext Result.success(supabaseRecords)
+            val records = SupabaseApi.fetchMandiRates(state, commodity)
+            if (records.isNotEmpty()) {
+                Result.success(records)
+            } else {
+                val cached = lastGoodData["${state.trim().lowercase()}_${commodity.trim().lowercase()}"]
+                if (!cached.isNullOrEmpty()) {
+                    Result.success(cached)
+                } else {
+                    Result.failure(Exception("No current mandi rates found for $commodity in $state"))
+                }
             }
         } catch (e: Exception) {
-            // Silently fallback to gov api if supabase fails
-        }
-
-        // 2. Query Direct Agmarknet Government API (Real-Time)
-        val govResult = fetchDirectFromGovApi(state, commodity)
-        if (govResult.isSuccess && govResult.getOrDefault(emptyList()).isNotEmpty()) {
-            return@withContext govResult
-        }
-
-        // Return last known good cached data if available, or failure
-        val key = "${state.trim().lowercase()}_${commodity.trim().lowercase()}"
-        val cached = lastGoodData[key]
-        if (!cached.isNullOrEmpty()) {
-            return@withContext Result.success(cached)
-        }
-
-        return@withContext Result.failure(Exception("Live Mandi feed temporarily unavailable for $commodity in $state"))
-    }
-
-    private suspend fun fetchDirectFromGovApi(
-        state: String,
-        commodity: String
-    ): Result<List<MandiRecord>> = withContext(Dispatchers.IO) {
-        var lastError = "Unknown error"
-        val maxRetries = 3
-        var backoffMs = 1000L
-
-        for (attempt in 0 until maxRetries) {
-            try {
-                val stateEnc = URLEncoder.encode(state.trim(), "UTF-8")
-                val commEnc = URLEncoder.encode(commodity.trim(), "UTF-8")
-                val url = buildString {
-                    append(GOV_BASE_URL)
-                    append("?api-key=$PRIMARY_AUTHORIZED_KEY")
-                    append("&format=json&limit=50&offset=0")
-                    append("&filters[state]=$stateEnc")
-                    append("&filters[commodity]=$commEnc")
-                }
-
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .header("Accept", "application/json")
-                    .header("Referer", "https://data.gov.in/")
-                    .header("Origin", "https://data.gov.in")
-                    .build()
-
-                val responseBody = client.newCall(request).execute().use { response ->
-                    when (response.code) {
-                        429 -> {
-                            lastError = "Rate limited (HTTP 429), backing off for ${backoffMs}ms (attempt ${attempt + 1}/$maxRetries)..."
-                            null
-                        }
-                        401, 403 -> {
-                            lastError = "Auth error HTTP ${response.code}"
-                            null
-                        }
-                        in 500..599 -> {
-                            lastError = "Server error ${response.code}"
-                            null
-                        }
-                        else -> if (response.isSuccessful) {
-                            response.body?.string()
-                        } else {
-                            lastError = "HTTP ${response.code}"
-                            null
-                        }
-                    }
-                }
-
-                if (responseBody != null) {
-                    val root = json.parseToJsonElement(responseBody).jsonObject
-                    val recordsArray = root["records"]?.jsonArray
-                        ?: return@withContext Result.success(emptyList())
-
-                    val records = recordsArray.mapNotNull { el ->
-                        runCatching {
-                            val obj = el.jsonObject
-                            val modal = obj["modal_price"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
-                            MandiRecord(
-                                state = obj["state"]?.jsonPrimitive?.content ?: "",
-                                district = obj["district"]?.jsonPrimitive?.content ?: "",
-                                market = obj["market"]?.jsonPrimitive?.content ?: "",
-                                commodity = obj["commodity"]?.jsonPrimitive?.content ?: "",
-                                variety = obj["variety"]?.jsonPrimitive?.content ?: "",
-                                minPrice = obj["min_price"]?.jsonPrimitive?.doubleOrNull ?: modal,
-                                maxPrice = obj["max_price"]?.jsonPrimitive?.doubleOrNull ?: modal,
-                                modalPrice = modal,
-                                arrivalDate = obj["arrival_date"]?.jsonPrimitive?.content ?: ""
-                            )
-                        }.getOrNull()
-                    }
-                    return@withContext Result.success(records)
-                }
-
-                if (attempt < maxRetries - 1) {
-                    delay(backoffMs)
-                    backoffMs *= 2
-                }
-            } catch (e: Exception) {
-                lastError = e.localizedMessage ?: "Network exception"
-                if (attempt < maxRetries - 1) {
-                    delay(backoffMs)
-                    backoffMs *= 2
-                }
+            val cached = lastGoodData["${state.trim().lowercase()}_${commodity.trim().lowercase()}"]
+            if (!cached.isNullOrEmpty()) {
+                Result.success(cached)
+            } else {
+                Result.failure(Exception("Failed to fetch mandi rates: ${e.message}"))
             }
         }
-        Result.failure(Exception("Gov API unavailable: $lastError"))
     }
 }

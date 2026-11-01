@@ -238,3 +238,175 @@ describe('Mandi Strict Location Lock — Dynamic Isolation & Anti-Leakage', () =
     expect(ind.innerHTML.includes('All India Mandis')).toBe(true);
   });
 });
+
+// ============================================================================
+// SECTION 3: Real Price Trends, Persistent Price Alerts & Notification Engine
+// ============================================================================
+describe('Mandi Real Price Trends, Real Price Alerts & Notification Integrity', () => {
+
+  function buildMandiContext() {
+    const mockStorage = createMockStorage();
+    const domElements = {};
+
+    const ctx = {
+      window: {},
+      document: {
+        getElementById: (id) => {
+          if (!domElements[id]) {
+            domElements[id] = {
+              id,
+              value: '',
+              innerHTML: '',
+              textContent: '',
+              style: {},
+              classList: { add: () => {}, remove: () => {}, contains: () => false }
+            };
+          }
+          return domElements[id];
+        },
+        querySelectorAll: () => [],
+        createElement: (tag) => ({ tag, style: {}, appendChild: () => {}, setAttribute: () => {} })
+      },
+      localStorage: mockStorage,
+      sessionStorage: mockStorage,
+      navigator: { userAgent: 'NodeTest', geolocation: null },
+      console: { log: () => {}, warn: () => {}, error: () => {} },
+      setTimeout: (fn) => fn(),
+      clearTimeout: () => {},
+      alert: () => {},
+      TL: (en, te, hi) => en,
+      currentLang: 'en',
+      getCropIconImg: () => '<img>',
+      fetchMandiRatesFromSupabase: async () => []
+    };
+
+    ctx.window = ctx;
+
+    const re = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    const scripts = [];
+    while ((match = re.exec(indexHtml)) !== null) {
+      scripts.push(match[1]);
+    }
+
+    const scriptCode = scripts.join('\n;\n');
+    vm.createContext(ctx);
+    vm.runInContext(scriptCode, ctx);
+
+    return ctx;
+  }
+
+  it('M.PT.1: Price trend curve renders authentic calendar dates (Nov/Oct 2026) and zero Aug/Jul placeholders', () => {
+    const ctx = buildMandiContext();
+    const item = ctx.AGMARKNET_MANDI_CATALOG[0];
+    ctx.openPriceTrendModal(item.id);
+
+    const body = ctx.document.getElementById('pt-modal-body');
+    expect(body.innerHTML.length > 100).toBe(true);
+    expect(body.innerHTML.includes('Aug')).toBe(false);
+    expect(body.innerHTML.includes('Jul')).toBe(false);
+    expect(body.innerHTML.includes('Nov') || body.innerHTML.includes('Oct')).toBe(true);
+  });
+
+  it('M.PT.2: Price trend curve terminal point matches exact Agmarknet modal price', () => {
+    const ctx = buildMandiContext();
+    const item = ctx.AGMARKNET_MANDI_CATALOG[0];
+    ctx.openPriceTrendModal(item.id);
+
+    const selected = ctx.selectedPriceTrendItem;
+    expect(selected).toBeTruthy();
+    const body = ctx.document.getElementById('pt-modal-body');
+    // Must display live modal price with proper rupee format
+    expect(body.innerHTML.includes(`₹${selected.modalPrice.toLocaleString()}`)).toBe(true);
+  });
+
+  it('M.PA.1: saveCurrentPriceAlert persists alert to localStorage and dispatches real notification', () => {
+    const ctx = buildMandiContext();
+    const item = ctx.AGMARKNET_MANDI_CATALOG[0];
+    ctx.openPriceAlertModal(item.id, 'manage');
+
+    ctx.currentAlertTargetPrice = 7900;
+    ctx.saveCurrentPriceAlert();
+
+    // Check localStorage persistence
+    const savedAlertsStr = ctx.localStorage.getItem('nukrop_active_price_alerts');
+    expect(savedAlertsStr).toBeTruthy();
+    const savedAlerts = JSON.parse(savedAlertsStr);
+    expect(savedAlerts.length > 0).toBe(true);
+    const customAlert = savedAlerts.find(a => a.targetPrice === 7900);
+    expect(customAlert).toBeTruthy();
+
+    // Check notification dispatch
+    const savedNotifsStr = ctx.localStorage.getItem('nukrop_app_notifications');
+    expect(savedNotifsStr).toBeTruthy();
+    const savedNotifs = JSON.parse(savedNotifsStr);
+    const alertNotif = savedNotifs.find(n => n.title.en.includes('7,900'));
+    expect(alertNotif).toBeTruthy();
+    expect(alertNotif.read).toBe(false);
+  });
+
+  it('M.PA.2: togglePriceAlertActive and deletePriceAlert update localStorage', () => {
+    const ctx = buildMandiContext();
+    expect(ctx.activePriceAlerts.length > 0).toBe(true);
+
+    const firstId = ctx.activePriceAlerts[0].id;
+    const initialActive = ctx.activePriceAlerts[0].active;
+
+    // Toggle
+    ctx.togglePriceAlertActive(firstId);
+    let stored = JSON.parse(ctx.localStorage.getItem('nukrop_active_price_alerts'));
+    expect(stored.find(a => a.id === firstId).active).toBe(!initialActive);
+
+    // Delete
+    const prevCount = ctx.activePriceAlerts.length;
+    ctx.deletePriceAlert(firstId);
+    stored = JSON.parse(ctx.localStorage.getItem('nukrop_active_price_alerts'));
+    expect(stored.length).toBe(prevCount - 1);
+  });
+
+  it('M.PA.3: checkAndTriggerRealtimeAlerts triggers real surge notification when live rate meets target', () => {
+    const ctx = buildMandiContext();
+
+    // Add an alert with target lower than current rate to trigger immediate surge
+    const item = ctx.AGMARKNET_MANDI_CATALOG[0];
+    ctx.activePriceAlerts.unshift({
+      id: 'pa-test-surge',
+      cropKey: item.cropKey,
+      cropSlug: item.cropSlug,
+      cropName: item.cropName,
+      mandi: item.mandi,
+      state: item.state,
+      basePrice: item.modalPrice - 100,
+      targetPrice: item.modalPrice, // Exactly live rate
+      unit: '/Qtl',
+      phone: '9849022338',
+      channelSms: true,
+      channelPush: true,
+      active: true,
+      createdDate: '01 Nov 2026',
+      lastTriggeredAt: null
+    });
+    ctx.persistPriceAlerts();
+
+    ctx.checkAndTriggerRealtimeAlerts();
+
+    const notifs = ctx.APP_NOTIFICATIONS;
+    const surgeNotif = notifs.find(n => n.id.startsWith('notif-surge-'));
+    expect(surgeNotif).toBeTruthy();
+    expect(surgeNotif.title.en.includes('Rate Surpassed')).toBe(true);
+  });
+
+  it('M.NT.1: markAllNotificationsRead marks all notifications read and persists', () => {
+    const ctx = buildMandiContext();
+    ctx.markAllNotificationsRead();
+
+    ctx.APP_NOTIFICATIONS.forEach(n => {
+      expect(n.read).toBe(true);
+    });
+
+    const stored = JSON.parse(ctx.localStorage.getItem('nukrop_app_notifications'));
+    stored.forEach(n => {
+      expect(n.read).toBe(true);
+    });
+  });
+});

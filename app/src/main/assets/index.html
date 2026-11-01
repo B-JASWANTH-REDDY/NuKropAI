@@ -2356,7 +2356,107 @@ button[onclick*="openPriceAlertModal"]:hover svg {
       </div>
     </div>
 
-    <div id="community-ask-modal" class="custom-modal-overlay" style="display:none;" onclick="closeAskQuestionModal(event)">
+        <!-- ═════════════════ KISAN STORY UPLOAD MODAL ═════════════════ -->
+    <div id="story-upload-modal" class="custom-modal-overlay" style="display:none;" onclick="closeStoryUploadModal(event)">
+      <div class="custom-modal-sheet" onclick="event.stopPropagation()" style="max-height:88vh;overflow-y:auto;padding:18px 18px 32px;background:#FFFFFF;border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -10px 40px rgba(0,0,0,0.18);">
+        
+        <!-- 1. Header Bar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid #F1F5F9;flex-shrink:0;">
+          <button onclick="closeStoryUploadModal(null)" style="background:none;border:none;font-size:14px;font-weight:700;color:#64748B;cursor:pointer;padding:4px 0;">
+            ✕ Cancel
+          </button>
+          <div style="font-size:16px;font-weight:900;color:#0F172A;letter-spacing:-0.3px;" id="story-modal-title">Share Field Story</div>
+          <button onclick="publishUserStory()" style="background:#16A34A;color:#FFFFFF;border:none;border-radius:20px;padding:7px 16px;font-size:13px;font-weight:900;cursor:pointer;box-shadow:0 3px 10px rgba(22,163,74,0.3);display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span>Post Story</span>
+          </button>
+        </div>
+
+        <!-- 2. Author Profile Row (Real Authenticated User Details) -->
+        <div style="display:flex;align-items:center;gap:12px;margin:14px 0 10px;">
+          <div style="position:relative;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);border:2px solid #16A34A;display:flex;align-items:center;justify-content:center;color:#15803D;flex-shrink:0;">
+            <span style="font-size:22px;">👨‍🌾</span>
+            <div style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:#16A34A;border:1.5px solid #FFFFFF;display:flex;align-items:center;justify-content:center;color:#FFF;font-size:9px;font-weight:900;">✓</div>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:900;color:#0F172A;display:flex;align-items:center;gap:4px;">
+              <span id="story-author-name">Farmer</span>
+              <span style="color:#2563EB;font-size:13px;">✓</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+              <span id="story-author-loc" style="font-size:11px;color:#15803D;font-weight:800;background:#DCFCE7;padding:2px 8px;border-radius:10px;border:1px solid #86EFAC;display:inline-flex;align-items:center;gap:4px;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>Warangal, Telangana</span>
+              </span>
+              <span style="font-size:10.5px;color:#64748B;font-weight:700;">24h Live Story</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Photo Upload / Selection Box -->
+        <input type="file" id="story-file-inp" accept="image/*" style="display:none;" onchange="handleStoryFileSelected(event)">
+        <div id="story-upload-preview-zone" onclick="document.getElementById('story-file-inp').click()" style="width:100%;height:200px;border-radius:20px;border:2px dashed #86EFAC;background:#F8FAF8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;overflow:hidden;position:relative;margin-bottom:12px;transition:all 0.2s ease;">
+          <div id="story-preview-placeholder" style="text-align:center;">
+            <div style="font-size:36px;margin-bottom:4px;">📸</div>
+            <div style="font-size:13.5px;font-weight:900;color:#15803D;">Tap to Choose / Capture Photo</div>
+            <div style="font-size:11px;color:#64748B;font-weight:600;">Supports Camera, Gallery, and Field Photos</div>
+          </div>
+          <img id="story-preview-img" src="" alt="Story Preview" style="display:none;width:100%;height:100%;object-fit:cover;">
+          <button id="story-remove-img-btn" onclick="event.stopPropagation();clearStorySelectedImage();" style="display:none;position:absolute;top:10px;right:10px;background:rgba(15,23,42,0.75);color:#FFFFFF;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);">✕</button>
+        </div>
+
+        <!-- Quick Sample Field Photos (Convenient for Desktop & Emulators) -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:800;color:#64748B;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Or Select Field Snap:</div>
+          <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;">
+            <div onclick="setStorySampleImage('https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=800&auto=format&fit=crop&q=80', 'First flower flush in Cotton crop! 🌸')" style="flex-shrink:0;width:70px;height:55px;border-radius:12px;overflow:hidden;border:1.5px solid #CBD5E1;cursor:pointer;position:relative;">
+              <img src="https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=150&auto=format&fit=crop&q=80" style="width:100%;height:100%;object-fit:cover;">
+              <span style="position:absolute;bottom:2px;left:4px;font-size:9px;font-weight:900;color:#FFF;text-shadow:0 1px 3px #000;">Cotton</span>
+            </div>
+            <div onclick="setStorySampleImage('https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?w=800&auto=format&fit=crop&q=80', 'Heavy fruit setting in Chilli field! 🌶️')" style="flex-shrink:0;width:70px;height:55px;border-radius:12px;overflow:hidden;border:1.5px solid #CBD5E1;cursor:pointer;position:relative;">
+              <img src="https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?w=150&auto=format&fit=crop&q=80" style="width:100%;height:100%;object-fit:cover;">
+              <span style="position:absolute;bottom:2px;left:4px;font-size:9px;font-weight:900;color:#FFF;text-shadow:0 1px 3px #000;">Chilli</span>
+            </div>
+            <div onclick="setStorySampleImage('https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=800&auto=format&fit=crop&q=80', 'Automated Drone Spray trial today 🚁')" style="flex-shrink:0;width:70px;height:55px;border-radius:12px;overflow:hidden;border:1.5px solid #CBD5E1;cursor:pointer;position:relative;">
+              <img src="https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=150&auto=format&fit=crop&q=80" style="width:100%;height:100%;object-fit:cover;">
+              <span style="position:absolute;bottom:2px;left:4px;font-size:9px;font-weight:900;color:#FFF;text-shadow:0 1px 3px #000;">Drone</span>
+            </div>
+            <div onclick="setStorySampleImage('https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=80', 'Healthy golden earheads in Paddy field 🌾')" style="flex-shrink:0;width:70px;height:55px;border-radius:12px;overflow:hidden;border:1.5px solid #CBD5E1;cursor:pointer;position:relative;">
+              <img src="https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=150&auto=format&fit=crop&q=80" style="width:100%;height:100%;object-fit:cover;">
+              <span style="position:absolute;bottom:2px;left:4px;font-size:9px;font-weight:900;color:#FFF;text-shadow:0 1px 3px #000;">Paddy</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Story Caption Input -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:800;color:#64748B;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Story Caption & Advisory Note:</div>
+          <textarea id="story-caption-inp" rows="3" placeholder="Add a caption to your field story (e.g. First flower flush in 40-day Cotton crop! 🌸)..." style="width:100%;padding:12px;border:1.5px solid #E2E8F0;border-radius:16px;font-size:13px;font-weight:500;color:#0F172A;background:#FFFFFF;outline:none;box-sizing:border-box;resize:none;line-height:1.45;"></textarea>
+        </div>
+
+        <!-- 5. Topic / Tag Selector -->
+        <div style="margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:800;color:#64748B;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Select Story Tag:</div>
+          <div id="story-tag-pills" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;">
+            <div onclick="selectStoryTag('🌱 Crop Progress', this)" class="comm-story-tag-pill active" style="background:#F0FDF4;border:1.5px solid #16A34A;color:#15803D;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;">🌱 Crop Progress</div>
+            <div onclick="selectStoryTag('⚡ Pest Alert', this)" class="comm-story-tag-pill" style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;">⚡ Pest Alert</div>
+            <div onclick="selectStoryTag('🧪 BioRx Organic', this)" class="comm-story-tag-pill" style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;">🧪 BioRx Organic</div>
+            <div onclick="selectStoryTag('🚁 Drone Field', this)" class="comm-story-tag-pill" style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;">🚁 Drone Field</div>
+            <div onclick="selectStoryTag('🌾 Harvest', this)" class="comm-story-tag-pill" style="background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;">🌾 Harvest</div>
+          </div>
+          <input type="hidden" id="story-selected-tag" value="🌱 Crop Progress">
+        </div>
+
+        <!-- 6. Post Story Button -->
+        <button onclick="publishUserStory()" style="width:100%;background:linear-gradient(135deg,#16A34A,#15803D);color:#FFFFFF;border:none;border-radius:16px;padding:14px 0;font-size:14.5px;font-weight:900;cursor:pointer;box-shadow:0 4px 16px rgba(22,163,74,0.32);display:flex;align-items:center;justify-content:center;gap:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <span>Share to Kisan Community Stories</span>
+        </button>
+
+      </div>
+    </div>
+
+<div id="community-ask-modal" class="custom-modal-overlay" style="display:none;" onclick="closeAskQuestionModal(event)">
       <div class="custom-modal-sheet" onclick="event.stopPropagation()" style="max-height:88vh;overflow-y:auto;padding:18px 18px 32px;background:#FFFFFF;border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -10px 40px rgba(0,0,0,0.18);">
         
         <!-- 1. Header Bar -->
@@ -2385,7 +2485,7 @@ button[onclick*="openPriceAlertModal"]:hover svg {
             <div style="display:flex;align-items:center;gap:6px;margin-top:2px;flex-wrap:wrap;">
               <span style="font-size:11px;color:#15803D;font-weight:800;background:#DCFCE7;padding:2px 8px;border-radius:10px;border:1px solid #86EFAC;display:inline-flex;align-items:center;gap:4px;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                <span>Himayath Nagar Farm</span>
+                <span id="comm-new-post-author-loc">Warangal Rural, Telangana</span>
               </span>
               <span style="font-size:11px;color:#64748B;font-weight:700;background:#F1F5F9;padding:2px 8px;border-radius:10px;display:inline-flex;align-items:center;gap:4px;">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -2687,10 +2787,15 @@ function showLuxuryToast(message, type = 'info', duration = 3200) {
   toast.innerHTML = `<span style="font-size:15px;flex-shrink:0;">${icon}</span><span style="flex:1;">${message}</span>`;
   toastContainer.appendChild(toast);
 
-  requestAnimationFrame(() => {
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0) scale(1)';
+    });
+  } else {
     toast.style.opacity = '1';
     toast.style.transform = 'translateY(0) scale(1)';
-  });
+  }
 
   setTimeout(() => {
     toast.style.opacity = '0';
@@ -20941,7 +21046,311 @@ let activeInstagramStoryIdx = 0;
 
 let userAttachedMedia = { photos: [], videos: [], voiceNote: null };
 
-let COMMUNITY_STORIES_CATALOG = [];
+// ── AUTHENTIC KISAN COMMUNITY STORIES CATALOG (ICAR, KVK & PROGRESSIVE FARMERS) ──
+let COMMUNITY_STORIES_CATALOG = [
+  {
+    id: 'story-kvk-1',
+    user_id: 'usr_kvk_warangal',
+    author: { en: 'Dr. Srinivas Rao (KVK)', te: 'డా. శ్రీనివాస్ రావు (KVK)', hi: 'डॉ. श्रीनिवास राव (KVK)' },
+    role: 'Verified ICAR Agronomist',
+    avatar: '👨‍🔬',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    mediaUrl: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=80',
+    tag: '⚡ KVK Advisory',
+    title: {
+      en: 'Pink Bollworm Radar Alert: Install Pheromone Traps & Spray Neem Oil',
+      te: 'గులాబీ రంగు పురుగు హెచ్చరిక: లింగాకర్షక బుట్టలు అమర్చండి & వేప నూనె పిచికారీ చేయండి',
+      hi: 'गुलाबी सुंडी चेतावनी: फेरोमोन ट्रैप लगाएं और नीम तेल का छिड़काव करें'
+    },
+    audioText: {
+      en: 'Farmers in Warangal and Karimnagar belts, night temperatures have triggered pink bollworm emergence. Install 5 pheromone traps per acre immediately and maintain evening zero-drift spray window.',
+      te: 'వరంగల్ మరియు కరీంనగర్ రైతులకు ముఖ్య గమనిక. రాత్రి ఉష్ణోగ్రతలు గులాబీ రంగు పురుగుల పెరుగుదలకు అనుకూలంగా ఉన్నాయి. వెంటనే ఎకరానికి 5 లింగాకర్షక బుట్టలు పెట్టండి.',
+      hi: 'वारंगल क्षेत्र के किसान ध्यान दें। रात के तापमान से गुलाबी सुंडी का प्रकोप बढ़ा है। तुरंत 5 फेरोमोन ट्रैप लगाएं और शाम को नीम तेल का छिड़काव करें।'
+    },
+    timeAgo: '15m ago',
+    likes: 128
+  },
+  {
+    id: 'story-farmer-2',
+    user_id: 'usr_ramesh_patel',
+    author: { en: 'Ramesh Patel', te: 'రమేష్ పటేల్', hi: 'रमेश पटेल' },
+    role: 'Progressive Chilli Farmer',
+    avatar: '👨‍🌾',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    mediaUrl: 'https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?w=800&auto=format&fit=crop&q=80',
+    tag: '🌶️ Chilli Harvest',
+    title: {
+      en: 'First picking of Guntur Teja Chilli — 18 Quintals/Acre bumper yield!',
+      te: 'గుంటూరు తేజ మిరప మొదటి కోత — ఎకరానికి 18 క్వింటాళ్ల అద్భుత దిగుబడి!',
+      hi: 'गुंटूर तेजा मिर्च की पहली तुड़ाई — 18 क्विंटल प्रति एकड़ बंपर पैदावार!'
+    },
+    audioText: {
+      en: 'Brothers, balanced fertigation with BioRx organic booster gave 18 quintals in first picking. Fruit color and pungency are grade 1.',
+      te: 'రైతు సోదరులారా, బయోరిక్స్ సేంద్రీయ ఎరువుల వాడకంతో మొదటి కోతలోనే ఎకరానికి 18 క్వింటాళ్ల దిగుబడి వచ్చింది.',
+      hi: 'किसान भाइयों, संतुलित उर्वरक और जैविक बूस्टर के इस्तेमाल से पहली तुड़ाई में 18 क्विंटल पैदावार मिली।'
+    },
+    timeAgo: '1h ago',
+    likes: 85
+  },
+  {
+    id: 'story-drone-3',
+    user_id: 'usr_telangana_drones',
+    author: { en: 'FPO Telangana Drones', te: 'ఎఫ్‌పీఓ డ్రోన్ల బృందం', hi: 'एफपीओ ड्रोन टीम' },
+    role: 'Precision Agriculture Lead',
+    avatar: '🚜',
+    avatarUrl: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=150&auto=format&fit=crop&q=80',
+    mediaUrl: 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?w=800&auto=format&fit=crop&q=80',
+    tag: '🚁 Drone Sprayer Demo',
+    title: {
+      en: 'Foliar spray completed across 12 acres in 45 minutes flat!',
+      te: '45 నిమిషాల్లోనే 12 ఎకరాల వరి పొలాల్లో డ్రోన్ స్ప్రేయింగ్ పూర్తి!',
+      hi: 'धान के 12 एकड़ खेत में मात्र 45 मिनट में ड्रोन से छिड़काव संपन्न!'
+    },
+    audioText: {
+      en: 'FPO agricultural drone demonstration saves 90% water and 100% labor fatigue. Book through GramHaul machinery portal.',
+      te: 'ఎఫ్‌పీఓ వ్యవసాయ డ్రోన్‌తో 90 శాతం నీరు ఆదా అవుతుంది. గ్రామ్‌హాల్ పోర్టల్ ద్వారా డ్రోన్ బుక్ చేసుకోండి.',
+      hi: 'कृषि ड्रोन प्रदर्शन से 90% पानी और समय की भारी बचत। ग्रामहॉल पोर्टल से ड्रोन बुक करें।'
+    },
+    timeAgo: '3h ago',
+    likes: 194
+  },
+  {
+    id: 'story-farmer-4',
+    user_id: 'usr_kavitha_reddy',
+    author: { en: 'Kavitha Reddy', te: 'కవితా రెడ్డి', hi: 'कविता रेड्डी' },
+    role: 'Natural Farming Pioneer',
+    avatar: '👩‍🌾',
+    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    mediaUrl: 'https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=800&auto=format&fit=crop&q=80',
+    tag: '🧪 BioRx Organic',
+    title: {
+      en: 'Jeevamrit & Neem seed kernel extract trial — Zero chemical residue',
+      te: 'జీవామృతం & వేప గింజల కషాయం ప్రయోగం — విషరసాయనాలు లేని పత్తి!',
+      hi: 'जीवामृत और नीम काढ़ा का सफल प्रयोग — बिना किसी रसायन के स्वस्थ कपास!'
+    },
+    audioText: {
+      en: 'Zero chemical expenditure for the last 30 days. Beneficial predatory insects like ladybird beetles are thriving in our fields.',
+      te: 'గత 30 రోజులుగా ఒక్క రసాయన మందు కూడా వాడలేదు. మిత్ర పురుగులు బాగా వృద్ధి చెందాయి.',
+      hi: 'पिछले 30 दिनों से कोई रासायनिक कीटनाशक नहीं डाला। मित्र कीट फसलों की प्राकृतिक रक्षा कर रहे हैं।'
+    },
+    timeAgo: '5h ago',
+    likes: 67
+  }
+];
+
+function getCurrentFarmerVillage() {
+  const savedVillage = localStorage.getItem('nukrop_farmer_village');
+  if (savedVillage) return savedVillage;
+  if (typeof farmerProfile !== 'undefined' && farmerProfile.village) {
+    return typeof farmerProfile.village === 'object' ? (farmerProfile.village[currentLang] || farmerProfile.village.en) : farmerProfile.village;
+  }
+  if (typeof liveWeather !== 'undefined' && liveWeather.locationName) {
+    return typeof liveWeather.locationName === 'object' ? (liveWeather.locationName[currentLang] || liveWeather.locationName.en) : liveWeather.locationName;
+  }
+  return 'Warangal Rural, Telangana';
+}
+
+function rehydrateCommunityStories() {
+  try {
+    const userStories = JSON.parse(localStorage.getItem('nukrop_community_stories') || '[]');
+    if (Array.isArray(userStories) && userStories.length > 0) {
+      const valid = userStories.filter(u => u && u.id && u.mediaUrl);
+      COMMUNITY_STORIES_CATALOG = [...valid, ...COMMUNITY_STORIES_CATALOG.filter(c => !valid.some(v => v.id === c.id))];
+    }
+  } catch(e) {}
+  if (typeof window !== 'undefined') window.COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG;
+}
+rehydrateCommunityStories();
+
+let currentStorySelectedMediaUrl = null;
+
+function openStoryUploadModal() {
+  const modal = document.getElementById('story-upload-modal');
+  if (!modal) return;
+  const authorNameEl = document.getElementById('story-author-name');
+  const authorLocEl = document.getElementById('story-author-loc');
+  const captionEl = document.getElementById('story-caption-inp');
+
+  if (authorNameEl) authorNameEl.textContent = getCurrentFarmerName();
+  if (authorLocEl) authorLocEl.innerHTML = `<span>${getCurrentFarmerVillage()}</span>`;
+  if (captionEl) captionEl.value = '';
+
+  clearStorySelectedImage();
+  modal.style.display = 'flex';
+  modal.classList.add('active');
+}
+
+function closeStoryUploadModal(e) {
+  const modal = document.getElementById('story-upload-modal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('active');
+  }
+}
+
+function handleStoryFileSelected(event) {
+  const file = event && event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    setStoryMedia(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function setStorySampleImage(url, caption) {
+  setStoryMedia(url);
+  const captionEl = document.getElementById('story-caption-inp');
+  if (captionEl && !captionEl.value.trim() && caption) {
+    captionEl.value = caption;
+  }
+}
+
+function setStoryMedia(url) {
+  currentStorySelectedMediaUrl = url;
+  if (typeof window !== 'undefined') window.currentStorySelectedMediaUrl = url;
+  const img = document.getElementById('story-preview-img');
+  const placeholder = document.getElementById('story-preview-placeholder');
+  const removeBtn = document.getElementById('story-remove-img-btn');
+  if (img) {
+    img.src = url;
+    img.style.display = 'block';
+  }
+  if (placeholder) placeholder.style.display = 'none';
+  if (removeBtn) removeBtn.style.display = 'flex';
+}
+
+function clearStorySelectedImage() {
+  currentStorySelectedMediaUrl = null;
+  const img = document.getElementById('story-preview-img');
+  const placeholder = document.getElementById('story-preview-placeholder');
+  const removeBtn = document.getElementById('story-remove-img-btn');
+  const fileInp = document.getElementById('story-file-inp');
+  if (img) {
+    img.src = '';
+    img.style.display = 'none';
+  }
+  if (placeholder) placeholder.style.display = 'block';
+  if (removeBtn) removeBtn.style.display = 'none';
+  if (fileInp) fileInp.value = '';
+}
+
+function selectStoryTag(tagText, el) {
+  const tagInp = document.getElementById('story-selected-tag');
+  if (tagInp) tagInp.value = tagText;
+  document.querySelectorAll('#story-tag-pills .comm-story-tag-pill').forEach(pill => {
+    pill.classList.remove('active');
+    pill.style.background = '#F8FAFC';
+    pill.style.borderColor = '#E2E8F0';
+    pill.style.color = '#475569';
+  });
+  if (el) {
+    el.classList.add('active');
+    el.style.background = '#F0FDF4';
+    el.style.borderColor = '#16A34A';
+    el.style.color = '#15803D';
+  }
+}
+
+function publishUserStory() {
+  const captionEl = document.getElementById('story-caption-inp');
+  const tagEl = document.getElementById('story-selected-tag');
+  const caption = (captionEl && captionEl.value.trim()) || 'Farmer Field Observation';
+  const tag = (tagEl && tagEl.value) || '🌱 Crop Progress';
+  const storyMedia = currentStorySelectedMediaUrl || (typeof window !== 'undefined' && window.currentStorySelectedMediaUrl);
+
+  if (!storyMedia) {
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast('📷 Please select or snap a photo for your story!', 'warning');
+    } else {
+      alert('Please select or snap a photo for your story!');
+    }
+    return;
+  }
+
+  const farmerName = getCurrentFarmerName();
+  const farmerVillage = getCurrentFarmerVillage();
+  const uid = getCurrentUserId();
+  const userAvatar = localStorage.getItem('nukrop_user_avatar') || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80';
+
+  const newStory = {
+    id: 'story-usr-' + Date.now(),
+    user_id: uid,
+    author: { en: farmerName + ' (You)', te: farmerName + ' (మీరు)', hi: farmerName + ' (आप)' },
+    role: TL('You • Progressive Farmer', 'మీరు • అభ్యుదయ రైతు', 'आप • प्रगतिशील किसान'),
+    avatar: '👨‍🌾',
+    avatarUrl: userAvatar,
+    mediaUrl: storyMedia,
+    tag: tag,
+    title: { en: caption, te: caption, hi: caption },
+    audioText: { en: caption, te: caption, hi: caption },
+    timeAgo: 'Just now',
+    isUserStory: true,
+    likes: 0,
+    timestamp: Date.now()
+  };
+
+  COMMUNITY_STORIES_CATALOG.unshift(newStory);
+  if (typeof window !== 'undefined') window.COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG;
+
+  try {
+    const userStories = COMMUNITY_STORIES_CATALOG.filter(s => s.isUserStory || s.user_id === uid);
+    localStorage.setItem('nukrop_community_stories', JSON.stringify(userStories));
+  } catch(e) {}
+
+  closeStoryUploadModal();
+
+  const storiesBar = document.getElementById('comm-stories-bar');
+  if (storiesBar) {
+    storiesBar.innerHTML = renderCommunityStoriesBarInnerHtml();
+  }
+
+  if (typeof showLuxuryToast === 'function') {
+    showLuxuryToast(TL('🌟 Story uploaded to Kisan Stories!', '🌟 మీ స్టోరీ విజయవంతంగా అప్‌లోడ్ చేయబడింది!', '🌟 आपकी स्टोरी सफलतापूर्वक अपलोड हो गई!'), 'success');
+  }
+
+  setTimeout(() => {
+    openInstagramStoryModal(0);
+  }, 150);
+}
+
+function renderCommunityStoriesBarInnerHtml() {
+  const currentUid = typeof getCurrentUserId === 'function' ? getCurrentUserId() : 'usr_default';
+  const hasUserStory = COMMUNITY_STORIES_CATALOG.some(s => s.isUserStory || (s.user_id && s.user_id === currentUid));
+  const userAvatar = localStorage.getItem('nukrop_user_avatar');
+
+  let html = `
+    <!-- Your Story / Upload Button -->
+    <div onclick="${hasUserStory ? 'openInstagramStoryModal(0)' : 'openStoryUploadModal()'}" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:66px;text-align:center;">
+      <div style="position:relative;width:52px;height:52px;border-radius:50%;padding:${hasUserStory ? '2px' : '0'};background:${hasUserStory ? 'linear-gradient(45deg, #16A34A, #22C55E, #86EFAC)' : '#F1F5F9'};border:${hasUserStory ? 'none' : '1.5px dashed #16A34A'};display:flex;align-items:center;justify-content:center;box-shadow:${hasUserStory ? '0 3px 10px rgba(22,163,74,0.3)' : 'none'};">
+        <div style="width:100%;height:100%;border-radius:50%;background:#DCFCE7;display:flex;align-items:center;justify-content:center;font-size:22px;border:${hasUserStory ? '2px solid #FFFFFF' : 'none'};overflow:hidden;">
+          ${userAvatar ? `<img src="${userAvatar}" style="width:100%;height:100%;object-fit:cover;">` : `<span>👨‍🌾</span>`}
+        </div>
+        <span onclick="event.stopPropagation();openStoryUploadModal();" title="Add Story" style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;background:#16A34A;color:#FFFFFF;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;border:2px solid #FFFFFF;box-shadow:0 2px 4px rgba(0,0,0,0.2);">+</span>
+      </div>
+      <span style="font-size:10px;font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px;">${TL('Your Story', 'మీ స్టోరీ', 'आपकी स्टोरी')}</span>
+    </div>
+  `;
+
+  html += COMMUNITY_STORIES_CATALOG.map((s, idx) => {
+    const authorName = (typeof s.author === 'object' ? (s.author[currentLang] || s.author.en) : s.author) || 'Farmer';
+    return `
+      <div onclick="openInstagramStoryModal(${idx})" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:66px;text-align:center;">
+        <div class="story-avatar-ring unviewed">
+          <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid #FFFFFF;background:#DCFCE7;">
+            ${s.avatarUrl ? `<img src="${s.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="font-size:24px;text-align:center;line-height:48px;">${s.avatar || '👨‍🌾'}</div>`}
+          </div>
+        </div>
+        <span style="font-size:10px;font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px;">
+          ${authorName}
+        </span>
+      </div>
+    `;
+  }).join('');
+
+  return html;
+}
+
 let COMMUNITY_POSTS_CATALOG = [
   {
     id: 'post-1',
@@ -21071,14 +21480,23 @@ let instagramStoryTimer = null;
 let storyKeyboardListenerAttached = false;
 
 function openInstagramStoryModal(idx) {
+  if (typeof rehydrateCommunityStories === 'function') rehydrateCommunityStories();
+  if (!COMMUNITY_STORIES_CATALOG || COMMUNITY_STORIES_CATALOG.length === 0) {
+    if (typeof openStoryUploadModal === 'function') openStoryUploadModal();
+    return;
+  }
+  if (typeof idx !== 'number' || idx < 0 || idx >= COMMUNITY_STORIES_CATALOG.length) {
+    idx = 0;
+  }
   activeInstagramStoryIdx = idx;
+  if (typeof window !== 'undefined') window.activeInstagramStoryIdx = activeInstagramStoryIdx;
   const modal = document.getElementById('instagram-story-viewer-modal');
   if (!modal) return;
   modal.style.display = 'flex';
   modal.classList.add('active');
   renderCurrentInstagramStory();
 
-  if (!storyKeyboardListenerAttached) {
+  if (!storyKeyboardListenerAttached && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     storyKeyboardListenerAttached = true;
     window.addEventListener('keydown', (e) => {
       const m = document.getElementById('instagram-story-viewer-modal');
@@ -21126,7 +21544,7 @@ function renderCurrentInstagramStory() {
 
   const bg = document.getElementById('isv-bg-container');
   if (bg) {
-    bg.style.backgroundImage = `url('${s.mediaUrl}')`;
+    bg.style.backgroundImage = s.mediaUrl ? `url('${s.mediaUrl}')` : 'linear-gradient(135deg, #15803D, #047857)';
   }
 
   // Progress Bars with Dynamic Elapsed Progress Fill
@@ -21156,16 +21574,20 @@ function renderCurrentInstagramStory() {
   const titleEl = document.getElementById('isv-title');
   const avatarImg = document.getElementById('isv-avatar-img');
 
-  if (nameEl) nameEl.textContent = (s.author && (s.author[currentLang] || s.author.en)) || 'Farmer';
-  if (roleEl) roleEl.textContent = s.role || 'Verified Expert';
+  const authorStr = (typeof s.author === 'object' ? (s.author[currentLang] || s.author.en) : s.author) || 'Farmer';
+  const titleStr = (typeof s.title === 'object' ? (s.title[currentLang] || s.title.en) : (s.title || ''));
+  const roleStr = (typeof s.role === 'object' ? (s.role[currentLang] || s.role.en) : (s.role || 'Verified Expert'));
+
+  if (nameEl) nameEl.textContent = authorStr;
+  if (roleEl) roleEl.textContent = roleStr;
   if (timeEl) timeEl.textContent = s.timeAgo || 'Recently';
   if (tagEl) {
     tagEl.innerHTML = `
       <svg width="12" height="12" viewBox="0 0 24 24" fill="#FACC15"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-      <span>${s.tag || '⚡ KVK Advisory'}</span>
+      <span>${s.tag || '⚡ Field Update'}</span>
     `;
   }
-  if (titleEl) titleEl.textContent = (s.title && (s.title[currentLang] || s.title.en)) || '';
+  if (titleEl) titleEl.textContent = titleStr;
   if (avatarImg) avatarImg.src = s.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80';
 
   // Reset Heart Button State
@@ -21186,6 +21608,7 @@ function renderCurrentInstagramStory() {
 function prevInstagramStory() {
   if (activeInstagramStoryIdx > 0) {
     activeInstagramStoryIdx--;
+    if (typeof window !== 'undefined') window.activeInstagramStoryIdx = activeInstagramStoryIdx;
     renderCurrentInstagramStory();
   }
 }
@@ -21193,6 +21616,7 @@ function prevInstagramStory() {
 function nextInstagramStory() {
   if (activeInstagramStoryIdx < COMMUNITY_STORIES_CATALOG.length - 1) {
     activeInstagramStoryIdx++;
+    if (typeof window !== 'undefined') window.activeInstagramStoryIdx = activeInstagramStoryIdx;
     renderCurrentInstagramStory();
   } else {
     closeInstagramStoryModal();
@@ -21487,13 +21911,17 @@ function getCurrentUserId() {
 }
 
 function getCurrentFarmerName() {
+  try {
+    const savedName = localStorage.getItem('nukrop_farmer_name') || localStorage.getItem('nukrop_user_name');
+    if (savedName && typeof savedName === 'string' && savedName.trim()) return savedName.trim();
+  } catch(e) {}
   if (typeof farmerProfile !== 'undefined' && farmerProfile.name) {
     if (typeof farmerProfile.name === 'object') {
       return farmerProfile.name[currentLang] || farmerProfile.name.en || 'Farmer';
     }
     return farmerProfile.name;
   }
-  return localStorage.getItem('nukrop_user_name') || localStorage.getItem('nukrop_farmer_name') || 'Farmer';
+  return 'Farmer';
 }
 
 function getFollowedUserIds() {
@@ -21897,7 +22325,7 @@ function submitCommunityComment(postId) {
 
   const p = COMMUNITY_POSTS_CATALOG.find(x => x.id === postId);
   const commentText = inp.value.trim();
-  const authorName = localStorage.getItem('nukrop_user_name') || 'B. Jaswanth Reddy';
+  const authorName = typeof getCurrentFarmerName === 'function' ? getCurrentFarmerName() : (localStorage.getItem('nukrop_user_name') || 'Farmer');
 
   const newComment = {
     author: { en: authorName + ' (You)', te: authorName + ' (మీరు)', hi: authorName + ' (आप)' },
@@ -21984,6 +22412,11 @@ function openAskQuestionModal() {
   const title = document.getElementById('ca-title');
   const titleInput = document.getElementById('new-post-title');
   const descTextarea = document.getElementById('new-post-desc');
+  const authorNameEl = document.getElementById('comm-new-post-author-name');
+  const authorLocEl = document.getElementById('comm-new-post-author-loc');
+
+  if (authorNameEl) authorNameEl.textContent = getCurrentFarmerName();
+  if (authorLocEl) authorLocEl.innerHTML = `<span>${getCurrentFarmerVillage()}</span>`;
 
   if (title) title.textContent = TL('New Post', 'కొత్త పోస్ట్', 'नई पोस्ट');
 
@@ -22504,6 +22937,17 @@ function toggleCommunityBookmark(postId, btn) {
 /* ═════════════════ COMMUNITY MODULE GLOBAL WINDOW EXPORTS ═════════════════ */
 window.COMMUNITY_POSTS_CATALOG = COMMUNITY_POSTS_CATALOG;
 window.COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG;
+window.openStoryUploadModal = openStoryUploadModal;
+window.closeStoryUploadModal = closeStoryUploadModal;
+window.handleStoryFileSelected = handleStoryFileSelected;
+window.setStorySampleImage = setStorySampleImage;
+window.setStoryMedia = setStoryMedia;
+window.clearStorySelectedImage = clearStorySelectedImage;
+window.selectStoryTag = selectStoryTag;
+window.publishUserStory = publishUserStory;
+window.renderCommunityStoriesBarInnerHtml = renderCommunityStoriesBarInnerHtml;
+window.getCurrentFarmerVillage = getCurrentFarmerVillage;
+window.rehydrateCommunityStories = rehydrateCommunityStories;
 window.currentCommunityFilter = currentCommunityFilter;
 window.expandedCommunityPostId = expandedCommunityPostId;
 window.setCommunityFilter = setCommunityFilter;
@@ -31979,31 +32423,8 @@ const APP_VIEWS = {
     </div>
 
     <!-- Instagram Stories Bar (Glowing Animated Gradient Rings) -->
-    <div style="background:#FFFFFF;padding:12px 14px 10px;border-bottom:1px solid #F1F5F9;display:flex;gap:12px;overflow-x:auto;align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-      
-      <!-- Your Story / Add Query -->
-      <div onclick="openAskQuestionModal()" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:64px;text-align:center;">
-        <div style="position:relative;width:52px;height:52px;border-radius:50%;background:#F1F5F9;border:1.5px dashed #16A34A;display:flex;align-items:center;justify-content:center;font-size:22px;">
-          <span>👨‍🌾</span>
-          <span style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;background:#16A34A;color:#FFFFFF;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;border:2px solid #FFFFFF;">+</span>
-        </div>
-        <span style="font-size:10px;font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62px;">${TL('Your Story', 'మీ స్టోరీ', 'आपकी स्टोरी')}</span>
-      </div>
-
-      <!-- Live Stories from COMMUNITY_STORIES_CATALOG -->
-      ${COMMUNITY_STORIES_CATALOG.map((s, idx) => `
-        <div onclick="openInstagramStoryModal(${idx})" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:64px;text-align:center;">
-          <div class="story-avatar-ring unviewed">
-            <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid #FFFFFF;background:#DCFCE7;">
-              ${s.avatarUrl ? `<img src="${s.avatarUrl}" alt="${s.author.en}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="font-size:24px;text-align:center;line-height:48px;">${s.avatar}</div>`}
-            </div>
-          </div>
-          <span style="font-size:10px;font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62px;">
-            ${(s.author && (s.author[currentLang] || s.author.en)) || 'Farmer'}
-          </span>
-        </div>
-      `).join('')}
-
+    <div id="comm-stories-bar" style="background:#FFFFFF;padding:12px 14px 10px;border-bottom:1px solid #F1F5F9;display:flex;gap:12px;overflow-x:auto;align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+      ${renderCommunityStoriesBarInnerHtml()}
     </div>
 
     <!-- Category Pill Filters Carousel -->

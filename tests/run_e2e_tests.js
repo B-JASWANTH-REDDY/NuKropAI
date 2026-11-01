@@ -16,6 +16,9 @@ require('./tier0_forensic_integrity');
 // Role Integrity & Multi-Role Anti-Loophole Verification Gate
 require('./test_role_integrity_anti_loophole');
 
+// Mandi Strict Location Lock & Anti-Leakage Gate
+require('./test_mandi_strict_location_lock');
+
 // Tier 1-4: Acceptance & Stress Suites
 require('./tier1_feature_coverage');
 require('./tier2_boundary_cases');

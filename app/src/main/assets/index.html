@@ -4690,9 +4690,16 @@ function stopBioRxVoiceReadout() {
 
 /* ═════════════════ AGMARKNET REAL LIVE MANDI CATALOG & CONTROLLER ═════════════════ */
 let mandiSearchCrop = '';
-let mandiSearchState = '';
+let mandiSearchState = 'Telangana';
 let mandiSearchMandi = '';
 let mandiSelectedPopular = 'all';
+
+if (typeof window !== 'undefined') {
+  window.mandiSearchCrop = mandiSearchCrop;
+  window.mandiSearchState = mandiSearchState;
+  window.mandiSearchMandi = mandiSearchMandi;
+  window.mandiSelectedPopular = mandiSelectedPopular;
+}
 
 const AGMARKNET_MANDI_CATALOG = [
   // ── AUTHENTIC DAILY AGMARKNET RATES (01/11/2026) ──
@@ -18921,26 +18928,36 @@ const AGMARKNET_MANDI_CATALOG = [
 ];
 
 function getFilteredMandiRates() {
-  const cropQ = (mandiSearchCrop || '').toLowerCase().trim();
-  const stateQ = (mandiSearchState || '').toLowerCase().trim();
-  const mandiQ = (mandiSearchMandi || '').toLowerCase().trim();
+  const cropQ = ((typeof window !== 'undefined' && window.mandiSearchCrop !== undefined ? window.mandiSearchCrop : mandiSearchCrop) || '').toLowerCase().trim();
+  const stateQ = ((typeof window !== 'undefined' && window.mandiSearchState !== undefined ? window.mandiSearchState : mandiSearchState) || '').toLowerCase().trim();
+  const mandiQ = ((typeof window !== 'undefined' && window.mandiSearchMandi !== undefined ? window.mandiSearchMandi : mandiSearchMandi) || '').toLowerCase().trim();
+  const popQ = (typeof window !== 'undefined' && window.mandiSelectedPopular !== undefined) ? window.mandiSelectedPopular : mandiSelectedPopular;
 
-  // Strict primary match
-  const exactMatches = AGMARKNET_MANDI_CATALOG.filter(item => {
-    if (mandiSelectedPopular !== 'all' && item.cropKey !== mandiSelectedPopular) {
-      return false;
-    }
-    if (cropQ) {
-      const matchName = (item.cropName.en + ' ' + item.cropName.te + ' ' + item.cropName.hi + ' ' + item.cropKey + ' ' + item.variety.en + ' ' + item.variety.te).toLowerCase();
-      if (!matchName.includes(cropQ)) return false;
-    }
+  // Strict location match filter:
+  // When a user selects their exact location (State or Mandi),
+  // ONLY records matching that exact location are admitted. Zero cross-location leakage.
+  const filterByLocation = (item) => {
     if (stateQ) {
-      const matchState = (item.state.en + ' ' + item.state.te + ' ' + item.state.hi).toLowerCase();
+      const matchState = (item.state.en + ' ' + (item.state.te || '') + ' ' + (item.state.hi || '')).toLowerCase();
       if (!matchState.includes(stateQ)) return false;
     }
     if (mandiQ) {
-      const matchMandi = (item.mandi.en + ' ' + item.mandi.te + ' ' + item.mandi.hi + ' ' + item.district).toLowerCase();
+      const matchMandi = (item.mandi.en + ' ' + (item.mandi.te || '') + ' ' + (item.mandi.hi || '') + ' ' + (item.district || '')).toLowerCase();
       if (!matchMandi.includes(mandiQ)) return false;
+    }
+    return true;
+  };
+
+  // Primary match: Strict Location Lock + Crop / Popular Chip filter
+  const exactMatches = AGMARKNET_MANDI_CATALOG.filter(item => {
+    if (!filterByLocation(item)) return false;
+
+    if (popQ !== 'all' && item.cropKey !== popQ) {
+      return false;
+    }
+    if (cropQ) {
+      const matchName = (item.cropName.en + ' ' + (item.cropName.te || '') + ' ' + (item.cropName.hi || '') + ' ' + item.cropKey + ' ' + (item.cropSlug || '') + ' ' + (item.variety ? (item.variety.en + ' ' + (item.variety.te || '')) : '')).toLowerCase();
+      if (!matchName.includes(cropQ)) return false;
     }
     return true;
   });
@@ -18949,29 +18966,64 @@ function getFilteredMandiRates() {
     return exactMatches;
   }
 
-  // Fallback 1: If crop matches, show all mandis for that crop
-  if (cropQ || mandiSelectedPopular !== 'all') {
-    const targetCrop = (mandiSelectedPopular !== 'all' ? mandiSelectedPopular : cropQ).toLowerCase();
+  // STRICT LOCATION LOCK:
+  // If user has specified a State or Mandi, NEVER show records from other states or mandis!
+  if (stateQ || mandiQ) {
+    // If the exact match failed because of a crop search, return empty array
+    // so the UI clearly reports that this specific crop has no trades at this location today.
+    return [];
+  }
+
+  // Fallback ONLY when NO location is selected (All-India exploration mode)
+  if (cropQ || popQ !== 'all') {
+    const targetCrop = (popQ !== 'all' ? popQ : cropQ).toLowerCase();
     const cropFallbacks = AGMARKNET_MANDI_CATALOG.filter(item => {
-      const matchName = (item.cropName.en + ' ' + item.cropName.te + ' ' + item.cropName.hi + ' ' + item.cropKey + ' ' + item.cropSlug).toLowerCase();
+      const matchName = (item.cropName.en + ' ' + (item.cropName.te || '') + ' ' + (item.cropName.hi || '') + ' ' + item.cropKey + ' ' + (item.cropSlug || '')).toLowerCase();
       return matchName.includes(targetCrop);
     });
     if (cropFallbacks.length > 0) return cropFallbacks;
 
-    // Return empty list if no official Agmarknet rate is reported for this target crop
     return [];
   }
 
-  // Fallback 2: If state matches, show mandis in that state
-  if (stateQ) {
-    const stateFallbacks = AGMARKNET_MANDI_CATALOG.filter(item => {
-      const matchState = (item.state.en + ' ' + item.state.te + ' ' + item.state.hi).toLowerCase();
-      return matchState.includes(stateQ);
-    });
-    if (stateFallbacks.length > 0) return stateFallbacks;
-  }
-
   return AGMARKNET_MANDI_CATALOG;
+}
+
+function selectMandiState(state) {
+  mandiSearchState = (state === 'all' || !state) ? '' : state;
+  mandiSearchMandi = '';
+  if (typeof window !== 'undefined') {
+    window.mandiSearchState = mandiSearchState;
+    window.mandiSearchMandi = mandiSearchMandi;
+  }
+  const stateEl = document.getElementById('mandi-state-inp');
+  const mktEl = document.getElementById('mandi-mkt-inp');
+  if (stateEl) stateEl.value = mandiSearchState;
+  if (mktEl) mktEl.value = '';
+  executeMandiSearch();
+}
+
+function selectMandiMarket(market, state = '') {
+  if (state) mandiSearchState = state;
+  mandiSearchMandi = market;
+  if (typeof window !== 'undefined') {
+    window.mandiSearchState = mandiSearchState;
+    window.mandiSearchMandi = mandiSearchMandi;
+  }
+  const stateEl = document.getElementById('mandi-state-inp');
+  const mktEl = document.getElementById('mandi-mkt-inp');
+  if (stateEl && state) stateEl.value = state;
+  if (mktEl) mktEl.value = market;
+  executeMandiSearch();
+}
+
+if (typeof window !== 'undefined') {
+  window.getFilteredMandiRates = getFilteredMandiRates;
+  window.selectMandiState = selectMandiState;
+  window.selectMandiMarket = selectMandiMarket;
+  window.executeMandiSearch = executeMandiSearch;
+  window.getMandiDefaults = getMandiDefaults;
+  window.renderMandiCardsHtml = renderMandiCardsHtml;
 }
 
 let selectedPriceTrendItem = null;
@@ -19016,6 +19068,31 @@ function executeMandiSearch() {
   if (mktEl) mandiSearchMandi = mktEl.value;
 
   if (mandiSearchState) { fetchMandiRatesFromSupabase(null, mandiSearchState); }
+
+  const indicator = document.getElementById('mandi-lock-indicator');
+  if (indicator) {
+    if (mandiSearchState || mandiSearchMandi) {
+      indicator.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#E8F5E9;border:1px solid #A7F3D0;border-radius:12px;padding:7px 12px;margin-bottom:10px;font-size:10.5px;color:#166534;font-weight:700;">
+          <span style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px;">🔒</span>
+            <span>${TL('Showing ONLY Mandi Rates for', 'వీటి ధరలు మాత్రమే చూపబడుతున్నాయి', 'केवल यहां के मंडी भाव दिखाए जा रहे हैं')}: <strong style="color:#0B4628;">${mandiSearchMandi ? mandiSearchMandi + ', ' : ''}${mandiSearchState}</strong></span>
+          </span>
+          <button onclick="selectMandiState('all')" style="background:none;border:none;color:#15803D;font-weight:800;font-size:10px;cursor:pointer;text-decoration:underline;">
+            ${TL('Show All States', 'అన్ని రాష్ట్రాలు', 'सभी राज्य देखें')}
+          </button>
+        </div>
+      `;
+    } else {
+      indicator.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:12px;padding:7px 12px;margin-bottom:10px;font-size:10.5px;color:#475569;font-weight:600;">
+          <span>🌐</span>
+          <span>${TL('All India Mandis (select a state or enter mandi above to lock to your exact location)', 'అఖిల భారత మార్కెట్లు (మీ స్థానిక ధరల కోసం రాష్ట్రాన్ని ఎంచుకోండి)', 'अखिल भारतीय मंडियां (अपने स्थान के भाव के लिए ऊपर राज्य चुनें)')}</span>
+        </div>
+      `;
+    }
+  }
+
   const container = document.getElementById('mandi-results-container');
   if (container) {
     container.innerHTML = renderMandiCardsHtml();
@@ -20104,14 +20181,26 @@ function renderMandiCardsHtml() {
   const isHi = currentLang === 'hi';
 
   if (list.length === 0) {
+    const activeCrop = ((typeof window !== 'undefined' && window.mandiSearchCrop !== undefined ? window.mandiSearchCrop : mandiSearchCrop) || ((typeof window !== 'undefined' && window.mandiSelectedPopular !== undefined ? window.mandiSelectedPopular : mandiSelectedPopular) !== 'all' ? (typeof window !== 'undefined' && window.mandiSelectedPopular !== undefined ? window.mandiSelectedPopular : mandiSelectedPopular) : '')).trim();
+    const activeLoc = ((typeof window !== 'undefined' && window.mandiSearchMandi !== undefined ? window.mandiSearchMandi : mandiSearchMandi) || (typeof window !== 'undefined' && window.mandiSearchState !== undefined ? window.mandiSearchState : mandiSearchState) || '').trim();
+    const locTitle = activeLoc ? (activeCrop ? TL(`No ${activeCrop} Rates in ${activeLoc}`, `${activeLoc} లో ${activeCrop} ధరలు లేవు`, `${activeLoc} में ${activeCrop} भाव नहीं मिले`) : TL(`No Mandi Rates in ${activeLoc}`, `${activeLoc} లో ధరలు కనుగొనబడలేదు`, `${activeLoc} में कोई भाव नहीं मिले`)) : TL('No Mandi Rates Found', 'ఫలితాలు కనుగొనబడలేదు', 'कोई मंडी भाव नहीं मिला');
+    const locSub = activeLoc ? TL(`Strict Location Filter active: showing official rates only for ${activeLoc}. No matching arrivals reported today (01/11/2026).`, `ఖచ్చితమైన స్థాన లాక్ సక్రియంగా ఉంది: ${activeLoc} అధికారిక ధరలు మాత్రమే చూపబడతాయి. నేడు రాక నమోదు కాలేదు.`, `सख्त स्थान फ़िल्टर सक्रिय: केवल ${activeLoc} के आधिकारिक भाव दिखाए जा रहे हैं।`) : TL('Try searching for Tomato, Wheat, Cotton, or Onion', 'దయచేసి వేరే పంట లేదా రాష్ట్రాన్ని ఎంచుకోండి', 'कृपया अन्य फसल या राज्य चुनें');
+
     return `
-      <div style="text-align:center;padding:40px 10px;background:#FFFFFF;border-radius:20px;border:1px solid #E2ECE2;margin-top:10px;">
-        <div style="font-size:32px;margin-bottom:8px;">🔍</div>
-        <div style="font-size:14px;font-weight:900;color:#0F172A;">${TL('No Mandi Rates Found', 'ఫలితాలు కనుగొనబడలేదు', 'कोई मंडी भाव नहीं मिला')}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px;">${TL('Try searching for Tomato, Wheat, Cotton, or Onion', 'దయచేసి వేరే పంట లేదా రాష్ట్రాన్ని ఎంచుకోండి', 'कृपया अन्य फसल या राज्य चुनें')}</div>
-        <button onclick="mandiSearchCrop='';mandiSearchState='';mandiSearchMandi='';mandiSelectedPopular='all';executeMandiSearch();" style="background:#1B5E20;color:#FFFFFF;border:none;border-radius:12px;padding:8px 16px;font-size:11px;font-weight:800;cursor:pointer;margin-top:12px;">
-          ${TL('Show All Rates', 'అన్ని ధరలు చూపించు', 'Show All Rates')}
-        </button>
+      <div style="text-align:center;padding:36px 16px;background:#FFFFFF;border-radius:20px;border:1.5px solid #E2ECE2;margin-top:10px;box-shadow:0 4px 16px -2px rgba(15,23,42,0.05);">
+        <div style="font-size:36px;margin-bottom:8px;">📍</div>
+        <div style="font-size:14px;font-weight:900;color:#0F172A;line-height:1.3;">${locTitle}</div>
+        <div style="font-size:11px;color:#64748B;margin-top:6px;max-width:320px;margin-left:auto;margin-right:auto;line-height:1.4;">${locSub}</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;">
+          ${activeCrop && activeLoc ? `
+            <button onclick="mandiSearchCrop='';mandiSelectedPopular='all';const ci=document.getElementById('mandi-crop-inp');if(ci)ci.value='';executeMandiSearch();" style="background:#1B5E20;color:#FFFFFF;border:none;border-radius:12px;padding:9px 16px;font-size:11px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(27,94,32,0.25);">
+              🌾 ${TL(`Show All Crops in ${activeLoc}`, `${activeLoc} లో అన్ని పంటలు చూపించు`, `${activeLoc} में सभी फसलें देखें`)}
+            </button>
+          ` : ''}
+          <button onclick="mandiSearchCrop='';mandiSearchState='';mandiSearchMandi='';mandiSelectedPopular='all';const s=document.getElementById('mandi-state-inp');if(s)s.value='';const m=document.getElementById('mandi-mkt-inp');if(m)m.value='';const c=document.getElementById('mandi-crop-inp');if(c)c.value='';executeMandiSearch();" style="background:#F1F5F9;color:#0F172A;border:1px solid #CBD5E1;border-radius:12px;padding:9px 16px;font-size:11px;font-weight:800;cursor:pointer;">
+            🇮🇳 ${TL('Show All India Mandis', 'అఖిల భారత మార్కెట్లు చూపించు', 'अखिल भारतीय मंडियां देखें')}
+          </button>
+        </div>
       </div>
     `;
   }
@@ -20260,11 +20349,11 @@ function getLiveMarketTickerHtml() {
 
 
 
-function getMandiDefaults(slug) {
+function getMandiDefaults(slug, preferredState = null) {
   const clean = (slug || 'cotton').toLowerCase().trim();
+  const targetState = (preferredState || (typeof mandiSearchState !== 'undefined' && mandiSearchState) || (typeof farmerProfile !== 'undefined' && (farmerProfile.state || 'Telangana')) || 'Telangana').toLowerCase().trim();
 
-  // Find corresponding item in AGMARKNET_MANDI_CATALOG
-  let found = AGMARKNET_MANDI_CATALOG.find(x => {
+  const isCropMatch = (x) => {
     if (!x) return false;
     if (x.cropSlug === clean || x.cropKey === clean) return true;
     if ((clean.includes('chili') || clean.includes('chilli') || clean.includes('pepper')) && (x.cropKey === 'chilli' || x.cropSlug === 'birds-eye-chili')) return true;
@@ -20275,10 +20364,34 @@ function getMandiDefaults(slug) {
     if (clean.includes('onion') && x.cropKey === 'onion') return true;
     if (clean.includes('potato') && x.cropKey === 'potato') return true;
     return false;
-  });
+  };
 
+  // 1. Prioritize finding the requested crop in the user's selected/home location!
+  let found = null;
+  if (targetState) {
+    found = AGMARKNET_MANDI_CATALOG.find(x => {
+      if (!isCropMatch(x)) return false;
+      const matchState = (x.state.en + ' ' + (x.state.te || '') + ' ' + (x.state.hi || '')).toLowerCase();
+      return matchState.includes(targetState);
+    });
+  }
+
+  // 2. If not found in target state, find any national match
   if (!found) {
-    found = AGMARKNET_MANDI_CATALOG.find(x => x.cropKey === 'cotton') || AGMARKNET_MANDI_CATALOG[0];
+    found = AGMARKNET_MANDI_CATALOG.find(isCropMatch);
+  }
+
+  // 3. Fallback to first item in target state or catalog
+  if (!found) {
+    if (targetState) {
+      found = AGMARKNET_MANDI_CATALOG.find(x => {
+        const matchState = (x.state.en + ' ' + (x.state.te || '') + ' ' + (x.state.hi || '')).toLowerCase();
+        return matchState.includes(targetState);
+      });
+    }
+    if (!found) {
+      found = AGMARKNET_MANDI_CATALOG.find(x => x.cropKey === 'cotton') || AGMARKNET_MANDI_CATALOG[0];
+    }
   }
 
   return {
@@ -22210,7 +22323,9 @@ let farmerProfile = {
   farmerId: 'FR-2026-9874512',
   khataNo: 'TS-WGL-8941',
   phone: '+91 98490 22338',
-  village: { en: 'Dharmaram, Geesugonda, Warangal, Telangana', te: 'ధర్మారం, గీసుకొండ, వరంగల్, తెలంగాణ', hi: 'धर्माराम, गीसुगोंडा, वारंगल, तेलंगाना', ta: 'தர்மாரம், கீசுகொண்டா, வாரங்கல்' },
+  state: 'Telangana',
+  district: 'Warangal',
+  village: { en: 'Dharmaram, Geesugonda, Warangal, Telangana', te: 'ధర్మారం, గీసుకొండ, వరంగల్, తెలంగాణ', hi: 'धर्माराम, गीसुगोंडा, वारंगल, तेलंगाना', ta: 'தர்மారం, கீசுகொண்டా, வாரங்கல்' },
   landAcres: '4.50',
   totalExtent: '4.50 Acres (3 Survey Parcels: 142/A-2, 98/B-1, 104/1)',
   kccLimit: '₹3.00 Lakh',
@@ -30118,10 +30233,76 @@ const APP_VIEWS = {
           </button>
         </div>
 
-        <!-- State & Mandi Dual Filter Inputs -->
+        <!-- Quick State Selector Chips (Strict Location Lock) -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+            <span style="font-size:9.5px;font-weight:800;color:#64748B;text-transform:uppercase;letter-spacing:0.05em;">
+              ${TL('Select State / Exact APMC', 'రాష్ట్రం / మార్కెట్ ఎంచుకోండి', 'सटीक राज्य / मंडी चुनें')}
+            </span>
+            ${(mandiSearchState || mandiSearchMandi) ? `
+              <span style="font-size:9.5px;font-weight:800;color:#15803D;background:#DCFCE7;padding:1px 6px;border-radius:4px;">
+                🔒 ${TL('Location Locked', 'స్థాన లాక్', 'स्थान लॉक')}
+              </span>
+            ` : ''}
+          </div>
+          <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:3px;scrollbar-width:none;">
+            ${[
+              { key: 'Telangana', label: TL('Telangana', 'తెలంగాణ', 'तेलंगाना'), icon: '📍' },
+              { key: 'Andhra Pradesh', label: TL('Andhra Pradesh', 'ఆంధ్రప్రదేశ్', 'आंध्र प्रदेश'), icon: '🌾' },
+              { key: 'Maharashtra', label: TL('Maharashtra', 'మహారాష్ట్ర', 'महाराष्ट्र'), icon: '🧅' },
+              { key: 'Punjab', label: TL('Punjab', 'పంజాబ్', 'पंजाब'), icon: '🚜' },
+              { key: 'Karnataka', label: TL('Karnataka', 'కర్ణాటక', 'कर्नाटक'), icon: '🌿' },
+              { key: 'Madhya Pradesh', label: TL('Madhya Pradesh', 'మధ్యప్రదేశ్', 'मध्य प्रदेश'), icon: '🌱' },
+              { key: 'Gujarat', label: TL('Gujarat', 'గుజరాత్', 'गुजरात'), icon: '🥜' },
+              { key: 'Uttar Pradesh', label: TL('Uttar Pradesh', 'ఉత్తరప్రదేశ్', 'उत्तर प्रदेश'), icon: '🥔' },
+              { key: 'all', label: TL('All India 🇮🇳', 'అఖిల భారత 🇮🇳', 'अखिल भारतीय 🇮🇳'), icon: '🇮🇳' }
+            ].map(s => {
+              const isStateSel = (s.key === 'all' && !mandiSearchState && !mandiSearchMandi) || (mandiSearchState && mandiSearchState.toLowerCase() === s.key.toLowerCase());
+              return `
+                <button onclick="selectMandiState('${s.key}')" style="background:${isStateSel ? '#1B5E20' : '#F8FAF8'};color:${isStateSel ? '#FFFFFF' : '#334155'};border:1.5px solid ${isStateSel ? '#1B5E20' : '#E2E8F0'};border-radius:14px;padding:4px 10px;font-size:10px;font-weight:${isStateSel ? '800' : '700'};cursor:pointer;white-space:nowrap;transition:all 0.15s ease;display:inline-flex;align-items:center;gap:4px;box-shadow:${isStateSel ? '0 2px 6px rgba(27,94,32,0.22)' : 'none'};">
+                  <span>${s.icon}</span> ${s.label}
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- State & Mandi Dual Filter Inputs with Native Datalists -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-          <input id="mandi-state-inp" placeholder="${statePlaceholder}" value="${mandiSearchState}" class="clean-field" style="background:#F8FAF8;border:1.5px solid #D6E4D6;border-radius:10px;padding:8px 10px;font-size:11px;font-weight:600;color:#0F172A;margin-bottom:0;" oninput="executeMandiSearch()" onkeypress="if(event.key==='Enter')executeMandiSearch()">
-          <input id="mandi-mkt-inp" placeholder="${mandiPlaceholder}" value="${mandiSearchMandi}" class="clean-field" style="background:#F8FAF8;border:1.5px solid #D6E4D6;border-radius:10px;padding:8px 10px;font-size:11px;font-weight:600;color:#0F172A;margin-bottom:0;" oninput="executeMandiSearch()" onkeypress="if(event.key==='Enter')executeMandiSearch()">
+          <div>
+            <input id="mandi-state-inp" list="mandi-states-list" placeholder="${statePlaceholder}" value="${mandiSearchState}" class="clean-field" style="background:#F8FAF8;border:1.5px solid #D6E4D6;border-radius:10px;padding:8px 10px;font-size:11px;font-weight:600;color:#0F172A;margin-bottom:0;width:100%;box-sizing:border-box;" oninput="executeMandiSearch()" onkeypress="if(event.key==='Enter')executeMandiSearch()">
+            <datalist id="mandi-states-list">
+              <option value="Telangana">
+              <option value="Andhra Pradesh">
+              <option value="Maharashtra">
+              <option value="Punjab">
+              <option value="Karnataka">
+              <option value="Madhya Pradesh">
+              <option value="Gujarat">
+              <option value="Uttar Pradesh">
+            </datalist>
+          </div>
+          <div>
+            <input id="mandi-mkt-inp" list="mandi-markets-list" placeholder="${mandiPlaceholder}" value="${mandiSearchMandi}" class="clean-field" style="background:#F8FAF8;border:1.5px solid #D6E4D6;border-radius:10px;padding:8px 10px;font-size:11px;font-weight:600;color:#0F172A;margin-bottom:0;width:100%;box-sizing:border-box;" oninput="executeMandiSearch()" onkeypress="if(event.key==='Enter')executeMandiSearch()">
+            <datalist id="mandi-markets-list">
+              <option value="Warangal APMC Yard">
+              <option value="Bowenpally APMC">
+              <option value="Wanaparthy town APMC">
+              <option value="Dharmaram APMC">
+              <option value="Cherial APMC">
+              <option value="Siddipet(Rythu Bazar)">
+              <option value="Kollapur APMC">
+              <option value="Guntur APMC">
+              <option value="Anakapally APMC">
+              <option value="Khanna APMC">
+              <option value="Bhagta Bhai Ka APMC">
+              <option value="APMC Buldhana">
+              <option value="APMC Bhusaval">
+              <option value="Ramanagara APMC">
+              <option value="Gondal APMC">
+              <option value="Hasanpur APMC">
+            </datalist>
+          </div>
         </div>
 
         <!-- Popular Crops Section with NuKrop Pill Chips -->
@@ -30144,6 +30325,26 @@ const APP_VIEWS = {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Active Location Lock Banner -->
+    <div id="mandi-lock-indicator" style="padding:0 18px;">
+      ${(mandiSearchState || mandiSearchMandi) ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#E8F5E9;border:1px solid #A7F3D0;border-radius:12px;padding:7px 12px;margin-bottom:10px;font-size:10.5px;color:#166534;font-weight:700;">
+          <span style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px;">🔒</span>
+            <span>${TL('Showing ONLY Mandi Rates for', 'వీటి ధరలు మాత్రమే చూపబడుతున్నాయి', 'केवल यहां के मंडी भाव दिखाए जा रहे हैं')}: <strong style="color:#0B4628;">${mandiSearchMandi ? mandiSearchMandi + ', ' : ''}${mandiSearchState}</strong></span>
+          </span>
+          <button onclick="selectMandiState('all')" style="background:none;border:none;color:#15803D;font-weight:800;font-size:10px;cursor:pointer;text-decoration:underline;">
+            ${TL('Show All States', 'అన్ని రాష్ట్రాలు', 'सभी राज्य देखें')}
+          </button>
+        </div>
+      ` : `
+        <div style="display:flex;align-items:center;gap:6px;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:12px;padding:7px 12px;margin-bottom:10px;font-size:10.5px;color:#475569;font-weight:600;">
+          <span>🌐</span>
+          <span>${TL('All India Mandis (select a state or enter mandi above to lock to your exact location)', 'అఖిల భారత మార్కెట్లు (మీ స్థానిక ధరల కోసం రాష్ట్రాన్ని ఎంచుకోండి)', 'अखिल भारतीय मंडियां (अपने स्थान के भाव के लिए ऊपर राज्य चुनें)')}</span>
+        </div>
+      `}
     </div>
 
     <!-- Live Mandi Rates Feed Results Container -->

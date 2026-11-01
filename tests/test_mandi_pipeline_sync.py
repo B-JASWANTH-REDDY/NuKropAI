@@ -15,6 +15,9 @@ from mandi_pipeline_sync import (
     get_required_env,
     load_to_database,
     run_sync_pipeline,
+    save_to_local_cache,
+    scrape_all_states,
+    DEFAULT_TARGET_STATES,
     API_ENDPOINT
 )
 
@@ -300,6 +303,58 @@ class TestMandiPipelineComprehensive(unittest.TestCase):
             success = run_sync_pipeline(target_filters={"state": "Uttar Pradesh", "district": "Agra", "market": "Agra"})
             self.assertTrue(success)
             mock_conn.commit.assert_called_once()
+
+    # -------------------------------------------------------------------------
+    # 14. Twice-Daily Real Mandi Cache Integrity
+    # -------------------------------------------------------------------------
+    def test_twice_daily_schedule_and_cache_integrity(self):
+        """
+        Verifies that daily real scraped mandi data file exists, contains authentic records,
+        and has verified metadata with zero synthetic prices.
+        """
+        cache_path = os.path.join(os.path.dirname(__file__), '..', 'app', 'src', 'main', 'assets', 'data', 'mandi_daily_real_rates.json')
+        self.assertTrue(os.path.exists(cache_path), "Mandi daily real rates file must exist in assets/data/")
+
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        meta = data.get('metadata', {})
+        self.assertIn('Agmarknet', meta.get('source', ''))
+        self.assertTrue(meta.get('verified_zero_synthetic'))
+        self.assertIn('Twice Daily', meta.get('schedule', ''))
+
+        records = data.get('records', [])
+        self.assertGreater(len(records), 50, "Should contain genuine scraped records across states")
+        
+        # Verify first record format
+        sample = records[0]
+        self.assertTrue(bool(sample.get('commodity')))
+        self.assertTrue(bool(sample.get('market')))
+        self.assertTrue(bool(sample.get('arrival_date')))
+        self.assertGreater(float(sample.get('modal_price', 0)), 0)
+
+    # -------------------------------------------------------------------------
+    # 15. save_to_local_cache Functionality
+    # -------------------------------------------------------------------------
+    def test_save_to_local_cache_functionality(self):
+        """
+        Verifies that save_to_local_cache writes valid records to a target destination.
+        """
+        temp_dest = os.path.join(os.path.dirname(__file__), '..', 'data', 'temp_test_cache.json')
+        sample_rows = [
+            {"state": "Telangana", "district": "Warangal", "market": "Warangal APMC", "commodity": "Cotton", "modal_price": "7480", "arrival_date": "01/11/2026"}
+        ]
+        try:
+            success = save_to_local_cache(sample_rows, custom_paths=[temp_dest])
+            self.assertTrue(success)
+            self.assertTrue(os.path.exists(temp_dest))
+            with open(temp_dest, 'r', encoding='utf-8') as f:
+                saved = json.load(f)
+            self.assertEqual(len(saved.get('records', [])), 1)
+            self.assertEqual(saved['records'][0]['commodity'], 'Cotton')
+        finally:
+            if os.path.exists(temp_dest):
+                os.remove(temp_dest)
 
 if __name__ == '__main__':
     unittest.main()

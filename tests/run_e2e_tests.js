@@ -13,6 +13,9 @@ const { globalContext } = require('./test_harness');
 // Tier 0: Mandatory Forensic Integrity & Anti-Facade Gate
 require('./tier0_forensic_integrity');
 
+// Role Integrity & Multi-Role Anti-Loophole Verification Gate
+require('./test_role_integrity_anti_loophole');
+
 // Tier 1-4: Acceptance & Stress Suites
 require('./tier1_feature_coverage');
 require('./tier2_boundary_cases');

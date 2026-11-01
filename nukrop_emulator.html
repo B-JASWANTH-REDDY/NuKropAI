@@ -8396,21 +8396,36 @@ function handleFarmerLogout() {
   const chassis = document.querySelector('.phone-chassis'); if(chassis) chassis.appendChild(modal); else document.body.appendChild(modal);
 }
 
-function executeSignOutToLogin() {
+function executeSignOutToLogin(preferredRole = null) {
   const modal = document.getElementById('farmer-logout-confirm-modal');
   if (modal) modal.remove();
+  const modal2 = document.getElementById('nukrop-logout-confirm-modal');
+  if (modal2) modal2.remove();
 
   try {
+    localStorage.removeItem('nukrop_active_session');
+    localStorage.removeItem('nukrop_user_token');
     localStorage.removeItem('nukrop_supabase_token');
     localStorage.removeItem('nukrop_supabase_uid');
+    localStorage.removeItem('nukrop_user_uuid');
+    localStorage.removeItem('nukrop_user_role');
+    localStorage.removeItem('nukrop_auth_method');
     localStorage.removeItem('nukrop_user_email');
-  localStorage.removeItem('nukrop_user_name');
+    localStorage.removeItem('nukrop_user_name');
+    localStorage.removeItem('nukrop_user_phone');
+    localStorage.removeItem('gh_driver_online');
     localStorage.removeItem('nukrop_onboarding_plantix_completed');
+    localStorage.removeItem('nukrop_onboarding_completed');
   } catch(e) {}
 
   if (typeof currentSupabaseSession !== 'undefined') currentSupabaseSession = null;
 
-  // Show login screen directly with empty inputs
+  if (preferredRole === 'driver' || preferredRole === 'farmer') {
+    authUserRole = preferredRole;
+  } else {
+    authUserRole = 'farmer';
+  }
+
   plantixFlowState.currentScreen = 'login';
   let overlay = document.getElementById('startup-experience-overlay');
   if (!overlay) {
@@ -8420,6 +8435,9 @@ function executeSignOutToLogin() {
     overlay.style.cssText = 'position:fixed;inset:0;background:#FFFFFF;z-index:99999;display:flex;flex-direction:column;';
     chassis.appendChild(overlay);
   }
+  overlay.style.display = 'flex';
+  overlay.style.opacity = '1';
+  overlay.style.pointerEvents = 'auto';
   renderLoginScreen(overlay);
 }
 
@@ -11067,6 +11085,191 @@ function get4kLeafSvg(sizePx = 44) {
 // ══════════════════════════════════════════════════════
 // AUTHENTICATION & LOGIN STATE CONTROLLERS
 // ══════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════
+   NUKROPAI ENTERPRISE ROLE INTEGRITY & ACCOUNT SECURITY GUARD
+   Strict Role Isolation: Farmer Accounts ≠ Truck Driver Accounts
+   ══════════════════════════════════════════════════════════════ */
+const NuKropRoleGuard = {
+  normalizePhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  },
+
+  normalizeEmail(email) {
+    if (!email) return '';
+    return String(email).trim().toLowerCase();
+  },
+
+  getRegistry() {
+    try {
+      const data = localStorage.getItem('nukrop_role_registry');
+      return data ? JSON.parse(data) : {};
+    } catch(e) {
+      return {};
+    }
+  },
+
+  registerAccount(identifier, role, meta = {}) {
+    if (!identifier || !role) return;
+    const reg = this.getRegistry();
+    const canonId = identifier.includes('@') ? this.normalizeEmail(identifier) : this.normalizePhone(identifier);
+    if (!canonId) return;
+
+    reg[canonId] = {
+      role: role.toLowerCase(),
+      registeredAt: (reg[canonId] && reg[canonId].registeredAt) || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      name: meta.name || (reg[canonId] && reg[canonId].name) || '',
+      phone: meta.phone || (reg[canonId] && reg[canonId].phone) || '',
+      email: meta.email || (reg[canonId] && reg[canonId].email) || ''
+    };
+    try {
+      localStorage.setItem('nukrop_role_registry', JSON.stringify(reg));
+    } catch(e) {}
+  },
+
+  async checkRoleConflict(identifier, attemptedRole) {
+    if (!identifier) return { conflict: false };
+    const targetRole = attemptedRole.toLowerCase();
+    const opposingRole = targetRole === 'farmer' ? 'driver' : 'farmer';
+
+    const canonPhone = this.normalizePhone(identifier);
+    const canonEmail = identifier.includes('@') ? this.normalizeEmail(identifier) : '';
+
+    // 1. Check local role registry
+    const reg = this.getRegistry();
+    if (canonPhone && reg[canonPhone]) {
+      if (reg[canonPhone].role === opposingRole) {
+        return {
+          conflict: true,
+          opposingRole,
+          reason: `Mobile number +91 ${canonPhone} is registered to an existing ${opposingRole.toUpperCase()} profile (${reg[canonPhone].name || 'Active Partner'}).`
+        };
+      }
+    }
+    if (canonEmail && reg[canonEmail]) {
+      if (reg[canonEmail].role === opposingRole) {
+        return {
+          conflict: true,
+          opposingRole,
+          reason: `Email address ${canonEmail} is registered to an existing ${opposingRole.toUpperCase()} account (${reg[canonEmail].name || 'Active Partner'}).`
+        };
+      }
+    }
+
+    // 2. Cross-check against current stored identity in localStorage
+    if (targetRole === 'driver') {
+      const farmerPhone = this.normalizePhone(localStorage.getItem('nukrop_user_phone') || localStorage.getItem('nukrop_farmer_phone') || (typeof farmerProfile !== 'undefined' ? farmerProfile.phone : ''));
+      const farmerEmail = this.normalizeEmail(localStorage.getItem('nukrop_user_email') || (typeof farmerProfile !== 'undefined' ? farmerProfile.email : ''));
+
+      if (canonPhone && farmerPhone && canonPhone === farmerPhone) {
+        return {
+          conflict: true,
+          opposingRole: 'farmer',
+          reason: `Mobile number +91 ${canonPhone} is already active on this device as a Farmer profile. Farmer accounts cannot log in as Truck Drivers.`
+        };
+      }
+      if (canonEmail && farmerEmail && canonEmail === farmerEmail) {
+        return {
+          conflict: true,
+          opposingRole: 'farmer',
+          reason: `Email ${canonEmail} is already active as a Farmer profile. Farmer accounts cannot log in as Truck Drivers.`
+        };
+      }
+    } else if (targetRole === 'farmer') {
+      const driverPhone = this.normalizePhone(localStorage.getItem('nukrop_driver_phone'));
+      const driverPlate = localStorage.getItem('nukrop_driver_plate');
+
+      if (canonPhone && driverPhone && canonPhone === driverPhone) {
+        return {
+          conflict: true,
+          opposingRole: 'driver',
+          reason: `Mobile number +91 ${canonPhone} is registered to a GramHaul Truck Driver Partner (Plate: ${driverPlate || 'Registered'}). Driver accounts cannot log in to the Farmer portal.`
+        };
+      }
+    }
+
+    // 3. Verify against Supabase profiles table if client is online
+    if (window.sbClient) {
+      try {
+        let query = window.sbClient.from('profiles').select('id, role, phone, email, full_name');
+        if (canonEmail && canonPhone) {
+          query = query.or(`email.eq.${canonEmail},phone.eq.${canonPhone},phone.eq.+91 ${canonPhone}`);
+        } else if (canonEmail) {
+          query = query.eq('email', canonEmail);
+        } else if (canonPhone) {
+          query = query.or(`phone.eq.${canonPhone},phone.eq.+91 ${canonPhone}`);
+        }
+
+        const { data, error } = await query.limit(1);
+        if (!error && data && data.length > 0) {
+          const profile = data[0];
+          if (profile.role && profile.role.toLowerCase() === opposingRole) {
+            if (canonPhone) this.registerAccount(canonPhone, opposingRole, { name: profile.full_name });
+            if (canonEmail) this.registerAccount(canonEmail, opposingRole, { name: profile.full_name });
+
+            return {
+              conflict: true,
+              opposingRole,
+              reason: `Cloud verified: Account (${canonEmail || ('+91 ' + canonPhone)}) is registered as a ${opposingRole.toUpperCase()} in the national agrarian registry.`
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase role conflict check network standby:', err.message);
+      }
+    }
+
+    return { conflict: false };
+  },
+
+  showRoleConflictModal(reason, targetRole, opposingRole) {
+    const modalId = 'role-conflict-alert-modal';
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    const isFarmer = targetRole === 'farmer';
+    const switchLabel = isFarmer ? 'Switch to Driver Portal' : 'Switch to Farmer Portal';
+
+    modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);backdrop-filter:blur(8px);z-index:9999999;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.22s ease-out;';
+
+    modal.innerHTML = `
+      <div style="background:#FFFFFF;border-radius:24px;width:100%;max-width:390px;padding:24px 20px;box-shadow:0 20px 50px rgba(0,0,0,0.35);text-align:center;box-sizing:border-box;">
+        <div style="width:60px;height:60px;border-radius:50%;background:#FEE2E2;border:2.5px solid #FCA5A5;color:#DC2626;font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+          ⛔
+        </div>
+        <div style="font-size:18px;font-weight:900;color:#0F172A;margin-bottom:6px;">Role Conflict Detected</div>
+        <div style="font-size:12px;font-weight:800;color:#DC2626;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
+          ${isFarmer ? 'Account is Registered as a Driver Partner' : 'Account is Registered as a Farmer'}
+        </div>
+        <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:14px;padding:12px 14px;font-size:12.5px;color:#7F1D1D;line-height:1.5;margin-bottom:18px;text-align:left;">
+          ${reason}
+        </div>
+        <div style="font-size:11.5px;color:#64748B;line-height:1.4;margin-bottom:18px;">
+          In accordance with agricultural logistics regulations, a single user cannot use the same phone number or credentials for both Shipper (Farmer) and Hauler (Truck Driver) profiles.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button onclick="document.getElementById('${modalId}').remove();setAuthUserRole('${opposingRole}');" style="width:100%;padding:13px;background:#0F172A;color:#FFFFFF;border:none;border-radius:14px;font-size:13.5px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(15,23,42,0.25);">
+            <span>→</span> ${switchLabel}
+          </button>
+          <button onclick="document.getElementById('${modalId}').remove();" style="width:100%;padding:11px;background:#F1F5F9;color:#475569;border:none;border-radius:14px;font-size:12.5px;font-weight:800;cursor:pointer;">
+            Use a Different Phone / Email
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+};
+if (typeof window !== "undefined") { window.NuKropRoleGuard = NuKropRoleGuard; }
+
+function handleGoogleLogin() {
+  openInAppGoogleAuthModal();
+}
+
 let authUserRole = 'farmer'; // 'farmer' or 'driver'
 let authFormMode = 'signup'; // 'signup' or 'signin'
 let passwordVisible = false;
@@ -11249,7 +11452,7 @@ async function submitRealTruckRegistration() {
 }
 window.submitRealTruckRegistration = submitRealTruckRegistration;
 
-function loginAsDriver() {
+async function loginAsDriver() {
   const nameInp = document.getElementById('drv-login-name');
   const phoneInp = document.getElementById('drv-login-phone');
   const plateInp = document.getElementById('drv-login-plate');
@@ -11280,15 +11483,41 @@ function loginAsDriver() {
     return;
   }
 
+  // 🛡️ ROLE CONFLICT CHECK: Disallow logging in as Driver if account is a Farmer!
+  if (typeof NuKropRoleGuard !== 'undefined') {
+    const conflict = await NuKropRoleGuard.checkRoleConflict(cleanPhone, 'driver');
+    if (conflict && conflict.conflict) {
+      NuKropRoleGuard.showRoleConflictModal(conflict.reason, 'driver', 'farmer');
+      if (phoneInp) {
+        phoneInp.style.borderColor = '#DC2626';
+        phoneInp.focus();
+      }
+      return;
+    }
+  }
+
   const formattedPhone = '+91 ' + cleanPhone.slice(-10);
 
+  // Register in authoritative role registry
+  if (typeof NuKropRoleGuard !== 'undefined') {
+    NuKropRoleGuard.registerAccount(cleanPhone, 'driver', {
+      name: driverName,
+      phone: formattedPhone,
+      plate: driverPlate,
+      vehicle: vehicleType
+    });
+  }
+
   localStorage.setItem('nukrop_user_role', 'driver');
+  localStorage.setItem('nukrop_auth_method', 'driver_portal');
   localStorage.setItem('nukrop_driver_name', driverName);
   localStorage.setItem('nukrop_driver_phone', formattedPhone);
   localStorage.setItem('nukrop_driver_plate', driverPlate);
   localStorage.setItem('nukrop_driver_vehicle', vehicleType || 'Tata Ace Gold (1.5 Ton)');
   localStorage.setItem('nukrop_driver_vehicle_img', typeof getDriverTruckImg === 'function' ? getDriverTruckImg(vehicleType) : 'images/trucks/tata_ace.png');
   localStorage.setItem('gh_driver_online', 'true');
+  localStorage.setItem('nukrop_onboarding_plantix_completed', 'true');
+  localStorage.setItem('nukrop_onboarding_completed', 'true');
 
   if (window.sbClient) {
     window.sbClient.from('truck_listings').upsert([{
@@ -11325,12 +11554,19 @@ function loginAsDriver() {
 }
 
 function handleGuestLogin() {
+  localStorage.setItem('nukrop_user_role', 'farmer');
+  localStorage.setItem('nukrop_auth_method', 'guest_farmer');
+  localStorage.setItem('nukrop_onboarding_plantix_completed', 'true');
+  localStorage.setItem('nukrop_onboarding_completed', 'true');
+
   const ids = ['startup-experience-overlay', 'onboarding-experience-overlay', 'splash-viewport', 'login-screen-overlay'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.remove();
   });
+  if (typeof updateBottomDockForRole === 'function') updateBottomDockForRole('farmer');
   openScreen('home', document.getElementById('tab-home'));
+  if (typeof showLuxuryToast === 'function') showLuxuryToast('🌾 Exploring NuKropAI as Guest Farmer', 'info');
 }
 
 function renderLoginScreen(container) {
@@ -12317,6 +12553,20 @@ async function handleFormAuthSubmit() {
 
   try {
     const userRole = localStorage.getItem('nukrop_user_role') || (typeof authUserRole !== 'undefined' ? authUserRole : 'farmer');
+
+    // 🛡️ ROLE INTEGRITY CHECK: Reject if identifier is already registered as opposing role!
+    if (typeof NuKropRoleGuard !== 'undefined') {
+      const conflict = await NuKropRoleGuard.checkRoleConflict(email, userRole);
+      if (conflict && conflict.conflict) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = `<span>${isSignUp ? 'Create Supabase Account' : 'Sign in with Supabase'}</span>`;
+        }
+        NuKropRoleGuard.showRoleConflictModal(conflict.reason, userRole, conflict.opposingRole);
+        return;
+      }
+    }
+
     let result;
 
     if (isSignUp) {
@@ -12355,6 +12605,22 @@ async function handleFormAuthSubmit() {
     if (result && result.data && result.data.user) {
       userId = result.data.user.id;
       token = result.data.session?.access_token || ('token_' + Date.now());
+
+      // Validate cloud user role matches the attempted login portal
+      const metaRole = result.data.user.user_metadata?.role;
+      if (metaRole && metaRole.toLowerCase() !== userRole.toLowerCase()) {
+        if (typeof nk_signOutUser === 'function') await nk_signOutUser();
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = `<span>${isSignUp ? 'Create Supabase Account' : 'Sign in with Supabase'}</span>`;
+        }
+        NuKropRoleGuard.showRoleConflictModal(
+          `This cloud account is registered as a ${metaRole.toUpperCase()}. You cannot sign in under the ${userRole.toUpperCase()} portal.`,
+          userRole,
+          metaRole
+        );
+        return;
+      }
     }
 
     if (!userId) {
@@ -12376,6 +12642,10 @@ async function handleFormAuthSubmit() {
     localStorage.setItem('nukrop_supabase_uid', userId);
     localStorage.setItem('nukrop_user_uuid', userId);
     if (token) localStorage.setItem('nukrop_supabase_token', token);
+
+    if (typeof NuKropRoleGuard !== 'undefined') {
+      NuKropRoleGuard.registerAccount(email, userRole, { name, email });
+    }
 
     if (userRole === 'driver') {
       localStorage.setItem('nukrop_driver_id', userId);
@@ -12503,25 +12773,54 @@ function promptForCustomGoogleAccount() {
   selectGoogleAccount(customEmail.trim(), (customName || 'Registered User').trim());
 }
 
-function switchUserRole(role) {
-  authUserRole = role;
-  localStorage.setItem('nukrop_user_role', role);
-  if (role === 'driver') {
-    const savedPlate = localStorage.getItem('nukrop_driver_plate');
-    const savedPhone = localStorage.getItem('nukrop_driver_phone');
-    const isRealTruckRegistered = savedPlate && savedPhone &&
-      savedPlate.trim() !== '' && savedPlate !== 'TS 03 UB 4491';
+function switchUserRole(targetRole) {
+  const currentRole = localStorage.getItem('nukrop_user_role') || authUserRole || 'farmer';
 
-    if (!isRealTruckRegistered) {
-      openDriverTruckRegistrationModal();
-      return;
+  if (targetRole === currentRole) {
+    if (targetRole === 'driver') {
+      openScreen('driver_dashboard', null);
+    } else {
+      openScreen('home', document.getElementById('tab-home'));
     }
-    openScreen('driver_dashboard', null);
-    if (typeof showLuxuryToast === 'function') showLuxuryToast('🚚 Switched to GramHaul Driver Cockpit', 'info');
-  } else {
-    openScreen('home', document.getElementById('tab-home'));
-    if (typeof showLuxuryToast === 'function') showLuxuryToast('🧑‍🌾 Switched to Farmer Operations Hub', 'success');
+    return;
   }
+
+  // Strict role separation: switching between roles requires signing out first!
+  const modalId = 'role-switch-auth-modal';
+  let modal = document.getElementById(modalId);
+  if (modal) modal.remove();
+
+  modal = document.createElement('div');
+  modal.id = modalId;
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);z-index:9999999;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s ease;';
+
+  const isToDriver = targetRole === 'driver';
+  const title = isToDriver ? 'Switch to Truck Driver Portal?' : 'Switch to Farmer Operations Hub?';
+  const desc = isToDriver 
+    ? 'Farmer and Commercial Hauler accounts are strictly separated for security and compliance. To access the Driver Cockpit, you must sign out of your Farmer profile and sign in with your Driver Partner credentials.'
+    : 'Truck Driver Partner and Farmer accounts are strictly separated. To access Farmer features (Crop Doctor, APMC Mandi, Land Records), you must sign out of your Driver session and sign in with your Farmer account.';
+  const btnText = isToDriver ? 'Sign Out & Go to Driver Portal' : 'Sign Out & Go to Farmer Portal';
+
+  modal.innerHTML = `
+    <div style="background:#FFFFFF;border-radius:24px;width:100%;max-width:390px;padding:24px;box-shadow:0 20px 50px rgba(0,0,0,0.3);text-align:center;box-sizing:border-box;">
+      <div style="width:64px;height:64px;border-radius:50%;background:${isToDriver ? '#FEF9C3' : '#DCFCE7'};border:2px solid ${isToDriver ? '#FDE047' : '#86EFAC'};display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 14px;">
+        ${isToDriver ? '🚚' : '🌾'}
+      </div>
+      <div style="font-size:18px;font-weight:900;color:#0F172A;margin-bottom:8px;">${title}</div>
+      <div style="font-size:12.5px;color:#64748B;line-height:1.5;margin-bottom:20px;text-align:left;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:12px 14px;">
+        ${desc}
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('${modalId}').remove();" style="flex:1;padding:12px 0;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:14px;color:#475569;font-size:13px;font-weight:800;cursor:pointer;">
+          Cancel
+        </button>
+        <button onclick="document.getElementById('${modalId}').remove();executeSignOutToLogin('${targetRole}');" style="flex:1;padding:12px 0;background:${isToDriver ? '#0F172A' : '#15803D'};border:none;border-radius:14px;color:#FFFFFF;font-size:13px;font-weight:900;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.2);">
+          ${btnText}
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 function toggleDriverOnlineStatus(btn) {
@@ -12548,13 +12847,29 @@ function acceptHaulBooking(haulId, amount) {
   }
 }
 
-function completeGoogleAuth(email, name) {
+async function completeGoogleAuth(email, name) {
+  // 🛡️ ROLE INTEGRITY CHECK: Reject if Google email is registered as Driver!
+  if (typeof NuKropRoleGuard !== 'undefined') {
+    const conflict = await NuKropRoleGuard.checkRoleConflict(email, 'farmer');
+    if (conflict && conflict.conflict) {
+      const modal = document.getElementById('google-auth-modal');
+      if (modal) modal.remove();
+      NuKropRoleGuard.showRoleConflictModal(conflict.reason, 'farmer', 'driver');
+      return;
+    }
+  }
+
   try {
+    localStorage.setItem('nukrop_user_role', 'farmer');
     localStorage.setItem('nukrop_auth_method', 'google');
     localStorage.setItem('nukrop_user_email', email);
     localStorage.setItem('nukrop_user_name', name);
     if (typeof farmerProfile !== 'undefined') {
       farmerProfile.email = email;
+      farmerProfile.name = { en: name, te: name, hi: name };
+    }
+    if (typeof NuKropRoleGuard !== 'undefined') {
+      NuKropRoleGuard.registerAccount(email, 'farmer', { name, email });
     }
   } catch(e) {}
 
@@ -12562,19 +12877,44 @@ function completeGoogleAuth(email, name) {
   const modal = document.getElementById('google-auth-modal');
   if (modal) modal.remove();
 
-  // Advance smoothly to language selection
   localStorage.setItem('nukrop_onboarding_plantix_completed', 'true');
+  localStorage.setItem('nukrop_onboarding_completed', 'true');
   const overlay = document.getElementById('startup-experience-overlay');
   if (overlay) overlay.remove();
   openScreen('home', document.getElementById('tab-home'));
+  if (typeof showLuxuryToast === 'function') {
+    showLuxuryToast(`✅ Welcome, ${name}! Signed in via Google.`, 'success');
+  }
 }
 
-function handlePhoneAuth() {
-  const phoneInp = document.getElementById('login-phone-input');
+async function handlePhoneAuth() {
+  const phoneInp = document.getElementById('login-phone-input') || document.getElementById('auth-email-input');
   if (phoneInp) loginPhoneValue = phoneInp.value.trim();
+
+  const cleanPhone = (loginPhoneValue || '').replace(/[^0-9]/g, '');
+  if (cleanPhone.length < 10) {
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast('⚠️ Please enter a valid 10-digit mobile number.', 'warning');
+    } else {
+      alert('Please enter a valid 10-digit mobile number.');
+    }
+    return;
+  }
+
+  // 🛡️ ROLE INTEGRITY CHECK: Reject if phone is registered to a Driver!
+  if (typeof NuKropRoleGuard !== 'undefined') {
+    const conflict = await NuKropRoleGuard.checkRoleConflict(cleanPhone, 'farmer');
+    if (conflict && conflict.conflict) {
+      NuKropRoleGuard.showRoleConflictModal(conflict.reason, 'farmer', 'driver');
+      return;
+    }
+  }
 
   if (!loginOtpSent) {
     loginOtpSent = true;
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast('📲 OTP sent to +91 ' + cleanPhone.slice(-10) + '. Code: 7824', 'info');
+    }
     const container = document.getElementById('startup-experience-overlay');
     if (container) renderLoginScreen(container);
     return;
@@ -12582,18 +12922,26 @@ function handlePhoneAuth() {
 
   // OTP Verified
   try {
+    localStorage.setItem('nukrop_user_role', 'farmer');
     localStorage.setItem('nukrop_auth_method', 'phone_otp');
-    localStorage.setItem('nukrop_user_phone', '+91 ' + loginPhoneValue);
+    localStorage.setItem('nukrop_user_phone', '+91 ' + cleanPhone.slice(-10));
     if (typeof farmerProfile !== 'undefined') {
-      farmerProfile.phone = '+91 ' + loginPhoneValue;
+      farmerProfile.phone = '+91 ' + cleanPhone.slice(-10);
+    }
+    if (typeof NuKropRoleGuard !== 'undefined') {
+      NuKropRoleGuard.registerAccount(cleanPhone, 'farmer', { phone: '+91 ' + cleanPhone.slice(-10) });
     }
   } catch(e) {}
 
-  NuKropAnalytics.track('login_phone_success', { phone: loginPhoneValue });
+  NuKropAnalytics.track('login_phone_success', { phone: cleanPhone });
   localStorage.setItem('nukrop_onboarding_plantix_completed', 'true');
+  localStorage.setItem('nukrop_onboarding_completed', 'true');
   const overlay = document.getElementById('startup-experience-overlay');
   if (overlay) overlay.remove();
   openScreen('home', document.getElementById('tab-home'));
+  if (typeof showLuxuryToast === 'function') {
+    showLuxuryToast('✅ Mobile verified! Welcome to NuKrop.', 'success');
+  }
 }
 
 function handleGuestLogin() {
@@ -13402,10 +13750,19 @@ function initStartupExperience(forceReplay = false) {
   if (!forceReplay) {
     try {
       const completed = localStorage.getItem('nukrop_onboarding_plantix_completed');
-      const auth = localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_auth_method');
+      const auth = localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_auth_method') || localStorage.getItem('nukrop_driver_phone');
       if (completed === 'true' && auth) {
         const existingOverlay = document.getElementById('startup-experience-overlay');
         if (existingOverlay) existingOverlay.remove();
+
+        const role = localStorage.getItem('nukrop_user_role') || 'farmer';
+        if (role === 'driver') {
+          openScreen('driver_dashboard', null);
+          if (typeof updateBottomDockForRole === 'function') updateBottomDockForRole('driver');
+        } else {
+          openScreen('home', document.getElementById('tab-home'));
+          if (typeof updateBottomDockForRole === 'function') updateBottomDockForRole('farmer');
+        }
         return;
       }
     } catch(e) {}
@@ -18912,37 +19269,11 @@ function confirmUserLogout() {
   const settingsModal = document.getElementById('app-settings-modal');
   if (settingsModal) settingsModal.remove();
 
-  try {
-    localStorage.removeItem('nukrop_active_session');
-    localStorage.removeItem('nukrop_user_token');
-    localStorage.removeItem('gh_driver_online');
-    localStorage.removeItem('nukrop_user_email');
-  localStorage.removeItem('nukrop_user_name');
-    localStorage.removeItem('nukrop_auth_method');
-  } catch(e) {}
+  executeSignOutToLogin();
 
   if (typeof showLuxuryToast === 'function') {
     showLuxuryToast('👋 Successfully logged out. Welcome back anytime!', 'info');
   }
-
-  setTimeout(() => {
-    plantixFlowState.currentScreen = 'login';
-    let overlay = document.getElementById('startup-experience-overlay');
-    if (!overlay) {
-      const chassis = document.querySelector('.phone-chassis');
-      if (chassis) {
-        chassis.insertAdjacentHTML('beforeend', '<div id="startup-experience-overlay" style="position:absolute;inset:0;background:#FFFFFF;border-radius:48px;overflow:hidden;z-index:99999;display:flex;flex-direction:column;"></div>');
-        overlay = document.getElementById('startup-experience-overlay');
-      }
-    }
-    if (overlay) {
-      overlay.style.display = 'flex';
-      overlay.style.pointerEvents = 'auto';
-      overlay.style.opacity = '1';
-      overlay.style.transform = 'scale(1)';
-      renderPlantixFlow();
-    }
-  }, 300);
 }
 
 // ── 140+ CROPS COMMODITY SELECTOR MODAL (GRAMHAUL & MARKET) ──
@@ -22975,6 +23306,24 @@ function updateBottomDockForRole() {
 
 
 function openScreen(screenKey, tabElement) {
+  const activeRole = localStorage.getItem('nukrop_user_role') || authUserRole || 'farmer';
+
+  // 🛡️ ROLE SCREEN GUARDS: Prevent cross-role screen hijacking!
+  const farmerExclusiveScreens = ['home', 'community', 'scanner', 'scan', 'market', 'profile', 'equipment', 'loan', 'biorx', 'bioshield', 'khata', 'agristack'];
+  if (activeRole === 'driver' && farmerExclusiveScreens.includes(screenKey)) {
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast('🚚 Driver Partner session active. Sign out to access Farmer features.', 'warning');
+    }
+    screenKey = 'driver_dashboard';
+  }
+
+  if (activeRole === 'farmer' && screenKey === 'driver_dashboard') {
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast('🧑‍🌾 Driver Cockpit is restricted to Truck Drivers. Book freight from GramHaul.', 'info');
+    }
+    screenKey = 'gramhaul';
+  }
+
   if (screenKey === 'gramhaul') {
     fetchGramhaulTrucks();
     setTimeout(() => {
@@ -22984,10 +23333,10 @@ function openScreen(screenKey, tabElement) {
       }
     }, 150);
   }
-  currentScreenKey = screenKey || 'home';
+  currentScreenKey = screenKey || (activeRole === 'driver' ? 'driver_dashboard' : 'home');
   currentTabElement = tabElement || null;
 
-  if (['home', 'community', 'scanner', 'scan', 'market', 'profile'].includes(currentScreenKey)) {
+  if (activeRole === 'farmer' && ['home', 'community', 'scanner', 'scan', 'market', 'profile'].includes(currentScreenKey)) {
     localStorage.setItem('nukrop_user_role', 'farmer');
     authUserRole = 'farmer';
   }

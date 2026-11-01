@@ -218,15 +218,35 @@ ALTER TABLE public.outbreak_alerts REPLICA IDENTITY FULL;
 ALTER TABLE public.price_alerts REPLICA IDENTITY FULL;
 
 DO $$
+DECLARE
+  tbl text;
+  target_tables text[] := ARRAY[
+    'driver_telemetry',
+    'driver_locations',
+    'haul_bookings',
+    'community_posts',
+    'community_comments',
+    'community_stories',
+    'outbreak_alerts',
+    'price_alerts'
+  ];
 BEGIN
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_telemetry; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_locations; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.haul_bookings; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.community_comments; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.community_stories; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.outbreak_alerts; EXCEPTION WHEN OTHERS THEN NULL; END;
-  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.price_alerts; EXCEPTION WHEN OTHERS THEN NULL; END;
+  FOREACH tbl IN ARRAY target_tables LOOP
+    -- Only add if not already in publication, avoiding ERROR 42710
+    IF NOT EXISTS (
+      SELECT 1 
+      FROM pg_publication_tables 
+      WHERE pubname = 'supabase_realtime' 
+        AND schemaname = 'public' 
+        AND tablename = tbl
+    ) THEN
+      BEGIN
+        EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+      EXCEPTION WHEN OTHERS THEN
+        NULL;
+      END;
+    END IF;
+  END LOOP;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -513,3 +533,4 @@ VALUES
   'Active / Open'
 )
 ON CONFLICT (id) DO NOTHING;
+

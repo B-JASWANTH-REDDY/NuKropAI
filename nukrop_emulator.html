@@ -25177,6 +25177,10 @@ function checkAndTriggerOnboarding() {
 }
 
 function openOnboardingFlow(isManual = false) {
+  if (typeof window.replayStartupExperience === 'function') {
+    window.replayStartupExperience(isManual ? 'slide_disease' : 'splash');
+    return;
+  }
   advanceSlide('language');
   return;
   onboardingState.step = 1;
@@ -27791,11 +27795,27 @@ let plantixFlowState = {
   cameraAllowed: true,
   notificationsAllowed: true
 };
+if (typeof window !== 'undefined') window.plantixFlowState = plantixFlowState;
 
 function renderPlantixFlow() {
-  const overlay = document.getElementById('startup-experience-overlay');
+  let overlay = document.getElementById('startup-experience-overlay');
+  if (!overlay) {
+    const chassis = document.querySelector('.phone-chassis');
+    if (chassis) {
+      chassis.insertAdjacentHTML('beforeend', '<div id="startup-experience-overlay" style="position:absolute;inset:0;background:#FFFFFF;border-radius:48px;overflow:hidden;z-index:99999;display:flex;flex-direction:column;"></div>');
+      overlay = document.getElementById('startup-experience-overlay');
+    } else {
+      overlay = document.createElement('div');
+      overlay.id = 'startup-experience-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:#FFFFFF;z-index:99999;display:flex;flex-direction:column;';
+      document.body.appendChild(overlay);
+    }
+  }
   if (!overlay) return;
 
+  overlay.style.display = 'flex';
+  overlay.style.opacity = '1';
+  overlay.style.pointerEvents = 'auto';
   overlay.style.background = '#FFFFFF';
   overlay.style.color = '#0F172A';
   overlay.style.padding = '0';
@@ -28000,10 +28020,61 @@ function skipToPermissions() {
 }
 
 function advanceSlide(screen) {
+  if (typeof splashTimer !== 'undefined' && splashTimer) {
+    clearInterval(splashTimer);
+    splashTimer = null;
+  }
+  if (typeof window !== 'undefined' && window.splashTimer) {
+    try { clearInterval(window.splashTimer); } catch(e) {}
+    window.splashTimer = null;
+  }
   if (typeof plantixFlowState !== 'undefined') {
     plantixFlowState.currentScreen = screen;
   }
+  if (typeof window !== 'undefined' && window.plantixFlowState) {
+    window.plantixFlowState.currentScreen = screen;
+  }
   renderPlantixFlow();
+}
+
+window.replayStartupExperience = function(startAt = 'splash') {
+  if (typeof splashTimer !== 'undefined' && splashTimer) {
+    clearInterval(splashTimer);
+    splashTimer = null;
+  }
+  if (typeof window !== 'undefined' && window.splashTimer) {
+    try { clearInterval(window.splashTimer); } catch(e) {}
+    window.splashTimer = null;
+  }
+  if (typeof plantixFlowState !== 'undefined') {
+    plantixFlowState.currentScreen = startAt;
+  }
+  if (typeof window !== 'undefined' && window.plantixFlowState) {
+    window.plantixFlowState.currentScreen = startAt;
+  }
+  renderPlantixFlow();
+};
+
+function closeStartupExperienceAndReturn() {
+  if (typeof splashTimer !== 'undefined' && splashTimer) {
+    clearInterval(splashTimer);
+    splashTimer = null;
+  }
+  const overlay = document.getElementById('startup-experience-overlay');
+  if (overlay) {
+    overlay.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    overlay.style.opacity = '0';
+    overlay.style.transform = 'scale(0.96)';
+    setTimeout(() => {
+      overlay.remove();
+      const role = localStorage.getItem('nukrop_user_role') || 'farmer';
+      if (role === 'driver') {
+        openScreen('driver_dashboard', null);
+      } else {
+        openScreen('home', document.getElementById('tab-home'));
+      }
+    }, 250);
+  }
 }
 
 function renderCarouselSlide(container, config) {
@@ -28043,9 +28114,20 @@ function renderCarouselSlide(container, config) {
         <div style="background:rgba(30, 41, 59, 0.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#FFFFFF;padding:7px 16px;border-radius:999px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(0,0,0,0.18);">
           ${config.topBadge || '🌿 NuKropAI OS'}
         </div>
-        <button onclick="skipToPermissions()" style="background:#FFFFFF;color:#16A34A;border:none;padding:7px 20px;border-radius:999px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.18);transition:transform 0.15s ease;">
-          Skip
-        </button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${(function() {
+            try {
+              const isAuth = localStorage.getItem('nukrop_onboarding_plantix_completed') === 'true' && (localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_driver_phone') || localStorage.getItem('nukrop_auth_method'));
+              if (isAuth) {
+                return `<button onclick="closeStartupExperienceAndReturn()" style="background:rgba(15,23,42,0.65);color:#FFFFFF;border:1px solid rgba(255,255,255,0.25);padding:7px 14px;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer;backdrop-filter:blur(8px);">Exit ✕</button>`;
+              }
+            } catch(e) {}
+            return '';
+          })()}
+          <button onclick="skipToPermissions()" style="background:#FFFFFF;color:#16A34A;border:none;padding:7px 20px;border-radius:999px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.18);transition:transform 0.15s ease;">
+            Skip
+          </button>
+        </div>
       </div>
 
       <!-- Bottom Sheet Card (Matching media_1790938800434.png 1:1) -->
@@ -28559,6 +28641,18 @@ function finishPlantixOnboarding() {
       currentUserProfile.crops = myActiveCrops;
     }
   }
+
+  // Check if user was replaying crop manager from an existing session
+  try {
+    const isAuth = localStorage.getItem('nukrop_onboarding_plantix_completed') === 'true' && (localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_driver_phone') || localStorage.getItem('nukrop_auth_method'));
+    if (isAuth) {
+      closeStartupExperienceAndReturn();
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast('✅ Farm profile updated with ' + myActiveCrops.length + ' active crops!', 'success');
+      }
+      return;
+    }
+  } catch(e) {}
 
   // Route to the Login Screen as per user flow
   advanceSlide('login');
@@ -33089,6 +33183,7 @@ const APP_VIEWS = {
             ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'KCC Loan Status', 'Sanctioned: ₹1.25L · Active NABARD', 'openKccLoanModal()'],
             ['M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z|M13 16V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10|M18 8h3l3 4v4h-3', 'Previous Rides & Hauls', `${completedRides.length} Trips · Invoices & E-Way Bills`, 'openPreviousRidesModal()'],
             ['M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 0-2-2z|M9 22V12h6v10', 'Farm Documents', 'Pattadar Passbook, Soil Health Card', 'openFarmDocsModal()'],
+            ['M15 10l5 5-5 5M4 4v7a4 4 0 0 0 4 4h12', 'App Walkthrough & Splash Tour', 'Experience AI features & onboarding guide', "replayStartupExperience('splash')"],
             ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z', 'Settings & Preferences', 'Languages, GPS Accuracy, Notifications', 'openSettingsModal()'],
             ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'Privacy Policy & Data Security', 'DPDP Act 2023 · AgriStack Encrypted', 'openPrivacyPolicyModal()'],
             ['M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zm-5 0a4 4 0 1 1-8 0 4 4 0 0 1 8 0z', 'Help & Support', '24/7 Kisan Call Center · 1800-180-1551', 'openSupportModal()']
@@ -33119,6 +33214,7 @@ const APP_VIEWS = {
     `;
   },
 };
+if (typeof window !== 'undefined') window.APP_VIEWS = APP_VIEWS;
 
 
 /* ══════════════════════════════════════════════════════════════════
@@ -34028,6 +34124,32 @@ function openSettingsModal() {
             <div>
               <div style="font-size:13.5px;font-weight:900;color:#0F172A;">App Language</div>
               <div style="font-size:11px;color:#16A34A;font-weight:700;">Active: ${curLangName}</div>
+            </div>
+          </div>
+          <span style="color:#94A3B8;font-size:16px;">›</span>
+        </div>
+
+        <div onclick="replayStartupExperience('splash');document.getElementById('${modalId}').remove();" style="background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:16px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:38px;height:38px;border-radius:12px;background:#F0FDF4;display:flex;align-items:center;justify-content:center;color:#16A34A;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
+            <div>
+              <div style="font-size:13.5px;font-weight:900;color:#0F172A;">Replay App Tour & Splash</div>
+              <div style="font-size:11px;color:#16A34A;font-weight:700;">Experience startup animation & walkthrough</div>
+            </div>
+          </div>
+          <span style="color:#94A3B8;font-size:16px;">›</span>
+        </div>
+
+        <div onclick="replayStartupExperience('crops');document.getElementById('${modalId}').remove();" style="background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:16px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:38px;height:38px;border-radius:12px;background:#FEF3C7;display:flex;align-items:center;justify-content:center;color:#D97706;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <div>
+              <div style="font-size:13.5px;font-weight:900;color:#0F172A;">Manage & Select Crops</div>
+              <div style="font-size:11px;color:#D97706;font-weight:700;">120+ Indian agricultural crops</div>
             </div>
           </div>
           <span style="color:#94A3B8;font-size:16px;">›</span>
@@ -39072,6 +39194,10 @@ function initAllRealAlerts() {
 /* ══════════════════════════════════════════════════════════════
    GRAMHAUL: REAL GPS, INTERACTIVE PICKUP, REAL CHAT, CALL, SHARE & DRIVER SYNC
    ══════════════════════════════════════════════════════════════ */
+
+window.openSprayingModal = typeof openSprayModal !== 'undefined' ? openSprayModal : function() { if (typeof openSprayModal === 'function') openSprayModal(); };
+window.openBiorxRecipeModal = typeof openBioRxRecipeModal !== 'undefined' ? openBioRxRecipeModal : function(name, ing, steps, dos) { if (typeof openBioRxRecipeModal === 'function') openBioRxRecipeModal(name, ing, steps, dos); };
+window.openProfileEditModal = typeof openEditProfileModal !== 'undefined' ? openEditProfileModal : function() { if (typeof openEditProfileModal === 'function') openEditProfileModal(); };
 
 window.finishLoginAndEnterDashboard = function(role) {
   const ids = ['startup-experience-overlay', 'onboarding-experience-overlay', 'permission-experience-overlay', 'splash-viewport', 'login-screen-overlay'];

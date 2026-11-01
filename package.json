@@ -7,7 +7,7 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/run_e2e_tests.js && node tests/test_community_stories_and_real_posts.js && python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py && python tests/test_rls_multi_role_adversarial.py && python tests/test_real_world_production_verification.py",
+    "test": "node tests/run_e2e_tests.js && node tests/test_community_stories_and_real_posts.js && node tests/test_onboarding_and_splash_flows.js && python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py && python tests/test_rls_multi_role_adversarial.py && python tests/test_real_world_production_verification.py",
     "test:unit": "python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py",
     "test:e2e": "node tests/run_e2e_tests.js",
     "sync-apk": "node web/sync-apk.js",

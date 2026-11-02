@@ -81,8 +81,8 @@ object GeminiVisionService {
 
     suspend fun analyzeImage(apiKey: String, imageBytes: ByteArray, prompt: String): Result<String> =
         withContext(Dispatchers.IO) {
-            val key = resolveApiKey(apiKey)
-            if (key.isBlank()) {
+            val key = if (apiKey.isNotBlank()) apiKey else resolveApiKey(apiKey)
+            if (apiKey.isBlank() || key.isBlank()) {
                 return@withContext Result.failure(IllegalStateException("Gemini API key is not configured"))
             }
 
@@ -142,8 +142,8 @@ object GeminiVisionService {
 
     suspend fun textQuery(apiKey: String, prompt: String): Result<String> =
         withContext(Dispatchers.IO) {
-            val key = resolveApiKey(apiKey)
-            if (key.isBlank()) {
+            val key = if (apiKey.isNotBlank()) apiKey else resolveApiKey(apiKey)
+            if (apiKey.isBlank() || key.isBlank()) {
                 return@withContext Result.failure(IllegalStateException("Gemini API key is not configured"))
             }
 

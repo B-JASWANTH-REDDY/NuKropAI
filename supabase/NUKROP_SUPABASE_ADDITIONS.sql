@@ -66,18 +66,22 @@ CREATE INDEX IF NOT EXISTS idx_post_likes_user_id ON public.post_likes(user_id);
 -- C. PUBLIC PROFILES VIEW (DPDP Act 2023 Compliant Safe Identity View)
 -- Allows community authors and haul drivers to be resolved without exposing
 -- sensitive personal data (Aadhaar, AgriStack ULPIN, KCC Balance, Phone Number)
-CREATE OR REPLACE VIEW public.public_profiles AS
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
 SELECT 
-  id,
+  farmer_id,
   full_name,
   avatar_url,
-  village,
   district,
   state,
   role,
+  agristack_verified,
   preferred_language,
   created_at
 FROM public.profiles;
+
+REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
+GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- STEP 4: AUTH SIGNUP TRIGGER (AUTOMATIC PROFILE SYNC ON LOGIN/SIGNUP)
@@ -242,7 +246,7 @@ BEGIN
     ) THEN
       BEGIN
         EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
-      EXCEPTION WHEN OTHERS THEN
+      EXCEPTION WHEN duplicate_object THEN
         NULL;
       END;
     END IF;

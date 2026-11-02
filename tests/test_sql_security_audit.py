@@ -53,8 +53,10 @@ def run_security_audit():
     check("profiles table does NOT expose all data via USING (true)", not profiles_true)
     check("profiles SELECT restricted to owner", "profiles_select_own" in sql and "auth.uid()" in sql)
     check("public_profiles view defined for non-sensitive public metadata", "CREATE OR REPLACE VIEW public.public_profiles" in sql)
+    view_pos = sql.find("CREATE OR REPLACE VIEW public.public_profiles")
+    grant_pos = sql.find("GRANT SELECT ON public.public_profiles", view_pos)
     check("public_profiles excludes sensitive fields (agristack_id, phone, kcc_balance)", 
-          "agristack_id" not in sql[sql.find("public.public_profiles"):sql.find("GRANT SELECT ON public.public_profiles")])
+          "agristack_id" not in sql[view_pos:grant_pos] and "phone" not in sql[view_pos:grant_pos])
 
     print("\n▶ Directive 4: Driver GPS Data & Telemetry Access Control")
     check("driver_telemetry INSERT requires driver auth.uid()", "driver_telemetry_insert" in sql and "auth.uid()::text = user_id" in sql)

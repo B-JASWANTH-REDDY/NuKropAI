@@ -371,7 +371,7 @@ BEGIN
         public.machinery_messages, 
         public.machinery_bookings,
         public.khata_records;
-EXCEPTION WHEN OTHERS THEN
+EXCEPTION WHEN duplicate_object THEN
     RAISE NOTICE 'Notice on adding tables to supabase_realtime publication: %', SQLERRM;
 END $$;
 

@@ -908,9 +908,12 @@ END $$;
 -- ─────────────────────────────────────────────────────────────────
 -- STEP 4B: PUBLIC PROFILES SECURE VIEW (DPDP Act 2023 Identity Shield)
 -- ─────────────────────────────────────────────────────────────────
-CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = false) AS
+-- Uses security_invoker = true to strictly honor underlying table RLS policies.
+-- Excludes internal auth identifiers (id, user_id) and confidential attributes
+-- (phone, village, mandal, email, land_acres, kcc_balance, government identity tags).
+-- Projects only approved public attributes for community identity.
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
 SELECT 
-  id,
   farmer_id,
   full_name,
   avatar_url,
@@ -925,6 +928,91 @@ FROM public.profiles;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
 REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
 GRANT SELECT ON public.public_profiles TO authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────
+-- STEP 4C: COMMUNITY AUTHOR RESOLUTION (PRESERVES COMMUNITY DISPLAY)
+-- ─────────────────────────────────────────────────────────────────
+-- Audited SECURITY DEFINER functions to securely resolve author display
+-- metadata for community posts, stories, and comments without exposing
+-- private profile columns or permitting arbitrary user enumeration.
+CREATE OR REPLACE FUNCTION public.get_community_author_profile(p_author_id text)
+RETURNS TABLE (
+  farmer_id text,
+  full_name text,
+  avatar_url text,
+  district text,
+  state text,
+  role text,
+  agristack_verified boolean,
+  preferred_language varchar,
+  created_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS \$\$
+  SELECT 
+    p.farmer_id,
+    p.full_name,
+    p.avatar_url,
+    p.district,
+    p.state,
+    p.role,
+    p.agristack_verified,
+    p.preferred_language,
+    p.created_at
+  FROM public.profiles p
+  WHERE p.id = p_author_id
+    AND (
+      p.id = auth.uid()::text
+      OR EXISTS (SELECT 1 FROM public.community_posts cp WHERE cp.author_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.community_stories cs WHERE cs.author_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.community_comments cc WHERE cc.author_id = p.id)
+    )
+  LIMIT 1;
+\$\$;
+
+REVOKE ALL ON FUNCTION public.get_community_author_profile(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_community_author_profile(text) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.get_community_authors(p_author_ids text[])
+RETURNS TABLE (
+  author_id text,
+  farmer_id text,
+  full_name text,
+  avatar_url text,
+  district text,
+  state text,
+  role text,
+  agristack_verified boolean
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS \$\$
+  SELECT 
+    p.id AS author_id,
+    p.farmer_id,
+    p.full_name,
+    p.avatar_url,
+    p.district,
+    p.state,
+    p.role,
+    p.agristack_verified
+  FROM public.profiles p
+  WHERE p.id = ANY(p_author_ids)
+    AND (
+      p.id = auth.uid()::text
+      OR EXISTS (SELECT 1 FROM public.community_posts cp WHERE cp.author_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.community_stories cs WHERE cs.author_id = p.id)
+      OR EXISTS (SELECT 1 FROM public.community_comments cc WHERE cc.author_id = p.id)
+    );
+\$\$;
+
+REVOKE ALL ON FUNCTION public.get_community_authors(text[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_community_authors(text[]) TO authenticated, service_role;
 
 
 -- ─────────────────────────────────────────────────────────────────

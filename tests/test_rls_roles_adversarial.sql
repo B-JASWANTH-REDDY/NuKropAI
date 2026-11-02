@@ -7,6 +7,7 @@
 -- 3. Anonymous role cannot write to public.public_profiles view.
 -- 4. Driver role can update own telemetry, but cannot tamper with other drivers.
 -- 5. Service role maintains necessary administrative operational bypass.
+-- 6. User A cannot read User B's private profile information (DPDP Act compliance).
 -- =============================================================================
 
 BEGIN;
@@ -57,7 +58,7 @@ END $$;
 DO $$
 BEGIN
   BEGIN
-    INSERT INTO public.public_profiles (id, full_name)
+    INSERT INTO public.public_profiles (farmer_id, full_name)
     VALUES ('fake-id', 'Hacker Farmer');
     RAISE EXCEPTION 'FAIL: Anon was able to insert into public_profiles!';
   EXCEPTION
@@ -101,6 +102,22 @@ BEGIN
     WHEN insufficient_privilege THEN
       RAISE NOTICE '✔ PASS: Story delete blocked by RLS';
   END;
+END $$;
+
+-- Farmer A cannot read Farmer B's private profile info (phone, agristack_id, kcc_balance)
+DO $$
+DECLARE
+  v_count int;
+BEGIN
+  SELECT count(*) INTO v_count 
+  FROM public.profiles 
+  WHERE id = 'usr-farmer-b';
+  
+  IF v_count = 0 THEN
+    RAISE NOTICE '✔ PASS: Farmer A cannot read Farmer B private profile (0 rows returned under RLS)';
+  ELSE
+    RAISE EXCEPTION 'FAIL: Farmer A was able to read Farmer B profile record!';
+  END IF;
 END $$;
 
 ROLLBACK TO SAVEPOINT test_isolation;

@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 import { pool } from '../config/db';
 import { 
   getJwtSecret, 
@@ -8,6 +9,21 @@ import {
   getJwtIssuer, 
   getJwtAudience 
 } from '../middleware/auth';
+
+/**
+ * Safely digests and hashes refresh tokens using SHA-256 pre-hashing + bcrypt.
+ * Pre-hashing with SHA-256 avoids bcrypt's 72-byte truncation vulnerability,
+ * ensuring long JWT tokens with unique jti claims are never collided.
+ */
+export const hashRefreshToken = async (token: string): Promise<string> => {
+  const digest = crypto.createHash('sha256').update(token).digest('hex');
+  return bcrypt.hash(digest, 8);
+};
+
+export const compareRefreshToken = async (token: string, tokenHash: string): Promise<boolean> => {
+  const digest = crypto.createHash('sha256').update(token).digest('hex');
+  return bcrypt.compare(digest, tokenHash);
+};
 
 export const register = async (request: FastifyRequest, reply: FastifyReply) => {
   const { email, password, role } = request.body as any;
@@ -66,7 +82,8 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
       { 
         sub: String(user.id),
         id: String(user.id),
-        token_type: 'refresh'
+        token_type: 'refresh',
+        jti: crypto.randomUUID()
       }, 
       refreshSecret, 
       { 
@@ -77,7 +94,7 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
       }
     );
 
-    const refreshHash = await bcrypt.hash(refreshToken, 8);
+    const refreshHash = await hashRefreshToken(refreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     
     await pool.query(
@@ -144,7 +161,8 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
       { 
         sub: String(user.id),
         id: String(user.id),
-        token_type: 'refresh'
+        token_type: 'refresh',
+        jti: crypto.randomUUID()
       }, 
       refreshSecret, 
       { 
@@ -155,7 +173,7 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
       }
     );
 
-    const refreshHash = await bcrypt.hash(refreshToken, 8);
+    const refreshHash = await hashRefreshToken(refreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await pool.query(
@@ -203,7 +221,7 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
 
     let matchedToken = null;
     for (const t of tokensRes.rows) {
-      const match = await bcrypt.compare(refreshToken, t.token_hash);
+      const match = await compareRefreshToken(refreshToken, t.token_hash);
       if (match) {
         matchedToken = t;
         break;
@@ -248,7 +266,8 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
       { 
         sub: String(user.id),
         id: String(user.id),
-        token_type: 'refresh'
+        token_type: 'refresh',
+        jti: crypto.randomUUID()
       }, 
       refreshSecret, 
       { 
@@ -259,7 +278,7 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
       }
     );
 
-    const refreshHash = await bcrypt.hash(newRefreshToken, 8);
+    const refreshHash = await hashRefreshToken(newRefreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await pool.query(
@@ -297,7 +316,7 @@ export const logout = async (request: FastifyRequest, reply: FastifyReply) => {
     const tokensRes = await pool.query('SELECT * FROM public.refresh_tokens WHERE user_id = $1 AND revoked = FALSE', [userId]);
 
     for (const t of tokensRes.rows) {
-      const match = await bcrypt.compare(refreshToken, t.token_hash);
+      const match = await compareRefreshToken(refreshToken, t.token_hash);
       if (match) {
         await pool.query('UPDATE public.refresh_tokens SET revoked = TRUE WHERE id = $1', [t.id]);
         break;

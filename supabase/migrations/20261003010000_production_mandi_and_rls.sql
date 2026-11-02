@@ -1043,27 +1043,27 @@ CREATE POLICY "User manage own price alerts"
 -- ─────────────────────────────────────────────────────────────────
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.haul_bookings;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_telemetry;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.peer_messages;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.mandi_live_rates;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.outbreak_alerts;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ─────────────────────────────────────────────────────────────────
 -- 12. PERFORMANCE INDEXES

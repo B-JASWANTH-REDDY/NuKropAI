@@ -363,20 +363,20 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================================
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.mandi_rates;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.haul_bookings;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.disease_scans;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.khata_entries;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

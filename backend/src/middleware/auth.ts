@@ -13,6 +13,40 @@ export const getJwtSecret = (): string => {
   return secret.trim();
 };
 
+/**
+ * Retrieves the dedicated JWT refresh secret from environment variables.
+ * Fails closed: Never falls back to standard access token secret or insecure defaults.
+ */
+export const getJwtRefreshSecret = (): string => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret || typeof secret !== 'string' || secret.trim().length === 0) {
+    throw new Error('AUTH_CONFIGURATION_ERROR: Dedicated JWT refresh secret (JWT_REFRESH_SECRET) is not configured');
+  }
+  return secret.trim();
+};
+
+/**
+ * Determines the authoritative expected JWT issuer.
+ * Ensures strict agreement between signing controller and verification middleware.
+ */
+export const getJwtIssuer = (): string => {
+  if (process.env.JWT_ISSUER && process.env.JWT_ISSUER.trim().length > 0) {
+    return process.env.JWT_ISSUER.trim();
+  }
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_URL.trim().length > 0) {
+    return `${process.env.SUPABASE_URL.trim().replace(/\/$/, '')}/auth/v1`;
+  }
+  return 'nukrop-auth';
+};
+
+/**
+ * Retrieves the expected JWT audience.
+ * Defaults strictly to 'authenticated' as per Supabase & standard Auth0/OIDC conventions.
+ */
+export const getJwtAudience = (): string => {
+  return process.env.SUPABASE_JWT_AUDIENCE || 'authenticated';
+};
+
 export interface AuthenticatedUser {
   id: string;
   email: string;
@@ -46,15 +80,15 @@ export const extractAuthoritativeRole = (decoded: any): 'farmer' | 'buyer' | 'ad
 
   // 3. Check standard system role if not admin
   const standardRole = decoded.role?.toLowerCase();
-  if (standardRole === 'driver' || standardRole === 'buyer') {
+  if (standardRole === 'driver' || standardRole === 'buyer' || standardRole === 'farmer') {
     return standardRole;
   }
 
   // 4. Client-supplied user_metadata is untrusted for administrative roles.
   // Only non-privileged roles ('farmer', 'buyer') may be assigned as fallback defaults.
   const userMetadataRole = decoded.user_metadata?.role?.toLowerCase();
-  if (userMetadataRole === 'buyer') {
-    return 'buyer';
+  if (userMetadataRole === 'buyer' || userMetadataRole === 'farmer' || userMetadataRole === 'driver') {
+    return userMetadataRole;
   }
 
   // Default safe unprivileged role
@@ -62,25 +96,29 @@ export const extractAuthoritativeRole = (decoded: any): 'farmer' | 'buyer' | 'ad
 };
 
 /**
- * Verifies and decodes a JWT token using strict signature, audience, and algorithm checks.
+ * Verifies and decodes a JWT token using strict signature, audience, issuer, and algorithm checks.
  */
 export const verifyAuthToken = (token: string, secretOverride?: string): any => {
   const secret = secretOverride || getJwtSecret();
-  const expectedAudience = process.env.SUPABASE_JWT_AUDIENCE || 'authenticated';
+  const expectedAudience = getJwtAudience();
+  const expectedIssuer = getJwtIssuer();
 
   const options: jwt.VerifyOptions = {
     algorithms: ['HS256'],
-    audience: expectedAudience
+    audience: expectedAudience,
+    issuer: expectedIssuer
   };
 
-  // If SUPABASE_URL is configured, verify issuer
-  if (process.env.SUPABASE_URL) {
-    options.issuer = `${process.env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`;
+  // Strict verification: audience, algorithms, expiry, signature, issuer.
+  // Absolutely no audience bypass or retry without audience validation.
+  const decoded: any = jwt.verify(token, secret, options);
+
+  // Reject refresh tokens used as access tokens
+  if (decoded.token_type === 'refresh' || decoded.aud === 'nukrop-refresh') {
+    throw new Error('AUTH_CONTRACT_ERROR: Refresh tokens cannot be used as access tokens');
   }
 
-  // Strict verification: audience, algorithms, expiry, signature.
-  // Absolutely no audience bypass or retry without audience validation.
-  return jwt.verify(token, secret, options);
+  return decoded;
 };
 
 /**
@@ -110,8 +148,8 @@ export const authenticate = async (request: FastifyRequest, reply: FastifyReply)
 
     const decoded = verifyAuthToken(token, secret);
 
-    const userId = decoded.sub || decoded.id;
-    if (!userId || typeof userId !== 'string' && typeof userId !== 'number') {
+    const userId = decoded.sub || decoded.id || decoded.userId;
+    if (!userId || (typeof userId !== 'string' && typeof userId !== 'number')) {
       return reply.status(401).send({ error: 'Unauthorized: Invalid token payload subject identifier' });
     }
 

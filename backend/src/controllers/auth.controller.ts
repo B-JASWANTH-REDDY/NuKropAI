@@ -2,22 +2,12 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
-
-const getJwtSecret = (): string => {
-  const secret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
-  if (!secret || secret.trim().length === 0) {
-    throw new Error('AUTH_CONFIGURATION_ERROR: JWT secret is not configured');
-  }
-  return secret.trim();
-};
-
-const getRefreshSecret = (): string => {
-  const secret = process.env.JWT_REFRESH_SECRET;
-  if (!secret || secret.trim().length === 0) {
-    throw new Error('AUTH_CONFIGURATION_ERROR: Dedicated JWT refresh secret (JWT_REFRESH_SECRET) is not configured');
-  }
-  return secret.trim();
-};
+import { 
+  getJwtSecret, 
+  getJwtRefreshSecret, 
+  getJwtIssuer, 
+  getJwtAudience 
+} from '../middleware/auth';
 
 export const register = async (request: FastifyRequest, reply: FastifyReply) => {
   const { email, password, role } = request.body as any;
@@ -44,7 +34,9 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
 
   try {
     const jwtSecret = getJwtSecret();
-    const refreshSecret = getRefreshSecret();
+    const refreshSecret = getJwtRefreshSecret();
+    const tokenIssuer = getJwtIssuer();
+    const tokenAudience = getJwtAudience();
 
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query(
@@ -53,8 +45,37 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
     );
 
     const user = result.rows[0];
-    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, jwtSecret, { expiresIn: '15m', algorithm: 'HS256' });
-    const refreshToken = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: '7d', algorithm: 'HS256' });
+    const accessToken = jwt.sign(
+      { 
+        sub: String(user.id),
+        id: String(user.id),
+        userId: String(user.id),
+        email: user.email, 
+        role: user.role,
+        app_metadata: { role: user.role }
+      }, 
+      jwtSecret, 
+      { 
+        expiresIn: '15m', 
+        algorithm: 'HS256',
+        audience: tokenAudience,
+        issuer: tokenIssuer
+      }
+    );
+    const refreshToken = jwt.sign(
+      { 
+        sub: String(user.id),
+        id: String(user.id),
+        token_type: 'refresh'
+      }, 
+      refreshSecret, 
+      { 
+        expiresIn: '7d', 
+        algorithm: 'HS256',
+        audience: 'nukrop-refresh',
+        issuer: tokenIssuer
+      }
+    );
 
     const refreshHash = await bcrypt.hash(refreshToken, 8);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -87,7 +108,9 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
 
   try {
     const jwtSecret = getJwtSecret();
-    const refreshSecret = getRefreshSecret();
+    const refreshSecret = getJwtRefreshSecret();
+    const tokenIssuer = getJwtIssuer();
+    const tokenAudience = getJwtAudience();
 
     const result = await pool.query('SELECT * FROM public.users WHERE email = $1', [email]);
     if (result.rows.length === 0) {
@@ -100,8 +123,37 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
       return reply.status(401).send({ error: 'Invalid email or password credentials' });
     }
 
-    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, jwtSecret, { expiresIn: '15m', algorithm: 'HS256' });
-    const refreshToken = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: '7d', algorithm: 'HS256' });
+    const accessToken = jwt.sign(
+      { 
+        sub: String(user.id),
+        id: String(user.id),
+        userId: String(user.id),
+        email: user.email, 
+        role: user.role,
+        app_metadata: { role: user.role }
+      }, 
+      jwtSecret, 
+      { 
+        expiresIn: '15m', 
+        algorithm: 'HS256',
+        audience: tokenAudience,
+        issuer: tokenIssuer
+      }
+    );
+    const refreshToken = jwt.sign(
+      { 
+        sub: String(user.id),
+        id: String(user.id),
+        token_type: 'refresh'
+      }, 
+      refreshSecret, 
+      { 
+        expiresIn: '7d', 
+        algorithm: 'HS256',
+        audience: 'nukrop-refresh',
+        issuer: tokenIssuer
+      }
+    );
 
     const refreshHash = await bcrypt.hash(refreshToken, 8);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -131,14 +183,22 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
 
   try {
     const jwtSecret = getJwtSecret();
-    const refreshSecret = getRefreshSecret();
+    const refreshSecret = getJwtRefreshSecret();
+    const tokenIssuer = getJwtIssuer();
+    const tokenAudience = getJwtAudience();
 
-    const decoded = jwt.verify(refreshToken, refreshSecret, { algorithms: ['HS256'] }) as { id: string };
+    const decoded = jwt.verify(refreshToken, refreshSecret, { 
+      algorithms: ['HS256'],
+      audience: 'nukrop-refresh',
+      issuer: tokenIssuer
+    }) as { sub?: string; id?: string };
     
+    const userId = decoded.sub || decoded.id;
+
     // Look up the active user tokens
     const tokensRes = await pool.query(
       'SELECT * FROM public.refresh_tokens WHERE user_id = $1 AND revoked = FALSE AND expires_at > CURRENT_TIMESTAMP',
-      [decoded.id]
+      [userId]
     );
 
     let matchedToken = null;
@@ -153,7 +213,7 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!matchedToken) {
       // Security Alert: Potential refresh token reuse/replay attack.
       // Revoke all tokens for safety.
-      await pool.query('UPDATE public.refresh_tokens SET revoked = TRUE WHERE user_id = $1', [decoded.id]);
+      await pool.query('UPDATE public.refresh_tokens SET revoked = TRUE WHERE user_id = $1', [userId]);
       return reply.status(403).send({ error: 'Security Exception: Token reuse detected. Sessions revoked.' });
     }
 
@@ -161,14 +221,43 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
     await pool.query('UPDATE public.refresh_tokens SET revoked = TRUE WHERE id = $1', [matchedToken.id]);
 
     // Fetch user details
-    const userRes = await pool.query('SELECT id, email, role FROM public.users WHERE id = $1', [decoded.id]);
+    const userRes = await pool.query('SELECT id, email, role FROM public.users WHERE id = $1', [userId]);
     if (userRes.rows.length === 0) {
       return reply.status(404).send({ error: 'User associated with token not found' });
     }
 
     const user = userRes.rows[0];
-    const newAccessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, jwtSecret, { expiresIn: '15m', algorithm: 'HS256' });
-    const newRefreshToken = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: '7d', algorithm: 'HS256' });
+    const newAccessToken = jwt.sign(
+      { 
+        sub: String(user.id),
+        id: String(user.id),
+        userId: String(user.id),
+        email: user.email, 
+        role: user.role,
+        app_metadata: { role: user.role }
+      }, 
+      jwtSecret, 
+      { 
+        expiresIn: '15m', 
+        algorithm: 'HS256',
+        audience: tokenAudience,
+        issuer: tokenIssuer
+      }
+    );
+    const newRefreshToken = jwt.sign(
+      { 
+        sub: String(user.id),
+        id: String(user.id),
+        token_type: 'refresh'
+      }, 
+      refreshSecret, 
+      { 
+        expiresIn: '7d', 
+        algorithm: 'HS256',
+        audience: 'nukrop-refresh',
+        issuer: tokenIssuer
+      }
+    );
 
     const refreshHash = await bcrypt.hash(newRefreshToken, 8);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -196,9 +285,16 @@ export const logout = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 
   try {
-    const refreshSecret = getRefreshSecret();
-    const decoded = jwt.verify(refreshToken, refreshSecret, { algorithms: ['HS256'] }) as { id: string };
-    const tokensRes = await pool.query('SELECT * FROM public.refresh_tokens WHERE user_id = $1 AND revoked = FALSE', [decoded.id]);
+    const refreshSecret = getJwtRefreshSecret();
+    const tokenIssuer = getJwtIssuer();
+    const decoded = jwt.verify(refreshToken, refreshSecret, { 
+      algorithms: ['HS256'],
+      audience: 'nukrop-refresh',
+      issuer: tokenIssuer
+    }) as { sub?: string; id?: string };
+    
+    const userId = decoded.sub || decoded.id;
+    const tokensRes = await pool.query('SELECT * FROM public.refresh_tokens WHERE user_id = $1 AND revoked = FALSE', [userId]);
 
     for (const t of tokensRes.rows) {
       const match = await bcrypt.compare(refreshToken, t.token_hash);

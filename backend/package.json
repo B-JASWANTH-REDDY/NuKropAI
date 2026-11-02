@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "test": "tsc --noEmit && node ../tests/test_jwt_auth_security.js && python ../tests/test_mandi_pipeline_sync.py",
+    "test": "tsc --noEmit && node ../tests/test_jwt_auth_security.js && node ../tests/test_jwt_controller_integration.js && python ../tests/test_mandi_pipeline_sync.py",
     "start": "node dist/server.js",
     "dev": "ts-node-dev src/server.ts"
   },

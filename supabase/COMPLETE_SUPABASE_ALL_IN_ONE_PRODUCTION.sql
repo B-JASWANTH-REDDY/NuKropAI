@@ -1522,8 +1522,12 @@ BEGIN
     ON CONFLICT (id) DO NOTHING;
   END IF;
 EXCEPTION
-  WHEN OTHERS THEN
-    NULL; -- Safe recovery in restricted non-superuser environments
+  WHEN unique_violation THEN
+    NULL;
+  WHEN undefined_table THEN
+    NULL;
+  WHEN insufficient_privilege THEN
+    NULL;
 END $$;
 
 
@@ -1561,8 +1565,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
       BEGIN
         EXECUTE format('ALTER TABLE public.%I REPLICA IDENTITY FULL', tbl);
-      EXCEPTION WHEN OTHERS THEN 
-        NULL;
+      EXCEPTION
+        WHEN undefined_table THEN NULL;
+        WHEN insufficient_privilege THEN NULL;
       END;
 
       IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = tbl) THEN

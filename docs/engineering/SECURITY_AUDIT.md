@@ -21,6 +21,9 @@
 | **SEC-10** | **Financial Ledger Integrity** | Destructive NULLing of `khata_transactions.user_id` eliminated. Safe profile stubs preserve historical ownership. | **COMPLIANT** |
 | **SEC-11** | **CSRF & Origin Protection** | Supabase OAuth redirect URIs restricted to production Android deep links (`nukrop://auth/callback`) and verified web origins. | **COMPLIANT** |
 | **SEC-12** | **Sanitized Error Responses** | Backend catch blocks return sanitized 401/403/500 errors. Zero stack traces or secret strings are leaked in HTTP responses. | **COMPLIANT** |
+| **SEC-13** | **Strict Audience & Issuer Enforcement** | Removed audience bypass fallback in `backend/src/middleware/auth.ts`. Tokens missing expected audience `authenticated` or expected issuer are rejected immediately with zero fallback. | **COMPLIANT** |
+| **SEC-14** | **Dedicated Refresh Secret & Rate Limiting** | Refresh tokens require a dedicated `JWT_REFRESH_SECRET` with fail-closed startup. All authentication routes (`/register`, `/login`, `/refresh`) are guarded by 10 req/min rate limiters. | **COMPLIANT** |
+| **SEC-15** | **Public Profile Anonymous Lockout** | `public.public_profiles` view has all privileges revoked from `anon` and `PUBLIC`; `SELECT` granted strictly to `authenticated` sessions and `service_role`. | **COMPLIANT** |
 
 ---
 

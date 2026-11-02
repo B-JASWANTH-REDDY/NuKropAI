@@ -94,3 +94,58 @@
 * **Root Cause:** Missing `clearInterval(splashTimer)` on manual advance.
 * **Remediation:** Attached timer to `window.splashTimer` and cleared explicitly on touch advance.
 * **Status:** **RESOLVED** (`tests/test_onboarding_and_splash_flows.js`, test OS.3).
+
+---
+
+### DEF-011: Audience Check Fallback Bypass in JWT Verification Middleware (P0)
+* **Symptom:** Tokens without the expected audience (`aud: 'authenticated'`) fell back to a secondary verification pass without audience enforcement.
+* **Component:** `backend/src/middleware/auth.ts`.
+* **Root Cause:** Incomplete cleanup of legacy non-standard token support.
+* **Remediation:** Removed the entire try-catch retry block. Audience claim is strictly enforced with zero bypasses.
+* **Status:** **RESOLVED** (`tests/test_jwt_auth_security.js`, test SEC-JWT-5).
+
+---
+
+### DEF-012: Insecure Shared Secret for Refresh Tokens & Missing Auth Rate Limiting (P0)
+* **Symptom:** Refresh tokens fell back to access token secret (`JWT_SECRET`) if `JWT_REFRESH_SECRET` was absent, and auth endpoints lacked route-level rate limiting.
+* **Component:** `backend/src/controllers/auth.controller.ts`, `backend/src/routes/auth.routes.ts`.
+* **Root Cause:** Convenient development defaults left active.
+* **Remediation:** Enforced dedicated `JWT_REFRESH_SECRET` with immediate `AUTH_CONFIGURATION_ERROR` fail-closed behavior. Bound `authRateLimit` (10 requests per minute) to `/register`, `/login`, and `/refresh` routes.
+* **Status:** **RESOLVED** (`backend/src/controllers/auth.controller.ts`, `backend/src/routes/auth.routes.ts`).
+
+---
+
+### DEF-013: Android CI Build Failure via Strict Release Keystore Enforcement on PRs (P1)
+* **Symptom:** Android GitHub Actions failed on PR runs with `FATAL: Production release signing is enforced, but KEYSTORE_PATH was not provided or file does not exist`.
+* **Component:** `.github/workflows/android.yml`.
+* **Root Cause:** PR workflow executed `assembleRelease` without access to protected repository release secrets.
+* **Remediation:** Split CI pipeline: PR validation runs `./gradlew assembleDebug testDebugUnitTest --no-daemon`, while production release signing runs strictly on push to `main` with secret validation.
+* **Status:** **RESOLVED** (`.github/workflows/android.yml`).
+
+---
+
+### DEF-014: Working-Directory Relative Path Resolution in JWT Test Suite (P1)
+* **Symptom:** Backend CI failed with `ENOENT: no such file or directory, open 'backend/src/middleware/auth.ts'` when executed from `backend/` directory.
+* **Component:** `tests/test_jwt_auth_security.js`.
+* **Root Cause:** Hardcoded relative paths from workspace root broke when `cwd` was changed to `backend/`.
+* **Remediation:** Replaced relative paths with root-relative `path.resolve(__dirname, '..')`.
+* **Status:** **RESOLVED** (`tests/test_jwt_auth_security.js`).
+
+---
+
+### DEF-015: Frontend API Base URL Environment Key Discrepancy (P2)
+* **Symptom:** Frontend client used `VITE_API_URL` while contact form and analytics used `VITE_API_BASE_URL`.
+* **Component:** `web/src/api/client.ts`, `web/src/components/ContactForm.tsx`, `web/src/utils/analytics.ts`, `web/src/vite-env.d.ts`, `.env.example`.
+* **Root Cause:** Divergent naming in separate web components.
+* **Remediation:** Aligned all consumers to support both `VITE_API_URL` and `VITE_API_BASE_URL` with clean fallback to `http://localhost:5000/api`.
+* **Status:** **RESOLVED** (`web/src/api/client.ts`, `web/src/components/ContactForm.tsx`, `web/src/utils/analytics.ts`).
+
+---
+
+### DEF-016: Anonymous Enumeration of Public Profile View (P1)
+* **Symptom:** `public.public_profiles` view granted `SELECT` to `anon`.
+* **Component:** `supabase/CANONICAL_PRODUCTION_SETUP.sql`, `supabase/COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql`.
+* **Root Cause:** Public profile view granted to anon without restricting to authenticated sessions.
+* **Remediation:** Revoked all privileges on `public.public_profiles` from `PUBLIC` and `anon`; granted `SELECT` strictly to `authenticated` and `service_role`.
+* **Status:** **RESOLVED** (`supabase/CANONICAL_PRODUCTION_SETUP.sql`, `tests/test_sql_security_audit.py`).
+

@@ -45,7 +45,7 @@ class PrivacyAnalytics {
     }
 
     // In production, dispatch to backend telemetry proxy if endpoint configured
-    const apiBase = import.meta.env.VITE_API_BASE_URL;
+    const apiBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
     if (apiBase && !import.meta.env.DEV) {
       try {
         navigator.sendBeacon?.(

@@ -99,10 +99,10 @@ export const ContactForm: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // Simulate network dispatch to backend support worker
-      const apiBase = import.meta.env.VITE_API_BASE_URL;
+      // Dispatch to backend support worker if configured
+      const apiBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
       if (apiBase) {
-        await fetch(`${apiBase}/support/inquiry`, {
+        await fetch(`${apiBase.replace(/\/$/, '')}/support/inquiry`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

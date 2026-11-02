@@ -78,19 +78,9 @@ export const verifyAuthToken = (token: string, secretOverride?: string): any => 
     options.issuer = `${process.env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`;
   }
 
-  try {
-    return jwt.verify(token, secret, options);
-  } catch (err: any) {
-    // If audience check failed because token was minted without audience (legacy / direct),
-    // attempt strict verification with algorithm HS256 without audience constraint
-    if (err.name === 'JsonWebTokenError' && err.message?.includes('jwt audience invalid')) {
-      const fallbackOptions: jwt.VerifyOptions = {
-        algorithms: ['HS256']
-      };
-      return jwt.verify(token, secret, fallbackOptions);
-    }
-    throw err;
-  }
+  // Strict verification: audience, algorithms, expiry, signature.
+  // Absolutely no audience bypass or retry without audience validation.
+  return jwt.verify(token, secret, options);
 };
 
 /**

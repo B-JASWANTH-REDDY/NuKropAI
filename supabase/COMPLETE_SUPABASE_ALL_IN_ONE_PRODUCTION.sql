@@ -922,8 +922,9 @@ SELECT
   created_at
 FROM public.profiles;
 
-REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON public.public_profiles TO anon, authenticated;
+REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
+GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 
 -- ─────────────────────────────────────────────────────────────────

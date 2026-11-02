@@ -53,6 +53,7 @@ OPEN_METEO_API_URL=https://api.open-meteo.com/v1/forecast
 
 # Web Dashboard (Vite)
 VITE_API_URL=https://<your-backend-api-domain>
+VITE_API_BASE_URL=https://<your-backend-api-domain>
 VITE_SUPABASE_URL=https://<your-project-id>.supabase.co
 VITE_SUPABASE_ANON_KEY=<your-anon-key>
 ```

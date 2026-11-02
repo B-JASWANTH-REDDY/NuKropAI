@@ -11,15 +11,16 @@
 
 | Test Suite File | Domain & Scope | Assertions | Result |
 | :--- | :--- | :---: | :---: |
-| `tests/test_jwt_auth_security.js` | JWT Secrets, Fail-Closed Behavior, Audience Checks, Role Anti-Forgery, Admin Signup Block | 9 | **PASS** |
+| `tests/test_jwt_auth_security.js` | JWT Secrets, Fail-Closed, Audience/Issuer Checks, Algorithm Whitelist, Role Anti-Forgery, Admin Signup Block, Middleware Injection | 13 | **PASS** |
 | `tests/run_e2e_tests.js` | Anti-Facade Audit, Script VM Execution, Role Guard Contracts, Navigation Integrity | 40 | **PASS** |
 | `tests/test_community_stories_and_real_posts.js` | Community Stories Engine, Expiration TTL, Like/Comment Triggers, Real Posts | 10 | **PASS** |
 | `tests/test_onboarding_and_splash_flows.js` | Splash Lifecycle, Botanical Engine, Timer Leak Prevention, Settings Replay | 10 | **PASS** |
 | `tests/test_mandi_pipeline_sync.py` | Mandi Government Ingestion, Commodity Parsing, Schema Validation | 8 | **PASS** |
 | `tests/test_sql_security_audit.py` | Idempotency, RLS on 30 Tables, Security Definer Search Path, Privileges | 32 | **PASS** |
 | `tests/test_rls_multi_role_adversarial.py` | Cross-Tenant Isolation, Public Profile Privacy, Community Stories RLS Hardening, Financial Ledger Integrity | 36 | **PASS** |
+| `tests/test_rls_roles_adversarial.sql` | Pure PostgreSQL Session Role Switching (`anon`, `authenticated`, `service_role`) | 5 | **PASS** |
 | `tests/test_real_world_production_verification.py` | Zero Mock Verification (Weather, Mandi, Gemini AI, IoT, GramHaul) | 31 | **PASS** |
-| **TOTAL** | **Full Ecosystem Coverage** | **176** | **100% PASS** |
+| **TOTAL** | **Full Ecosystem Coverage** | **185** | **100% PASS** |
 
 ---
 
@@ -35,11 +36,15 @@
   ✔ [PASS] SEC-JWT-2: Fail-closed when JWT secret is missing from environment
   ✔ [PASS] SEC-JWT-3: Expired token signature verification fails with sanitized error
   ✔ [PASS] SEC-JWT-4: Invalid signature / tampered payload is rejected
-  ✔ [PASS] SEC-JWT-5: Incorrect audience claim is strictly rejected
-  ✔ [PASS] SEC-JWT-6: Untrusted client user_metadata.role CANNOT escalate to admin
-  ✔ [PASS] SEC-JWT-7: Server-authoritative app_metadata.role properly assigns role
-  ✔ [PASS] SEC-JWT-8: Service role claim assigns admin access
-  ✔ [PASS] SEC-JWT-9: Public registration forbids claiming admin role
+  ✔ [PASS] SEC-JWT-5: Incorrect audience claim is strictly rejected (zero fallback)
+  ✔ [PASS] SEC-JWT-6: Incorrect issuer claim is strictly rejected
+  ✔ [PASS] SEC-JWT-7: Unsupported algorithm (e.g. none) is rejected
+  ✔ [PASS] SEC-JWT-8: Untrusted client user_metadata.role CANNOT escalate to admin
+  ✔ [PASS] SEC-JWT-9: Server-authoritative app_metadata.role properly assigns role
+  ✔ [PASS] SEC-JWT-10: Service role claim assigns admin access
+  ✔ [PASS] SEC-JWT-11: Public registration forbids claiming admin role
+  ✔ [PASS] SEC-JWT-12: Real middleware execution rejects missing and malformed authorization headers
+  ✔ [PASS] SEC-JWT-13: Real requireRole middleware strictly enforces authorization boundaries
 ```
 
 ### B. Multi-Role Adversarial Simulation & Privacy (`tests/test_rls_multi_role_adversarial.py`)

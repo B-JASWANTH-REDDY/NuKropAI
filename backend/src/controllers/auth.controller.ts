@@ -14,9 +14,7 @@ const getJwtSecret = (): string => {
 const getRefreshSecret = (): string => {
   const secret = process.env.JWT_REFRESH_SECRET;
   if (!secret || secret.trim().length === 0) {
-    // If dedicated refresh secret is not set, use a derivative of JWT secret with clear separation
-    const mainSecret = getJwtSecret();
-    return `${mainSecret}::REFRESH_DOMAIN_KEY`;
+    throw new Error('AUTH_CONFIGURATION_ERROR: Dedicated JWT refresh secret (JWT_REFRESH_SECRET) is not configured');
   }
   return secret.trim();
 };

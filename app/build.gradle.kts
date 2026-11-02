@@ -35,7 +35,8 @@ android {
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH")
-      val isStrictSigning = System.getenv("STRICT_RELEASE_SIGNING") == "true" || System.getenv("CI") == "true"
+      val isReleaseTask = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+      val isStrictSigning = System.getenv("STRICT_RELEASE_SIGNING") == "true" || (System.getenv("CI") == "true" && isReleaseTask)
       if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
         storeFile = file(keystorePath)
         storePassword = System.getenv("STORE_PASSWORD")

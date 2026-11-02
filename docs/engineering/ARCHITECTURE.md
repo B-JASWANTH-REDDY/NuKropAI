@@ -72,3 +72,4 @@ flowchart TD
 ### E. Database Layer & Idempotent Publication Architecture
 * Normalized schema across 30 tables with foreign key cascades and audit triggers.
 * Publications for real-time streaming are managed idempotently through catalog inspection (`pg_publication_tables`), eliminating PostgreSQL error `42710`.
+

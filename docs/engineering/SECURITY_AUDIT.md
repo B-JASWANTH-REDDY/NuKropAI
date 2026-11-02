@@ -38,3 +38,4 @@ The 30 tables in `public` schema have been audited for exact policy enforcement:
 8. **`public.haul_bookings`**: Accessible only to participating farmer and driver.
 9. **`public.community_posts`**: Public SELECT; INSERT requires authenticated user; UPDATE/DELETE restricted to author.
 10. **`public.community_stories`**: Public SELECT for unexpired stories (`expires_at > now()`); INSERT requires authenticated user; DELETE restricted to author.
+

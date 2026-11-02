@@ -17,3 +17,4 @@
 | **MOD-08** | **Krishi Khata & Financial Ledger** | KCC balance tracking, loan amortization calculator, expense ledger, government subsidy discovery engine (`public.subsidies`). | `tests/test_rls_multi_role_adversarial.py` (Phase 2), `tests/test_sql_security_audit.py` (DIR-1.1–DIR-1.3) | **ACCEPTED (PASS)** |
 | **MOD-09** | **IoT Hardware Bridge & Interlocks** | Device registration with authenticated owner verification, sensor telemetry stream, safety interlock against commanding offline pumps/relays. | `tests/test_real_world_production_verification.py` (DIR-6.1–DIR-6.6) | **ACCEPTED (PASS)** |
 | **MOD-10** | **Database Security & RLS** | All 30 tables enforce RLS, publication loop is immune to PostgreSQL error 42710, private storage bucket configuration, role whitelisting trigger. | `tests/test_sql_security_audit.py` (32 tests), `tests/test_rls_multi_role_adversarial.py` (19 tests) | **ACCEPTED (PASS)** |
+

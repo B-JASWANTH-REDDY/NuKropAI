@@ -69,3 +69,4 @@
   ✔ [PASS] [DIR-5.1] Scanner includes Gemini Vision API endpoint (gemini-1.5-flash)
   ✔ [PASS] [DIR-6.4] Safety interlock prevents command dispatch to offline devices
 ```
+

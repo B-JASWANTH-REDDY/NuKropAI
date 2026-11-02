@@ -79,3 +79,17 @@
 * **Root Cause:** Incorrect initial setup flag.
 * **Remediation:** Altered `crop-scans` bucket definition to `public = false`. File access now requires authenticated caller verification.
 * **Verification:** SQL security test passes (`[PASS] crop-scans storage bucket set to private`).
+
+---
+
+### DEF-008: PostgreSQL 0A000 View Dependency on Column Type Cast (P0)
+* **Symptom:** `ERROR: 0A000: cannot alter type of a column used by a view or rule DETAIL: rule _RETURN on view public_profiles depends on column "id"`.
+* **Component:** `supabase/CANONICAL_PRODUCTION_SETUP.sql`, `supabase/COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql`.
+* **Root Cause:** In PostgreSQL, executing `ALTER TABLE public.profiles ALTER COLUMN id TYPE text` raises error `0A000` if the view `public_profiles` already exists, because view rewrite rule `_RETURN` locks the column definition.
+* **Remediation:** 
+  1. Relocated `public.public_profiles` creation to Step 4B (after column type migrations).
+  2. Executed `DROP VIEW IF EXISTS public.public_profiles CASCADE;` immediately prior to migration.
+  3. Conditioned all column casts with `IF EXISTS (SELECT 1 ... WHERE data_type != 'text')` with inner exception guards, skipping unnecessary rewrites when columns are already `text`.
+* **Verification:** Validated across pre-existing views and blank databases; executes with zero errors.
+
+

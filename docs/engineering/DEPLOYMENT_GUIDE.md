@@ -82,3 +82,4 @@ To populate genuine daily mandi market prices automatically:
    ```
    app/build/outputs/apk/release/app-release.apk
    ```
+

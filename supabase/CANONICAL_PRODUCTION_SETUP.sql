@@ -692,6 +692,40 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+
+-- 21B. COMMUNITY STORIES (24-Hour Ephemeral Agricultural Story Engine)
+CREATE TABLE IF NOT EXISTS public.community_stories (
+  id text NOT NULL DEFAULT (gen_random_uuid())::text PRIMARY KEY,
+  user_id text REFERENCES public.profiles(id) ON DELETE CASCADE,
+  author_id text REFERENCES public.profiles(id) ON DELETE CASCADE,
+  author_name text NOT NULL DEFAULT 'Farmer'::text,
+  author_village text DEFAULT 'Warangal, Telangana'::text,
+  author_avatar text DEFAULT 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'::text,
+  media_url text NOT NULL,
+  caption text,
+  tag text DEFAULT '🌱 Crop Progress'::text,
+  views_count integer NOT NULL DEFAULT 0,
+  likes_count integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + interval '24 hours')
+);
+
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS user_id text;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_id text;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_name text DEFAULT 'Farmer';
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_village text DEFAULT 'Warangal, Telangana';
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_avatar text;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS media_url text;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS caption text;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS tag text DEFAULT '🌱 Crop Progress';
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS views_count integer DEFAULT 0;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS likes_count integer DEFAULT 0;
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now();
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS expires_at timestamp with time zone DEFAULT (now() + interval '24 hours');
+
+CREATE INDEX IF NOT EXISTS idx_community_stories_expires ON public.community_stories(expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_community_stories_created ON public.community_stories(created_at DESC);
+
 -- 22. COMMUNITY COMMENTS
 CREATE TABLE IF NOT EXISTS public.community_comments (
   id text NOT NULL DEFAULT (gen_random_uuid())::text,
@@ -1254,6 +1288,24 @@ CREATE POLICY "community_posts_delete" ON public.community_posts FOR DELETE USIN
   auth.uid() IS NOT NULL AND (auth.uid()::text = user_id OR auth.uid()::text = author_id)
 );
 
+
+-- Community Stories Policies
+ALTER TABLE public.community_stories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "community_stories_read" ON public.community_stories;
+DROP POLICY IF EXISTS "community_stories_insert" ON public.community_stories;
+DROP POLICY IF EXISTS "community_stories_delete" ON public.community_stories;
+
+CREATE POLICY "community_stories_read" ON public.community_stories
+  FOR SELECT USING (expires_at > now() OR auth.uid()::text = user_id OR auth.uid()::text = author_id OR true);
+
+CREATE POLICY "community_stories_insert" ON public.community_stories
+  FOR INSERT WITH CHECK (
+    auth.role() = 'authenticated' OR auth.role() = 'anon'
+  );
+
+CREATE POLICY "community_stories_delete" ON public.community_stories
+  FOR DELETE USING (auth.uid()::text = user_id OR auth.uid()::text = author_id OR auth.role() = 'anon');
+
 -- Community Comments
 DROP POLICY IF EXISTS "community_comments_read" ON public.community_comments;
 CREATE POLICY "community_comments_read" ON public.community_comments FOR SELECT USING (true);
@@ -1449,11 +1501,14 @@ DECLARE
     'trip_waypoints',
     'community_posts',
     'community_comments',
+    'community_stories',
     'post_likes',
     'user_follows',
     'machinery_messages',
     'chat_messages',
-    'peer_messages'
+    'peer_messages',
+    'outbreak_alerts',
+    'price_alerts'
   ];
 BEGIN
   SELECT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') INTO pub_exists;
@@ -1464,10 +1519,19 @@ BEGIN
   FOREACH tbl IN ARRAY tables LOOP
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
       BEGIN
-        EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
-      EXCEPTION WHEN duplicate_object THEN
-        -- Table already in publication, proceed
+        EXECUTE format('ALTER TABLE public.%I REPLICA IDENTITY FULL', tbl);
+      EXCEPTION WHEN OTHERS THEN 
+        NULL;
       END;
+
+      IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = tbl) THEN
+        BEGIN
+          EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+        EXCEPTION 
+          WHEN duplicate_object THEN NULL;
+          WHEN OTHERS THEN NULL;
+        END;
+      END IF;
     END IF;
   END LOOP;
 END $$;

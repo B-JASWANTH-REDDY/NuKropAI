@@ -197,6 +197,44 @@ def run_adversarial_simulation():
     signup_role_whitelisted = "v_requested_role NOT IN ('farmer', 'driver')" in sql
     assert_perm("Signup role whitelist denies 'admin' and defaults to 'farmer'", signup_role_whitelisted, True)
 
+    print("\n▶ Phase 6: Public Profile Privacy & Leakage Defense (DPDP Compliance)")
+    view_start = sql.find("CREATE OR REPLACE VIEW public.public_profiles")
+    view_end = sql.find(";", view_start)
+    view_def = sql[view_start:view_end]
+
+    assert_perm("public_profiles does NOT expose internal user_id", "user_id" not in view_def, True)
+    assert_perm("public_profiles does NOT expose private village location", "village" not in view_def, True)
+    assert_perm("public_profiles does NOT expose private phone numbers", "phone" not in view_def, True)
+    assert_perm("public_profiles does NOT expose confidential AgriStack ID", "agristack_id" not in view_def, True)
+    assert_perm("public_profiles does NOT expose KCC credit limit or balance", "kcc_" not in view_def, True)
+    assert_perm("public_profiles does NOT expose land acreage details", "land_acres" not in view_def, True)
+    assert_perm("public_profiles explicitly revokes INSERT, UPDATE, DELETE", "REVOKE INSERT, UPDATE, DELETE ON public.public_profiles" in sql, True)
+
+    print("\n▶ Phase 7: Community Stories RLS Hardening & Anti-Abuse")
+    story_read_policy = policies.get(('community_stories', 'community_stories_read', 'SELECT'), ('', ''))[0]
+    assert_perm("community_stories SELECT does NOT contain dangerous 'OR true'", 'OR true' not in story_read_policy, True)
+
+    story_insert_policy = policies.get(('community_stories', 'community_stories_insert', 'INSERT'), ('', ''))[1]
+    assert_perm("community_stories INSERT strictly blocks anonymous callers", 'auth.role() = \'anon\'' not in story_insert_policy, True)
+    anon_insert_story = eval_policy_expr(story_insert_policy, None, {'user_id': 'usr-farmer-a'})
+    assert_perm("Anonymous user cannot INSERT community_stories", anon_insert_story, False)
+
+    farmer_a_insert_own_story = eval_policy_expr(story_insert_policy, 'usr-farmer-a', {'user_id': 'usr-farmer-a'})
+    assert_perm("Farmer A can INSERT own community_stories", farmer_a_insert_own_story, True)
+
+    farmer_a_forge_story = eval_policy_expr(story_insert_policy, 'usr-farmer-a', {'user_id': 'usr-farmer-b'})
+    assert_perm("Farmer A cannot INSERT story on behalf of Farmer B", farmer_a_forge_story, False)
+
+    story_delete_policy = policies.get(('community_stories', 'community_stories_delete', 'DELETE'), ('', ''))[0]
+    assert_perm("community_stories DELETE strictly blocks anonymous callers", 'auth.role() = \'anon\'' not in story_delete_policy, True)
+    farmer_a_delete_farmer_b_story = eval_policy_expr(story_delete_policy, 'usr-farmer-a', {'user_id': 'usr-farmer-b'})
+    assert_perm("Farmer A cannot DELETE Farmer B's community_story", farmer_a_delete_farmer_b_story, False)
+
+    print("\n▶ Phase 8: Financial Ledger Ownership Integrity & Safe Migrations")
+    assert_perm("Zero destructive NULLing of khata_transactions user_id", "UPDATE public.khata_transactions SET user_id = NULL" not in sql, True)
+    assert_perm("Safe profile stub insertion preserves historical khata ownership", "INSERT INTO public.profiles (id, full_name, role)" in sql and "khata_transactions" in sql, True)
+    assert_perm("No blanket exception swallowing in migration Step 4", "WHEN OTHERS THEN NULL" not in sql[:sql.find("-- STEP 5:")], True)
+
     print("\n" + "="*80)
     print(f"📊 ADVERSARIAL SIMULATION RESULTS: {passed} PASSED, {failed} FAILED")
     print("="*80)

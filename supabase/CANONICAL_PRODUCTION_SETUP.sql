@@ -847,81 +847,60 @@ CREATE TABLE IF NOT EXISTS public.mandi_ingestion_runs (
 -- ─────────────────────────────────────────────────────────────────
 -- STEP 4: MIGRATION & EXPLICIT FOREIGN KEY REPAIR
 -- ─────────────────────────────────────────────────────────────────
--- Drop view if exists before column alterations so dependent rule _RETURN never blocks type sanitization
-DROP VIEW IF EXISTS public.public_profiles CASCADE;
+-- Drop public_profiles view without CASCADE to prevent view rewrite rule lock during migration
+DROP VIEW IF EXISTS public.public_profiles;
 
--- Explicitly sanitizes and casts primary/foreign key columns without
--- blind dynamic policy drops, only executing if data type is not already text.
+-- PRESERVE FINANCIAL TRANSACTION OWNERSHIP:
+-- Ensure referenced profile records exist for all historical khata transactions.
+-- NEVER set user_id = NULL on financial transactions!
+INSERT INTO public.profiles (id, full_name, role)
+SELECT DISTINCT kt.user_id, 'Farmer (Ledger Account)', 'farmer'
+FROM public.khata_transactions kt
+WHERE kt.user_id IS NOT NULL 
+  AND NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = kt.user_id)
+ON CONFLICT (id) DO NOTHING;
+
+-- Explicitly inspect and cast primary/foreign key columns without blanket exception swallowing
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='profiles') THEN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='profiles' AND column_name='id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.profiles ALTER COLUMN id TYPE text USING id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.profiles ALTER COLUMN id TYPE text USING id::text;
     END IF;
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='profiles' AND column_name='user_id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.profiles ALTER COLUMN user_id TYPE text USING user_id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.profiles ALTER COLUMN user_id TYPE text USING user_id::text;
     END IF;
   END IF;
 
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='khata_transactions') THEN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='khata_transactions' AND column_name='id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.khata_transactions ALTER COLUMN id TYPE text USING id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.khata_transactions ALTER COLUMN id TYPE text USING id::text;
     END IF;
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='khata_transactions' AND column_name='user_id') THEN
-      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='khata_transactions' AND column_name='user_id' AND data_type != 'text') THEN
-        BEGIN
-          ALTER TABLE public.khata_transactions ALTER COLUMN user_id TYPE text USING user_id::text;
-        EXCEPTION WHEN OTHERS THEN NULL;
-        END;
-      END IF;
-      UPDATE public.khata_transactions SET user_id = NULL WHERE user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = khata_transactions.user_id);
-      ALTER TABLE public.khata_transactions DROP CONSTRAINT IF EXISTS khata_transactions_user_id_fkey;
-      ALTER TABLE public.khata_transactions ADD CONSTRAINT khata_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='khata_transactions' AND column_name='user_id' AND data_type != 'text') THEN
+      ALTER TABLE public.khata_transactions ALTER COLUMN user_id TYPE text USING user_id::text;
     END IF;
+    ALTER TABLE public.khata_transactions DROP CONSTRAINT IF EXISTS khata_transactions_user_id_fkey;
+    ALTER TABLE public.khata_transactions ADD CONSTRAINT khata_transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
   END IF;
 
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='haul_bookings') THEN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='haul_bookings' AND column_name='id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.haul_bookings ALTER COLUMN id TYPE text USING id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.haul_bookings ALTER COLUMN id TYPE text USING id::text;
     END IF;
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='haul_bookings' AND column_name='farmer_user_id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.haul_bookings ALTER COLUMN farmer_user_id TYPE text USING farmer_user_id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.haul_bookings ALTER COLUMN farmer_user_id TYPE text USING farmer_user_id::text;
     END IF;
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='haul_bookings' AND column_name='driver_user_id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.haul_bookings ALTER COLUMN driver_user_id TYPE text USING driver_user_id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.haul_bookings ALTER COLUMN driver_user_id TYPE text USING driver_user_id::text;
     END IF;
   END IF;
 
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='truck_listings') THEN
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='truck_listings' AND column_name='id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.truck_listings ALTER COLUMN id TYPE text USING id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.truck_listings ALTER COLUMN id TYPE text USING id::text;
     END IF;
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='truck_listings' AND column_name='user_id' AND data_type != 'text') THEN
-      BEGIN
-        ALTER TABLE public.truck_listings ALTER COLUMN user_id TYPE text USING user_id::text;
-      EXCEPTION WHEN OTHERS THEN NULL;
-      END;
+      ALTER TABLE public.truck_listings ALTER COLUMN user_id TYPE text USING user_id::text;
     END IF;
   END IF;
 END $$;
@@ -932,18 +911,18 @@ END $$;
 CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = false) AS
 SELECT 
   id,
-  user_id,
   farmer_id,
   full_name,
   avatar_url,
-  village,
   district,
   state,
   role,
+  agristack_verified,
   preferred_language,
   created_at
 FROM public.profiles;
 
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.public_profiles TO anon, authenticated;
 
 
@@ -1339,16 +1318,33 @@ DROP POLICY IF EXISTS "community_stories_read" ON public.community_stories;
 DROP POLICY IF EXISTS "community_stories_insert" ON public.community_stories;
 DROP POLICY IF EXISTS "community_stories_delete" ON public.community_stories;
 
+-- Public can read unexpired stories; owners can read their own active or archived stories
 CREATE POLICY "community_stories_read" ON public.community_stories
-  FOR SELECT USING (expires_at > now() OR auth.uid()::text = user_id OR auth.uid()::text = author_id OR true);
-
-CREATE POLICY "community_stories_insert" ON public.community_stories
-  FOR INSERT WITH CHECK (
-    auth.role() = 'authenticated' OR auth.role() = 'anon'
+  FOR SELECT USING (
+    expires_at > now() 
+    OR (auth.uid() IS NOT NULL AND (auth.uid()::text = user_id OR auth.uid()::text = author_id))
   );
 
+-- Only authenticated users can create stories for their own identity (no impersonation, zero anon insert)
+CREATE POLICY "community_stories_insert" ON public.community_stories
+  FOR INSERT WITH CHECK (
+    auth.uid() IS NOT NULL AND (auth.uid()::text = user_id OR auth.uid()::text = author_id)
+  );
+
+-- Story owners can update their stories
+DROP POLICY IF EXISTS "community_stories_update" ON public.community_stories;
+CREATE POLICY "community_stories_update" ON public.community_stories
+  FOR UPDATE USING (
+    auth.uid() IS NOT NULL AND (auth.uid()::text = user_id OR auth.uid()::text = author_id)
+  ) WITH CHECK (
+    auth.uid() IS NOT NULL AND (auth.uid()::text = user_id OR auth.uid()::text = author_id)
+  );
+
+-- Only the story owner can delete their story (zero anonymous deletion)
 CREATE POLICY "community_stories_delete" ON public.community_stories
-  FOR DELETE USING (auth.uid()::text = user_id OR auth.uid()::text = author_id OR auth.role() = 'anon');
+  FOR DELETE USING (
+    auth.uid() IS NOT NULL AND (auth.uid()::text = user_id OR auth.uid()::text = author_id)
+  );
 
 -- Community Comments
 DROP POLICY IF EXISTS "community_comments_read" ON public.community_comments;
@@ -1573,7 +1569,6 @@ BEGIN
           EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
         EXCEPTION 
           WHEN duplicate_object THEN NULL;
-          WHEN OTHERS THEN NULL;
         END;
       END IF;
     END IF;

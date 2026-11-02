@@ -3,8 +3,23 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'SUPER_SECURE_JWT_SECRET_KEY_12345';
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'SUPER_SECURE_REFRESH_SECRET_KEY_98765';
+const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET;
+  if (!secret || secret.trim().length === 0) {
+    throw new Error('AUTH_CONFIGURATION_ERROR: JWT secret is not configured');
+  }
+  return secret.trim();
+};
+
+const getRefreshSecret = (): string => {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret || secret.trim().length === 0) {
+    // If dedicated refresh secret is not set, use a derivative of JWT secret with clear separation
+    const mainSecret = getJwtSecret();
+    return `${mainSecret}::REFRESH_DOMAIN_KEY`;
+  }
+  return secret.trim();
+};
 
 export const register = async (request: FastifyRequest, reply: FastifyReply) => {
   const { email, password, role } = request.body as any;
@@ -17,13 +32,22 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
     return reply.status(400).send({ error: 'Password must be at least 8 characters long' });
   }
 
-  const validRoles = ['farmer', 'buyer', 'admin'];
-  const userRole = role || 'buyer';
-  if (!validRoles.includes(userRole)) {
-    return reply.status(400).send({ error: 'Invalid user role specified' });
+  // SECURITY: Prevent privilege escalation via public self-registration.
+  // Administrative roles cannot be claimed by arbitrary callers during signup.
+  if (role === 'admin') {
+    return reply.status(403).send({ error: 'Forbidden: Self-registration for administrative roles is prohibited' });
+  }
+
+  const validPublicRoles = ['farmer', 'buyer', 'driver'];
+  const userRole = role ? role.toLowerCase() : 'farmer';
+  if (!validPublicRoles.includes(userRole)) {
+    return reply.status(400).send({ error: 'Invalid user role specified. Permitted roles: farmer, buyer, driver' });
   }
 
   try {
+    const jwtSecret = getJwtSecret();
+    const refreshSecret = getRefreshSecret();
+
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query(
       'INSERT INTO public.users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING id, email, role',
@@ -31,8 +55,8 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
     );
 
     const user = result.rows[0];
-    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, jwtSecret, { expiresIn: '15m', algorithm: 'HS256' });
+    const refreshToken = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: '7d', algorithm: 'HS256' });
 
     const refreshHash = await bcrypt.hash(refreshToken, 8);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -44,10 +68,14 @@ export const register = async (request: FastifyRequest, reply: FastifyReply) => 
 
     return reply.status(201).send({ accessToken, refreshToken, user });
   } catch (err: any) {
+    if (err.message?.includes('AUTH_CONFIGURATION_ERROR')) {
+      request.log.error(err.message);
+      return reply.status(500).send({ error: 'Internal server error: Authentication service is misconfigured' });
+    }
     if (err.code === '23505') {
       return reply.status(409).send({ error: 'Email address is already registered' });
     }
-    console.error(err);
+    request.log.error(err);
     return reply.status(500).send({ error: 'Internal server registration error' });
   }
 };
@@ -60,6 +88,9 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 
   try {
+    const jwtSecret = getJwtSecret();
+    const refreshSecret = getRefreshSecret();
+
     const result = await pool.query('SELECT * FROM public.users WHERE email = $1', [email]);
     if (result.rows.length === 0) {
       return reply.status(401).send({ error: 'Invalid email or password credentials' });
@@ -71,8 +102,8 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
       return reply.status(401).send({ error: 'Invalid email or password credentials' });
     }
 
-    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+    const accessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, jwtSecret, { expiresIn: '15m', algorithm: 'HS256' });
+    const refreshToken = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: '7d', algorithm: 'HS256' });
 
     const refreshHash = await bcrypt.hash(refreshToken, 8);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -83,8 +114,12 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
     );
 
     return reply.send({ accessToken, refreshToken, user: { id: user.id, email: user.email, role: user.role } });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    if (err.message?.includes('AUTH_CONFIGURATION_ERROR')) {
+      request.log.error(err.message);
+      return reply.status(500).send({ error: 'Internal server error: Authentication service is misconfigured' });
+    }
+    request.log.error(err);
     return reply.status(500).send({ error: 'Internal server login error' });
   }
 };
@@ -97,7 +132,10 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, REFRESH_SECRET) as { id: string };
+    const jwtSecret = getJwtSecret();
+    const refreshSecret = getRefreshSecret();
+
+    const decoded = jwt.verify(refreshToken, refreshSecret, { algorithms: ['HS256'] }) as { id: string };
     
     // Look up the active user tokens
     const tokensRes = await pool.query(
@@ -131,8 +169,8 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
     }
 
     const user = userRes.rows[0];
-    const newAccessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
-    const newRefreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
+    const newAccessToken = jwt.sign({ id: user.id, email: user.email, role: user.role }, jwtSecret, { expiresIn: '15m', algorithm: 'HS256' });
+    const newRefreshToken = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: '7d', algorithm: 'HS256' });
 
     const refreshHash = await bcrypt.hash(newRefreshToken, 8);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -143,8 +181,11 @@ export const refresh = async (request: FastifyRequest, reply: FastifyReply) => {
     );
 
     return reply.send({ accessToken: newAccessToken, refreshToken: newRefreshToken });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    if (err.message?.includes('AUTH_CONFIGURATION_ERROR')) {
+      request.log.error(err.message);
+      return reply.status(500).send({ error: 'Internal server error: Authentication service is misconfigured' });
+    }
     return reply.status(401).send({ error: 'Invalid or expired refresh token' });
   }
 };
@@ -157,7 +198,8 @@ export const logout = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, REFRESH_SECRET) as { id: string };
+    const refreshSecret = getRefreshSecret();
+    const decoded = jwt.verify(refreshToken, refreshSecret, { algorithms: ['HS256'] }) as { id: string };
     const tokensRes = await pool.query('SELECT * FROM public.refresh_tokens WHERE user_id = $1 AND revoked = FALSE', [decoded.id]);
 
     for (const t of tokensRes.rows) {

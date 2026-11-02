@@ -1,75 +1,77 @@
 # NuKropAI Agrarian OS — Architecture & System Design
 
-**Version:** 7.0 (Production Release)  
-**Target:** Android, Web Dashboard, Supabase Backend, AI Diagnostic Cloud  
+**Version:** 7.0 (Hardened Production Release)  
+**Target:** Android Native Shell, Vite Web Dashboard, Supabase Backend, Fastify API Engine, Gemini Vision Cloud  
 
 ---
 
-## 1. High-Level System Architecture
-
-NuKropAI operates as a resilient, offline-first agrarian operating system designed for deployment in low-bandwidth rural environments across India. The ecosystem couples an edge-based Progressive Web Application running within an Android native web shell to a resilient PostgreSQL backend managed by Supabase, integrated with satellite weather observation networks, government mandi price grids, and Gemini Vision AI engines.
+## 1. System Topology & Data Flow
 
 ```mermaid
 flowchart TD
-    subgraph Client["Edge & Client Tier"]
-        AndroidShell["Android APK (Kotlin Shell)"]
-        WebEngine["NuKrop Web Core (ESM / PWA)"]
-        LocalStorage["Encrypted Local Storage (IndexedDB / Cache)"]
-        RoleGuard["NuKropRoleGuard (Farmer vs Driver)"]
+    subgraph ClientTier["Client & Edge Runtime"]
+        AndroidShell["Android APK (Kotlin Jetpack Shell)"]
+        WebEngine["NuKrop Core Engine (Vanilla ESM / PWA)"]
+        ReactDashboard["Web Admin / Farmer Dashboard (React 18 + Vite)"]
+        RoleGuard["NuKropRoleGuard (Farmer vs Transporter)"]
     end
 
-    subgraph CloudEdge["Edge Ingestion & Integration Tier"]
-        AgmarknetIngest["Agmarknet / DMI Sync Service"]
-        WeatherGrid["Open-Meteo & WMO Meteorological Grid"]
-        GeminiVision["Gemini 1.5 Flash Vision API"]
-        IoTMQTT["IoT Telemetry Bridge (MQTT / Sensors)"]
+    subgraph APIServices["Backend & API Tier (Node.js / Fastify)"]
+        AuthMiddleware["Hardened Auth Middleware (Fail-Closed JWT)"]
+        RoleAuthorizer["Authoritative Role Enforcer (app_metadata)"]
+        MandiWorker["Agmarknet Ingestion Service"]
+        IoTMQTT["IoT Telemetry Gateway (Safety Interlocks)"]
     end
 
     subgraph SupabasePlatform["Supabase Core (PostgreSQL 15+)"]
-        PostgresDB[("30 Relational Tables")]
-        RLSEngine["Row Level Security Policies"]
-        RealtimePub["Supabase Realtime (Publication Engine)"]
-        StorageEngine["Supabase Storage (crop-scans, community-media)"]
-        AuthGoTrue["Supabase Auth (JWT, OTP, OAuth)"]
+        PostgresTables[("30 Normalized Production Tables")]
+        RLSPolicies["Owner-Only RLS Policies (30 Tables)"]
+        PublicProfilesView["public.public_profiles (DPDP Minimization View)"]
+        RealtimePub["supabase_realtime Publication (Idempotent 15 Tables)"]
+        PrivateStorage["crop-scans Storage (public = false)"]
+        PublicStorage["community-media Storage (public = true)"]
+    end
+
+    subgraph ExternalIntegrations["External & Government Integrations"]
+        AgmarknetAPI["data.gov.in Agmarknet API"]
+        OpenMeteo["Open-Meteo Weather Grid"]
+        GeminiVision["Google Gemini 1.5 Flash Vision API"]
     end
 
     AndroidShell --> WebEngine
     WebEngine --> RoleGuard
-    WebEngine --> LocalStorage
+    ReactDashboard --> AuthMiddleware
     WebEngine <-->|REST & WebSocket| SupabasePlatform
-    WebEngine -->|Direct Inference| GeminiVision
-    AgmarknetIngest -->|Scheduled Sync| PostgresDB
-    WeatherGrid -->|Direct Edge Cache| WebEngine
-    IoTMQTT -->|Telemetry Streams| RealtimePub
-    RealtimePub -->|Live Subscriptions| WebEngine
+    AuthMiddleware --> RoleAuthorizer
+    RoleAuthorizer <--> PostgresTables
+    MandiWorker -->|Daily Sync| AgmarknetAPI
+    MandiWorker --> PostgresTables
+    WebEngine --> OpenMeteo
+    WebEngine --> GeminiVision
+    IoTMQTT --> RealtimePub
+    RealtimePub --> WebEngine
 ```
 
 ---
 
-## 2. Core Subsystems
+## 2. Core Security & Privacy Architecture
 
-### A. Authentication & Identity Boundary
-* **Multi-Role Segregation:** Farmers and Transporters operate under separate logical profiles in `public.profiles`. The `NuKropRoleGuard` prevents simultaneous or conflicting cross-registration using identical contact details.
-* **DPDP Compliance:** In accordance with the Digital Personal Data Protection Act 2023, data minimization principles are strictly applied:
-  * Private tables (`profiles`, `soil_health_cards`, `disease_scans`, `land_parcels`) protect personal and financial details.
-  * `public.public_profiles` view exposes only anonymized farmer names, district identifiers, and avatar URLs.
+### A. Authentication & Authoritative Role Architecture
+* **Fail-Closed JWT Verification:** `backend/src/middleware/auth.ts` verifies incoming Bearer tokens using `HS256`, explicit audience matching (`authenticated`), and requires environment-configured secrets.
+* **Privilege Escalation Defense:** Client-controlled `user_metadata` cannot grant elevated permissions. Only server-verified claims (`app_metadata.role` or `service_role`) assign administrative privileges. Public self-registration for `admin` is blocked.
+* **Role Boundary Enforcement:** `NuKropRoleGuard` prevents simultaneous or conflicting cross-registration using identical contact details between farmers and transport operators.
 
-### B. Mandi Price Ingestion & Intelligence
-* Mandi market intelligence connects to the official Agmarknet / Directorate of Marketing & Inspection (DMI) pipeline.
-* Rates are ingested into `public.mandi_live_rates` and partitioned by state, district, and commodity.
-* Zero client-side price fabrication or synthetic fluctuations are permitted.
+### B. DPDP Act 2023 Compliant Data Projection
+* In accordance with India's Digital Personal Data Protection Act 2023:
+  * Private user details (`phone`, `email`, `land_acres`, `kcc_balance`, `agristack_id`, `biometric_lock`, `village`) are isolated on `public.profiles` under `profiles_select_own` RLS policy (`auth.uid() = id`).
+  * `public.public_profiles` view exposes only non-sensitive public metadata (`id`, `farmer_id`, `full_name`, `avatar_url`, `district`, `state`, `role`, `agristack_verified`, `preferred_language`, `created_at`).
+  * Direct writes (`INSERT, UPDATE, DELETE`) to `public.public_profiles` are explicitly revoked.
 
-### C. Gemini 1.5 Flash Vision Diagnostic Pipeline
-* Edge image capture passes inline base64 image data directly to Google Gemini Vision.
-* Agricultural diagnostics categorize disease pathogen, severity rating, ICAR-approved bio-remedies, and scientific chemical interventions.
-* Scans are stored in `public.disease_scans` and linked to the authenticated user ID.
+### C. Community RLS Security Model
+* **Community Stories:** Ephemeral 24-hour stories (`public.community_stories`) enforce unexpired visibility (`expires_at > now()`) with zero `OR true` bypasses. Insertion and deletion require authenticated identity matching (`auth.uid() = user_id`).
+* **Posts, Comments, Likes, and Follows:** Strict ownership checks prevent impersonation, unauthorized updates, or forged likes/follows.
 
-### D. GramHaul Transport & Fleet Logistics
-* Real-time freight discovery connects local crop producers with rural logistics operators.
-* `public.truck_listings`, `public.haul_bookings`, and `public.driver_locations` update live via Supabase Realtime publications.
-* Haul calculations utilize genuine geo-distance coordinates and standard per-kilometer tonnage tariffs.
-
-### E. Database Layer & Idempotent Publication Architecture
-* Normalized schema across 30 tables with foreign key cascades and audit triggers.
-* Publications for real-time streaming are managed idempotently through catalog inspection (`pg_publication_tables`), eliminating PostgreSQL error `42710`.
-
+### D. Safe, Idempotent Database Migrations
+* **Realtime Publication Registration:** Evaluates `pg_publication_tables` before invoking `ALTER PUBLICATION`, trapping only `duplicate_object` and eliminating error `42710`.
+* **Zero Destructive Data Cleanup:** Financial transaction records (`public.khata_transactions`) are never set to `NULL`. Missing user accounts are created as safe profile stubs to maintain audit history.
+* **Safe Column Alteration:** Column casts inspect `information_schema.columns` to skip unnecessary casts when columns are already of type `text`.

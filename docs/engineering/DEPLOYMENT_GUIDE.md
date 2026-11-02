@@ -1,12 +1,12 @@
 # NuKropAI Production Deployment & Operations Runbook
 
-**Target:** Supabase, Vercel / Web Hosting, Android Play Store Release  
+**Target:** Supabase Database, Fastify API Engine, Vite Web Dashboard, Android Release Shell  
 
 ---
 
-## 1. Supabase Database Deployment
+## 1. Supabase Database Setup
 
-Execute the complete, self-contained, 100% idempotent SQL master script in the Supabase SQL Editor:
+Execute the self-contained, 100% idempotent SQL master script in the Supabase SQL Editor:
 
 1. Open your **Supabase Dashboard** -> Select your Project.
 2. In the left navigation, click on **SQL Editor**.
@@ -16,70 +16,86 @@ Execute the complete, self-contained, 100% idempotent SQL master script in the S
    supabase/COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql
    ```
 5. Paste into the SQL Editor and click **Run**.
-6. **Expected Result:** "Success. No rows returned." 
+6. **Expected Result:** `Success. No rows returned.`
    * Zero errors.
-   * Completely immune to `ERROR: 42710: relation "driver_telemetry" is already member of publication "supabase_realtime"`.
+   * Completely immune to `ERROR: 42710` (publication duplicate) and `ERROR: 0A000` (view rewrite rule locks).
+   * Safe column casts only execute if columns are not already `text`.
+   * Historical `khata_transactions` user ownership is preserved via profile stub insertion.
    * Automatically sets up all 30 tables, columns, constraints, triggers, storage buckets, RLS policies, and authentic agricultural seed data.
 
 ---
 
-## 2. Supabase Storage & Realtime Verification
+## 2. Environment Variables Configuration
 
-* **Storage Buckets:** Verify that under **Storage**:
-  * `community-media` is present and set to **Public**.
-  * `crop-scans` is present and set to **Private** (authenticated read/write).
-* **Realtime:** Verify that under **Database -> Publications -> supabase_realtime**:
-  * Tables `driver_telemetry`, `driver_locations`, `haul_bookings`, `truck_listings`, `community_posts`, `community_stories`, `community_comments`, `price_alerts` are active.
-
----
-
-## 3. Environment Variables Configuration
-
-In `.env` or your hosting platform (Vercel, Render, Railway), set:
+In `.env` or your hosting platform (Vercel, Render, Railway, Docker), configure the required environment variables:
 
 ```ini
 # Supabase Core Configuration
 SUPABASE_URL=https://<your-project-id>.supabase.co
 SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key-backend-only>
+SUPABASE_JWT_SECRET=<your-supabase-jwt-secret>
+
+# Backend API Configuration
+PORT=3000
+NODE_ENV=production
+JWT_SECRET=<your-jwt-secret>
+JWT_REFRESH_SECRET=<your-jwt-refresh-secret>
 
 # AI Diagnostic Engine
 GEMINI_API_KEY=<your-google-gemini-api-key>
 
 # Government Mandi Intelligence
-AGMARKNET_API_KEY=<your-data-gov-in-api-key>
+DATA_GOV_IN_API_KEY=<your-data-gov-in-api-key>
 
 # Weather Service (Open-Meteo works without key; enterprise key optional)
 OPEN_METEO_API_URL=https://api.open-meteo.com/v1/forecast
+
+# Web Dashboard (Vite)
+VITE_API_URL=https://<your-backend-api-domain>
+VITE_SUPABASE_URL=https://<your-project-id>.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-anon-key>
 ```
 
 ---
 
-## 4. Mandi Daily Ingestion Cron Setup
+## 3. Web Dashboard Build & Deployment
 
-To populate genuine daily mandi market prices automatically:
-
-* Run the ingestion pipeline locally or via a scheduled GitHub Action / Cloud Function:
-  ```bash
-  python src/services/mandi_ingest_service.py
-  ```
-* This service fetches live prices from data.gov.in / Agmarknet, normalizes commodity names and dates, and upserts them into `public.mandi_live_rates`.
+```bash
+cd web
+npm install
+npm run build
+```
+The compiled static assets will be output to `web/dist/`, ready for hosting on Vercel, Netlify, or AWS S3/CloudFront.
 
 ---
 
-## 5. Android APK Build & Release
+## 4. Backend API Deployment
+
+```bash
+cd backend
+npm install
+npm run build
+npm start
+```
+Starts the Fastify production API server listening on configured `PORT`.
+
+---
+
+## 5. Android APK Build & Release Signing
 
 1. Verify asset synchronization between web and Android:
    ```bash
-   node tests/run_e2e_tests.js
+   npm test
    ```
-2. Build Android production release APK:
+2. Build Android release APK with production keystore:
    ```bash
-   cd android
+   export KEYSTORE_PATH="/path/to/production.keystore"
+   export STORE_PASSWORD="<store-password>"
+   export KEY_ALIAS="<key-alias>"
+   export KEY_PASSWORD="<key-password>"
+   export STRICT_RELEASE_SIGNING="true"
+
    ./gradlew assembleRelease
    ```
-3. The signed APK will be output to:
-   ```
-   app/build/outputs/apk/release/app-release.apk
-   ```
-
+   > **Note:** If `KEYSTORE_PATH` is not provided, the build system falls back to `debug.keystore` for local testing only and outputs a warning. Never upload debug-signed APKs to the Google Play Store.

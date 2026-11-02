@@ -185,3 +185,4 @@ with open('supabase/CANONICAL_PRODUCTION_SETUP.sql', 'w', encoding='utf-8') as f
     f.write(sql)
 
 print("Saved updated supabase/COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql and CANONICAL_PRODUCTION_SETUP.sql successfully!")
+

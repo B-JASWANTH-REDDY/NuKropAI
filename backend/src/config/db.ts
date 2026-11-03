@@ -59,12 +59,19 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     try {
       return await rawPool.query(text, params);
     } catch (err) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`Database persistent query failed in production: ${(err as Error).message}`);
+      }
       console.warn("Database query error, falling back to memory execution.");
     }
   }
 
-  // Standard Normalized SQL simulation
+  // Strict Data Reliability: Never report successful persistent writes to volatile memory in production
   const queryStr = text.toLowerCase();
+  const isWriteOp = queryStr.startsWith('insert') || queryStr.startsWith('update') || queryStr.startsWith('delete');
+  if (process.env.NODE_ENV === 'production' && isWriteOp) {
+    throw new Error('Database offline: In-memory fallback cannot satisfy persistent writes in production mode.');
+  }
 
   // 1. Users Operations
   if (queryStr.includes('insert into public.users')) {

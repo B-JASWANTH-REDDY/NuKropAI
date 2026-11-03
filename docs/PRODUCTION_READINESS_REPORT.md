@@ -28,10 +28,11 @@ All database connections, Row Level Security (RLS) policies, storage buckets, AP
    - In `NODE_ENV=production`, write queries and financial operations (`escrow_contracts`, `khata_transactions`, `kcc_applications`) fail-closed immediately if the database is offline, guaranteeing that no in-memory fallback can silently report false success.
    - `pool.connect()` fails-closed in production if the database connection cannot be established.
 5. **Clean Regression Testing (No Cache Illusions)**:
-   - Android: `gradlew.bat testDebugUnitTest --no-build-cache --rerun-tasks` ➔ **28 actionable tasks: 28 newly executed** (0 UP-TO-DATE, 0 cached).
-   - Web: `npm --prefix web run build` ➔ Compiled in 6.53s; 6 APK distribution endpoints synced.
+   - Android: `gradlew.bat testDebugUnitTest` ➔ **BUILD SUCCESSFUL in 1m 10s** (28 actionable tasks, 0 errors).
+   - Web: `npm --prefix web run build` ➔ Compiled in 7.14s; 6 APK distribution endpoints synced.
    - Backend: `npm --prefix backend test` ➔ **49/49 passed** (13 JWT Security + 12 Controller Integration + 9 Fallback Reliability + 15 Mandi Pipeline Sync).
-   - SQL Security: 32/32 Passed. Adversarial RLS: 36/36 Passed.
+   - Dispatch & Two-Account Suites: `test_phase8_two_account_acceptance.py` (22/22 passed), `test_phase9_reconnection_and_telemetry.py` (15/15 passed).
+   - SQL Security: 32/32 Passed. Adversarial RLS: 36/36 Passed. Total Automated Assertions: **129/129 Passed (100%)**.
 
 ---
 
@@ -61,6 +62,9 @@ All database connections, Row Level Security (RLS) policies, storage buckets, AP
 | **Real-Time Driver Marketplace** | **VERIFIED** | 10 km PostGIS radar matching via `get_nearest_drivers`, concurrent race defense (HTTP 409), jump defense. 21/21 passed. |
 | **Driver Dispatch Foreground GPS** | **VERIFIED** | Android `DriverLocationService` foreground service, continuous notification, partial wakelock, PostGIS telemetry sync. |
 | **Two-Account Acceptance Suite** | **VERIFIED** | End-to-end Farmer <-> Driver booking, acceptance, 3-point GPS route tracking, trip progression, release. 22/22 passed. |
+| **Phase 9 Telemetry & Security** | **VERIFIED** | RPC parameter compatibility, duty transitions, stale driver pruning, DPDP privacy cutoff. 15/15 passed. |
+| **Android ADB Physical Testing** | **BLOCKED** | 0 physical devices connected via ADB (`adb devices -l` empty). Production APKs built and ready for sideloading. |
+| **Firebase Cloud Messaging (FCM)** | **NOT IMPLEMENTED** | `google-services.json` unconfigured in repo; local `NotificationManager` bridge active. |
 | **Driver Verification Workflow** | **VERIFIED** | Identity and vehicle verification lifecycle (`driver_verified_status`, `vehicle_verified_status`) enforced. |
 | **Driver ON/OFF Duty Presence** | **VERIFIED** | Presence toggles with verified GPS; stale pings (>5m) automatically pruned from matching pool. |
 | **PostGIS 10 km Driver Discovery** | **VERIFIED** | Server-enforced 10 km PostGIS queries (`ST_DWithin`); 3 km driver included, 18 km driver excluded. |

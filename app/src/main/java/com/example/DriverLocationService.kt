@@ -241,3 +241,4 @@ class DriverLocationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
+

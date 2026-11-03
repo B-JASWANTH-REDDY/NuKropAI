@@ -39,15 +39,17 @@ Every implemented feature follows a server-authoritative path with strict valida
 - **Persistence**: Upserts records into `public.mandi_live_rates` with full government provenance metadata and records execution in `public.mandi_ingestion_runs`.
 - **Client Retrieval**: Android (`MandiApiService.kt`, `MarketScreen.kt`) and Web (`MandiPilot`) query live rates with real-time arbitrage spreads via `public.mandi_arbitrage_quotes`.
 
-### D. GramHaul Shared Logistics & Real-Time Driver Dispatch (Phase 7 & Phase 8)
+### D. GramHaul Shared Logistics & Real-Time Driver Dispatch (Phases 7, 8 & 9)
 - **Driver Verification**: Drivers require verified KYC (`driver_verified_status = 'VERIFIED'`) and vehicle roadworthiness before receiving dispatch offers.
 - **ON-DUTY / OFF-DUTY Presence**: Drivers toggle presence with physical GPS coordinates; stale drivers (>5 mins) are automatically pruned from discovery.
 - **10 km PostGIS Matching**: Server-enforced radius matching using PostGIS `ST_DWithin` and spatial index `idx_driver_locations_spatial`.
 - **Atomic Booking Acceptance**: Race-condition-safe atomic booking acceptance via conditional database updates (`UPDATE haul_bookings SET status='ACCEPTED' ... WHERE status='PENDING'`). Duplicate acceptance rejected with HTTP 409 Conflict.
 - **Real-Time GPS Telemetry**: Verified location pings logged in `public.driver_locations` and persistent breadcrumbs in `public.driver_telemetry`.
 - **Physical Device Background Service**: Android foreground service (`DriverLocationService.kt`) with `FOREGROUND_SERVICE_LOCATION`, persistent notification, and Partial WakeLock ensuring uninterrupted GPS updates when minimized or screen is turned off.
+- **Push Notification Architecture**: In-app and lock-screen status-bar notifications bridged through native Android `NotificationManager` (`postSystemNotification`) on channel `nukrop_farmer_alerts` with `PRIORITY_MAX`. Cloud messaging (FCM) is unconfigured (`google-services.json` omitted).
+- **Physical Device ADB Status**: Currently 0 physical devices connected via ADB (`BLOCKED`); ready for manual sideloading via generated production release APK (`NuKropAI.apk`).
 - **Anti-Spoofing & Jump Defense**: Pings with accuracy > 50m or implied speed > 160 km/h are rejected.
-- **Multi-Tenant Privacy**: Live driver tracking is accessible strictly to the authorized farmer owning that active ongoing booking. Unrelated users receive HTTP 403.
+- **Multi-Tenant Privacy & DPDP Cutoff**: Live driver tracking is accessible strictly to the authorized farmer owning that active ongoing booking. Location tracking terminates automatically upon `COMPLETED` trip status. Unrelated users receive HTTP 403.
 - **Map Radar**: Leaflet and Jetpack Compose map dynamically render verified driver positions via `supabase_realtime` and backend dispatch APIs.
 
 ### E. Farm Khata Ledger
@@ -64,11 +66,13 @@ Every implemented feature follows a server-authoritative path with strict valida
 
 ## 3. Verification Test Evidence
 
+- **Phase 9 Telemetry & Security Tests**: 15 / 15 passed (`test_phase9_reconnection_and_telemetry.py`).
 - **Phase 8 Two-Account Acceptance Tests**: 22 / 22 passed (`test_phase8_two_account_acceptance.py`).
 - **Phase 7 Driver Marketplace & Dispatch Tests**: 21 / 21 passed (`test_driver_marketplace_e2e.py`).
 - **Live Supabase Core Domain Flows**: 12 / 12 passed (`test_live_supabase_verification.py`).
 - **Live Storage E2E Security Tests**: 10 / 10 passed (`test_storage_end_to_end.py`).
 - **Backend Regression Tests**: 49 / 49 passed (`test_jwt_auth_security.js`, `test_jwt_controller_integration.js`, `test_db_fallback_reliability.js`, `test_mandi_pipeline_sync.py`).
-- **Web Production Build**: Vite compiled in 17.31s, verified 6 production APK endpoints.
-- **Android Kotlin Compilation & Tests**: Gradle `compileDebugKotlin` and `testDebugUnitTest` passed cleanly with Android Studio JBR 21.
+- **Web Production Build**: Vite compiled in 7.14s, verified 6 production APK endpoints.
+- **Android Kotlin Compilation & Tests**: Gradle `compileDebugKotlin` and `testDebugUnitTest` passed cleanly with Android Studio JBR 21 (28 actionable tasks, 0 errors).
 - **SQL Security Audit & Multi-Role RLS Simulator**: 68 / 68 security & boundary assertions verified.
+- **Total Validated Automated Assertions**: 129 / 129 passed (100%).

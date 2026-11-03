@@ -177,3 +177,4 @@ $$;
 -- ── 3. EXECUTE GRANTS ──
 GRANT EXECUTE ON FUNCTION public.get_nearby_drivers(DOUBLE PRECISION, DOUBLE PRECISION, DOUBLE PRECISION, INT) TO authenticated, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.accept_haul_booking(TEXT, TEXT) TO authenticated, service_role;
+

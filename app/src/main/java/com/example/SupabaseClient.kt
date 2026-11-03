@@ -437,6 +437,106 @@ object SupabaseApi {
             emptyList()
         }
     }
+
+    /**
+     * Query verified nearby drivers within 10 km via PostGIS RPC get_nearest_drivers
+     */
+    suspend fun fetchNearbyVerifiedDrivers(
+        lat: Double,
+        lng: Double,
+        radiusMeters: Double = 10000.0
+    ): List<NearbyDriverInfo> = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("user_lon", lng)
+                put("user_lat", lat)
+                put("radius_meters", radiusMeters)
+                put("max_drivers", 20)
+            }.toString()
+
+            val url = "$SUPABASE_URL/rest/v1/rpc/get_nearest_drivers"
+            val mediaType = "application/json".toMediaTypeOrNull()
+            val body = jsonPayload.toRequestBody(mediaType)
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
+                .addHeader("Content-Type", "application/json")
+                .post(body)
+                .build()
+
+            val (isSuccessful, responseBody) = httpClient.newCall(request).execute().use { response ->
+                Pair(response.isSuccessful, response.body?.string() ?: "")
+            }
+            if (!isSuccessful || responseBody.isBlank()) return@withContext emptyList()
+
+            val arr = JSONArray(responseBody)
+            val drivers = mutableListOf<NearbyDriverInfo>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                drivers.add(
+                    NearbyDriverInfo(
+                        driverId = obj.optString("driver_id", ""),
+                        driverName = obj.optString("driver_name", "Verified Driver"),
+                        vehicleType = obj.optString("vehicle_type", "Tata Ace (1.5T)"),
+                        vehicleNumber = obj.optString("vehicle_number", "AP-39-TK-1008"),
+                        lat = obj.optDouble("lat", lat),
+                        lng = obj.optDouble("lon", lng),
+                        distanceMeters = obj.optDouble("distance_meters", 0.0),
+                        lastPing = obj.optString("updated_at", "")
+                    )
+                )
+            }
+            drivers
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * Driver updates live GPS position via PostGIS upsert_driver_location RPC
+     */
+    suspend fun upsertDriverLocation(
+        driverId: String,
+        lat: Double,
+        lng: Double,
+        heading: Double = 0.0,
+        speedKmh: Double = 0.0
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val jsonPayload = JSONObject().apply {
+                put("p_driver_id", driverId)
+                put("p_lon", lng)
+                put("p_lat", lat)
+                put("p_heading", heading)
+                put("p_speed_kmh", speedKmh)
+            }.toString()
+
+            val url = "$SUPABASE_URL/rest/v1/rpc/upsert_driver_location"
+            val mediaType = "application/json".toMediaTypeOrNull()
+            val body = jsonPayload.toRequestBody(mediaType)
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", SUPABASE_ANON_KEY)
+                .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
+                .addHeader("Content-Type", "application/json")
+                .post(body)
+                .build()
+
+            httpClient.newCall(request).execute().use { response -> response.isSuccessful }
+        } catch (_: Exception) {
+            false
+        }
+    }
 }
 
-
+data class NearbyDriverInfo(
+    val driverId: String,
+    val driverName: String,
+    val vehicleType: String,
+    val vehicleNumber: String,
+    val lat: Double,
+    val lng: Double,
+    val distanceMeters: Double,
+    val lastPing: String
+)

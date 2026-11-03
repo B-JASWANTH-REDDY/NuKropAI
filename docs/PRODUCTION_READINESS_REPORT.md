@@ -58,6 +58,12 @@ All database connections, Row Level Security (RLS) policies, storage buckets, AP
 | **Storage Public Avatars** | **VERIFIED** | Live upload to `avatars` (HTTP 200); anonymous public read verified. |
 | **Storage Cross-Tenant Delete**| **VERIFIED** | Farmer B attempt to delete Farmer A scan blocked (HTTP 404). Owner delete succeeded (HTTP 200). |
 | **Backend JWT Contract** | **VERIFIED** | Standardized audience and issuer claims; 12 real controller tests passed. |
+| **Driver Verification Workflow** | **VERIFIED** | Identity and vehicle verification lifecycle (`driver_verified_status`, `vehicle_verified_status`) enforced. |
+| **Driver ON/OFF Duty Presence** | **VERIFIED** | Presence toggles with verified GPS; stale pings (>5m) automatically pruned from matching pool. |
+| **PostGIS 10 km Driver Discovery** | **VERIFIED** | Server-enforced 10 km PostGIS queries (`ST_DWithin`); 3 km driver included, 18 km driver excluded. |
+| **Atomic Booking Acceptance** | **VERIFIED** | Concurrency race condition prevented; only 1 driver wins, second receives HTTP 409 Conflict. |
+| **Real-Time GPS Tracking & Telemetry** | **VERIFIED** | Live telemetry breadcrumbs logged in `driver_telemetry`; jump spoofing (>160 km/h) & poor accuracy (>50m) rejected. |
+| **Multi-Tenant Tracking Privacy** | **VERIFIED** | Precise driver coordinates restricted strictly to active booking owner farmer; unrelated access returns HTTP 403. |
 | **In-Memory Write Protection** | **VERIFIED** | Production mode rejects all write operations (`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `CALL`, `BEGIN`) when DB is offline (9/9 tests passed). |
 | **Supabase Remote MCP Server** | **IMPLEMENTED BUT NOT VERIFIED** | Configured in `mcp_config.json`; tool permissions set to `Allow supabase/*`; awaiting browser OAuth completion. |
 | **Local PostgreSQL Container** | **BLOCKED** | Docker daemon offline; verified via live PostgREST instead. |

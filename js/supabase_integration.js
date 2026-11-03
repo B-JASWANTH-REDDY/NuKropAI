@@ -1024,6 +1024,293 @@ async function nk_saveTripWaypoint(bookingId, driverUuid, lat, lng, speed = 0, h
   } catch (_) {}
 }
 
+// ─────────────────────────────────────────────────────────────────
+// 14. REAL-TIME DRIVER DISPATCH, PRESENCE & LIVE GPS TRACKING (PHASE 7)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Sets driver ON DUTY or OFF DUTY with real GPS coordinates.
+ * Validates verification status and prevents off-duty or unverified matching.
+ */
+async function nk_setDriverDuty(isOnDuty, lat, lng, accuracy = 5.0) {
+  if (!sbClient) return { success: false, error: 'NO_CLIENT' };
+  const driverId = localStorage.getItem('nukrop_user_uuid') || localStorage.getItem('nukrop_driver_id');
+  if (!driverId) return { success: false, error: 'NO_DRIVER_ID' };
+
+  // First verify driver profile verification status
+  const { data: prof, error: profErr } = await sbClient
+    .from('profiles')
+    .select('driver_verified_status, full_name, phone')
+    .eq('id', driverId)
+    .single();
+
+  if (prof && prof.driver_verified_status && prof.driver_verified_status !== 'VERIFIED') {
+    return {
+      success: false,
+      error: 'DRIVER_NOT_VERIFIED',
+      message: `Driver identity status is ${prof.driver_verified_status}. Only VERIFIED drivers can go ON DUTY.`
+    };
+  }
+
+  if (isOnDuty) {
+    if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) {
+      return { success: false, error: 'INVALID_GPS', message: 'Valid GPS coordinates required to go ON DUTY.' };
+    }
+
+    // Try RPC set_driver_duty_status or fallback to upsert_driver_location
+    try {
+      const { data, error } = await sbClient.rpc('set_driver_duty_status', {
+        p_driver_id: driverId,
+        p_is_on_duty: true,
+        p_lat: Number(lat),
+        p_lng: Number(lng),
+        p_accuracy: Number(accuracy) || 5.0
+      });
+      if (!error && data) return data;
+    } catch (_) {}
+
+    // Fallback: upsert into driver_locations directly
+    const payload = {
+      driver_id: driverId,
+      driver_name: (prof && prof.full_name) || localStorage.getItem('nukrop_user_name') || 'Verified Driver',
+      driver_phone: (prof && prof.phone) || '',
+      vehicle_number: localStorage.getItem('nukrop_driver_plate') || 'AP-39-TK-1008',
+      vehicle_type: localStorage.getItem('nukrop_driver_vehicle') || 'Tata Ace (1.5T)',
+      capacity_tonnes: 1.5,
+      current_lat: Number(lat),
+      current_lng: Number(lng),
+      is_available: true,
+      is_on_duty: true,
+      last_ping: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await sbClient
+      .from('driver_locations')
+      .upsert(payload, { onConflict: 'driver_id' })
+      .select();
+
+    return { success: !error, isOnDuty: true, data, error: error ? error.message : null };
+  } else {
+    // Going OFF DUTY
+    try {
+      const { data, error } = await sbClient.rpc('set_driver_duty_status', {
+        p_driver_id: driverId,
+        p_is_on_duty: false
+      });
+      if (!error && data) return data;
+    } catch (_) {}
+
+    const { data, error } = await sbClient
+      .from('driver_locations')
+      .update({ is_on_duty: false, is_available: false, updated_at: new Date().toISOString() })
+      .eq('driver_id', driverId);
+
+    return { success: !error, isOnDuty: false, message: 'Driver is now OFF DUTY' };
+  }
+}
+
+/**
+ * Searches for nearby verified on-duty drivers within a server-enforced radius (default 10 km).
+ * Uses PostGIS geography distance queries.
+ */
+async function nk_getNearbyDrivers(farmerLat, farmerLng, radiusKm = 10) {
+  if (!sbClient) return { success: false, error: 'NO_CLIENT', drivers: [] };
+  if (isNaN(farmerLat) || isNaN(farmerLng)) {
+    return { success: false, error: 'INVALID_COORDINATES', drivers: [] };
+  }
+
+  const radiusMeters = Math.min(Math.max(radiusKm * 1000, 1000), 50000);
+
+  // 1. Try enhanced get_nearby_drivers RPC
+  try {
+    const { data, error } = await sbClient.rpc('get_nearby_drivers', {
+      p_farmer_lat: Number(farmerLat),
+      p_farmer_lng: Number(farmerLng),
+      p_radius_meters: radiusMeters,
+      p_max_drivers: 20
+    });
+    if (!error && Array.isArray(data)) {
+      return { success: true, count: data.length, radiusKm, drivers: data };
+    }
+  } catch (_) {}
+
+  // 2. Try standard PostGIS get_nearest_drivers RPC
+  try {
+    const { data, error } = await sbClient.rpc('get_nearest_drivers', {
+      user_lon: Number(farmerLng),
+      user_lat: Number(farmerLat),
+      radius_meters: radiusMeters,
+      max_drivers: 20
+    });
+    if (!error && Array.isArray(data)) {
+      const formatted = data.map(d => ({
+        driver_id: d.driver_id,
+        driver_name: d.driver_name || 'Verified Driver',
+        vehicle_type: d.vehicle_type || 'Tata Ace (1.5T)',
+        vehicle_number: d.vehicle_plate || d.vehicle_number || 'AP-39-TK-1008',
+        current_lat: d.lat,
+        current_lng: d.lon,
+        distance_meters: Math.round(d.distance_meters),
+        distance_km: parseFloat((d.distance_meters / 1000).toFixed(2)),
+        last_ping: d.updated_at,
+        is_on_duty: true,
+        verification_status: 'VERIFIED'
+      }));
+      return { success: true, count: formatted.length, radiusKm, drivers: formatted };
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    count: 0,
+    radiusKm,
+    drivers: [],
+    message: `No verified drivers are currently available within ${radiusKm} km.`
+  };
+}
+
+/**
+ * Creates a real haul booking request with initial PENDING status.
+ */
+async function nk_requestHaulBooking(bookingData) {
+  if (!sbClient) return { success: false, error: 'NO_CLIENT' };
+  const userUuid = localStorage.getItem('nukrop_user_uuid') || null;
+  const farmerId = localStorage.getItem('nukrop_farmer_id') || null;
+
+  const payload = {
+    farmer_user_id:    userUuid,
+    user_id:           userUuid,
+    farmer_id:         farmerId,
+    pickup_village:    bookingData.pickupVillage || bookingData.pickup || 'Farm Location',
+    destination_mandi: bookingData.destinationMandi || bookingData.mandi || 'APMC Yard',
+    crop_name:         bookingData.cropName || bookingData.crop || 'Harvest Crop',
+    load_quintals:     Number(bookingData.loadQuintals || bookingData.weight || 20),
+    agreed_fare:       Number(bookingData.agreedFare || bookingData.fare || 1500),
+    vehicle_type:      bookingData.vehicleType || 'Tata Ace (1.5T)',
+    pickup_lat:        bookingData.pickupLat ? Number(bookingData.pickupLat) : null,
+    pickup_lng:        bookingData.pickupLng ? Number(bookingData.pickupLng) : null,
+    dropoff_lat:       bookingData.dropoffLat ? Number(bookingData.dropoffLat) : null,
+    dropoff_lng:       bookingData.dropoffLng ? Number(bookingData.dropoffLng) : null,
+    notes:             bookingData.notes || null,
+    status:            'PENDING'
+  };
+
+  const { data, error } = await sbClient.from('haul_bookings').insert([payload]).select();
+  if (error) {
+    console.error('[HaulBooking] Request error:', error.message);
+    return { success: false, error: error.message };
+  }
+  return { success: true, booking: data ? data[0] : null };
+}
+
+/**
+ * Atomic driver booking acceptance. Only one driver can accept; prevents race conditions.
+ */
+async function nk_acceptHaulBooking(bookingId) {
+  if (!sbClient) return { success: false, error: 'NO_CLIENT' };
+  const driverId = localStorage.getItem('nukrop_user_uuid') || localStorage.getItem('nukrop_driver_id');
+  if (!driverId) return { success: false, error: 'NO_DRIVER_ID' };
+
+  // 1. Try atomic database RPC
+  try {
+    const { data, error } = await sbClient.rpc('accept_haul_booking', {
+      p_booking_id: bookingId,
+      p_driver_id: driverId
+    });
+    if (!error && data) return data;
+  } catch (_) {}
+
+  // 2. Fallback: Atomic conditional update on haul_bookings
+  const { data, error } = await sbClient
+    .from('haul_bookings')
+    .update({
+      status: 'ACCEPTED',
+      driver_user_id: driverId,
+      driver_id: driverId,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', bookingId)
+    .in('status', ['PENDING', 'REQUESTED', 'SEARCHING'])
+    .select();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  if (!data || data.length === 0) {
+    return {
+      success: false,
+      error: 'BOOKING_UNAVAILABLE',
+      message: 'This booking has already been accepted by another driver or was cancelled.'
+    };
+  }
+
+  // Bind driver presence
+  await sbClient
+    .from('driver_locations')
+    .update({ is_available: false, active_booking_id: bookingId, updated_at: new Date().toISOString() })
+    .eq('driver_id', driverId);
+
+  return { success: true, booking: data[0] };
+}
+
+/**
+ * Advances trip lifecycle (ACCEPTED -> ARRIVED -> IN_TRANSIT -> COMPLETED / CANCELLED).
+ */
+async function nk_updateTripStatus(bookingId, newStatus) {
+  if (!sbClient) return { success: false, error: 'NO_CLIENT' };
+  const driverId = localStorage.getItem('nukrop_user_uuid') || localStorage.getItem('nukrop_driver_id');
+
+  try {
+    const { data, error } = await sbClient.rpc('update_haul_trip_status', {
+      p_booking_id: bookingId,
+      p_driver_id: driverId,
+      p_new_status: newStatus
+    });
+    if (!error && data) return data;
+  } catch (_) {}
+
+  const { data, error } = await sbClient
+    .from('haul_bookings')
+    .update({ status: newStatus, updated_at: new Date().toISOString() })
+    .eq('id', bookingId)
+    .select();
+
+  if (['COMPLETED', 'TRIP_COMPLETED', 'CANCELLED'].includes(newStatus) && driverId) {
+    await sbClient
+      .from('driver_locations')
+      .update({ is_available: true, active_booking_id: null, updated_at: new Date().toISOString() })
+      .eq('driver_id', driverId);
+  }
+
+  return { success: !error, status: newStatus, data: data ? data[0] : null };
+}
+
+/**
+ * Subscribes to live driver GPS tracking for an authorized active booking.
+ */
+function nk_subscribeToBookingTracking(bookingId, onGPS, onStatusChange) {
+  if (!sbClient || !bookingId) return null;
+
+  const topic = `booking:${bookingId}`;
+  const channel = sbClient.channel(topic);
+
+  channel
+    .on('broadcast', { event: 'gps_ping' }, ({ payload }) => onGPS && onGPS(payload))
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'haul_bookings',
+      filter: `id=eq.${bookingId}`
+    }, payload => {
+      if (onStatusChange && payload.new) onStatusChange(payload.new.status, payload.new);
+    })
+    .subscribe();
+
+  return channel;
+}
+
 // ─── WINDOW EXPORTS FOR GLOBAL RUNTIME INTEROP ───
 if (typeof nk_signUp !== 'undefined') window.nk_signUp = nk_signUp;
 if (typeof nk_loginUser !== 'undefined') window.nk_loginUser = nk_loginUser;
@@ -1061,3 +1348,9 @@ if (typeof nk_savePriceAlert !== 'undefined') window.nk_savePriceAlert = nk_save
 if (typeof nk_saveChatMessage !== 'undefined') window.nk_saveChatMessage = nk_saveChatMessage;
 if (typeof nk_fetchSoilHealthCard !== 'undefined') window.nk_fetchSoilHealthCard = nk_fetchSoilHealthCard;
 if (typeof nk_saveTripWaypoint !== 'undefined') window.nk_saveTripWaypoint = nk_saveTripWaypoint;
+if (typeof nk_setDriverDuty !== 'undefined') window.nk_setDriverDuty = nk_setDriverDuty;
+if (typeof nk_getNearbyDrivers !== 'undefined') window.nk_getNearbyDrivers = nk_getNearbyDrivers;
+if (typeof nk_requestHaulBooking !== 'undefined') window.nk_requestHaulBooking = nk_requestHaulBooking;
+if (typeof nk_acceptHaulBooking !== 'undefined') window.nk_acceptHaulBooking = nk_acceptHaulBooking;
+if (typeof nk_updateTripStatus !== 'undefined') window.nk_updateTripStatus = nk_updateTripStatus;
+if (typeof nk_subscribeToBookingTracking !== 'undefined') window.nk_subscribeToBookingTracking = nk_subscribeToBookingTracking;

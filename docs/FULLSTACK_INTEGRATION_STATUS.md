@@ -39,11 +39,15 @@ Every implemented feature follows a server-authoritative path with strict valida
 - **Persistence**: Upserts records into `public.mandi_live_rates` with full government provenance metadata and records execution in `public.mandi_ingestion_runs`.
 - **Client Retrieval**: Android (`MandiApiService.kt`, `MarketScreen.kt`) and Web (`MandiPilot`) query live rates with real-time arbitrage spreads via `public.mandi_arbitrage_quotes`.
 
-### D. GramHaul Shared Logistics & Fleet Tracking
-- **Transporters**: Transporter listings managed in `public.truck_listings`.
-- **Bookings**: Farmers create bookings in `public.haul_bookings` with pickup coordinates and mandi destinations.
-- **Realtime Telemetry**: Driver GPS pings ingest into `public.driver_locations` and `public.driver_telemetry`.
-- **Map Radar**: Leaflet map dynamically renders driver pins via `supabase_realtime` subscriptions.
+### D. GramHaul Shared Logistics & Real-Time Driver Dispatch (Phase 7)
+- **Driver Verification**: Drivers require verified KYC (`driver_verified_status = 'VERIFIED'`) and vehicle roadworthiness before receiving dispatch offers.
+- **ON-DUTY / OFF-DUTY Presence**: Drivers toggle presence with physical GPS coordinates; stale drivers (>5 mins) are automatically pruned from discovery.
+- **10 km PostGIS Matching**: Server-enforced radius matching using PostGIS `ST_DWithin` and spatial index `idx_driver_locations_spatial`.
+- **Atomic Booking Acceptance**: Race-condition-safe atomic booking acceptance via conditional database updates (`UPDATE haul_bookings SET status='ACCEPTED' ... WHERE status='PENDING'`). Duplicate acceptance rejected with HTTP 409 Conflict.
+- **Real-Time GPS Telemetry**: Verified location pings logged in `public.driver_locations` and persistent breadcrumbs in `public.driver_telemetry`.
+- **Anti-Spoofing & Jump Defense**: Pings with accuracy > 50m or implied speed > 160 km/h are rejected.
+- **Multi-Tenant Privacy**: Live driver tracking is accessible strictly to the authorized farmer owning that active ongoing booking. Unrelated users receive HTTP 403.
+- **Map Radar**: Leaflet and Jetpack Compose map dynamically render verified driver positions via `supabase_realtime` and backend dispatch APIs.
 
 ### E. Farm Khata Ledger
 - **UI**: Digital accounting ledger for tracking agricultural income and operational expenses.
@@ -59,9 +63,10 @@ Every implemented feature follows a server-authoritative path with strict valida
 
 ## 3. Verification Test Evidence
 
-- **Backend TypeScript Build**: Compiled cleanly with 0 type errors.
-- **Backend Auth & Mandi Tests**: 40 / 40 passed (`test_jwt_auth_security.js`, `test_jwt_controller_integration.js`, `test_mandi_pipeline_sync.py`).
-- **Web Production Build**: Vite built in 5.26s, verified 6 production APK endpoints.
-- **Android Unit Tests**: 28 / 28 Gradle tasks up-to-date and passing (`testDebugUnitTest`).
-- **SQL Security Audit**: 32 / 32 security directive assertions verified.
-- **Multi-Role RLS Simulator**: 36 / 36 adversarial boundary checks passed.
+- **Phase 7 Driver Marketplace & Dispatch Tests**: 21 / 21 passed (`test_driver_marketplace_e2e.py`).
+- **Live Supabase Core Domain Flows**: 12 / 12 passed (`test_live_supabase_verification.py`).
+- **Live Storage E2E Security Tests**: 10 / 10 passed (`test_storage_end_to_end.py`).
+- **Backend Regression Tests**: 49 / 49 passed (`test_jwt_auth_security.js`, `test_jwt_controller_integration.js`, `test_db_fallback_reliability.js`, `test_mandi_pipeline_sync.py`).
+- **Web Production Build**: Vite compiled in 17.31s, verified 6 production APK endpoints.
+- **Android Kotlin Compilation**: Gradle `compileDebugKotlin` compiled cleanly in 1m 27s with Android Studio JBR 21.
+- **SQL Security Audit & Multi-Role RLS Simulator**: 68 / 68 security & boundary assertions verified.

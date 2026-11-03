@@ -66,11 +66,31 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     }
   }
 
-  // Strict Data Reliability: Never report successful persistent writes to volatile memory in production
-  const queryStr = text.toLowerCase();
-  const isWriteOp = queryStr.startsWith('insert') || queryStr.startsWith('update') || queryStr.startsWith('delete');
-  if (process.env.NODE_ENV === 'production' && isWriteOp) {
-    throw new Error('Database offline: In-memory fallback cannot satisfy persistent writes in production mode.');
+  // Strict Data Reliability: Audit all write, transaction, and financial paths.
+  // Never allow in-memory fallbacks to fake persistence in production mode.
+  const queryStr = text.toLowerCase().trim();
+  const isWriteOp = 
+    queryStr.startsWith('insert') ||
+    queryStr.startsWith('update') ||
+    queryStr.startsWith('delete') ||
+    queryStr.startsWith('truncate') ||
+    queryStr.startsWith('call') ||
+    queryStr.startsWith('begin') ||
+    queryStr.startsWith('commit') ||
+    queryStr.startsWith('rollback') ||
+    (queryStr.startsWith('with') && (
+      queryStr.includes('insert ') || 
+      queryStr.includes('update ') || 
+      queryStr.includes('delete ')
+    ));
+
+  const isFinancial = 
+    queryStr.includes('escrow_contracts') || 
+    queryStr.includes('khata_transactions') || 
+    queryStr.includes('kcc_applications');
+
+  if (process.env.NODE_ENV === 'production' && (isWriteOp || isFinancial)) {
+    throw new Error('Database offline: In-memory fallback cannot satisfy persistent or financial operations in production mode.');
   }
 
   // 1. Users Operations
@@ -271,11 +291,14 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
 export const pool = {
   query: query,
   connect: async () => {
-    // If Postgres is online, return raw pool client. Otherwise, return fake client
+    // If Postgres is online, return raw pool client. Otherwise, fail-closed in production
     try {
       const client = await rawPool.connect();
       return client;
     } catch (err) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`Database offline: Cannot establish client connection or transaction in production: ${(err as Error).message}`);
+      }
       return {
         query: query,
         release: () => {}

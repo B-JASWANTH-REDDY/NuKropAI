@@ -141,6 +141,7 @@ with urllib.request.urlopen(req_biorx) as resp:
 machinery_payload = json.dumps({
     "booking_ref": f"MB-{uuid.uuid4().hex[:6].upper()}",
     "user_id": uid,
+    "machine_id": "MCH-ROTAVATOR-01",
     "machine_name": "John Deere 5050D Tractor (Rotavator)",
     "total_amount": 2800.00,
     "status": "CONFIRMED"
@@ -213,16 +214,25 @@ try:
         post_id = post_res[0]['id']
         print(f"✔ [PASS] Live Community Post Created: id={post_id}, title='{post_res[0]['title']}'")
 
-        # Like own post
+        # Like own post via community_likes
         like_payload = json.dumps({
             "user_id": uid,
             "post_id": post_id
         }).encode('utf-8')
 
-        req_like = urllib.request.Request(f"{url}/rest/v1/post_likes", data=like_payload, headers=headers)
+        req_like = urllib.request.Request(f"{url}/rest/v1/community_likes", data=like_payload, headers=headers)
         with urllib.request.urlopen(req_like) as resp_like:
             like_res = json.loads(resp_like.read().decode())
-            print(f"✔ [PASS] Live Post Like Created: id={like_res[0]['id']}")
+            print(f"✔ [PASS] Live Community Like Created: id={like_res[0]['id']}")
+
+        # Attempt post_likes table
+        req_pl = urllib.request.Request(f"{url}/rest/v1/post_likes", data=like_payload, headers=headers)
+        try:
+            with urllib.request.urlopen(req_pl) as resp_pl:
+                pl_res = json.loads(resp_pl.read().decode())
+                print(f"✔ [PASS] Live Post Like Created: id={pl_res[0]['id']}")
+        except urllib.error.HTTPError as e:
+            print(f"✖ [RLS BLOCK] post_likes table HTTP {e.code} (Pending migration 20261103000002)")
 except urllib.error.HTTPError as e:
     print(f"✖ [COMMUNITY ERR] HTTP {e.code}: {e.read().decode()[:100]}")
 

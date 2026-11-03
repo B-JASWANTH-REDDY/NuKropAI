@@ -3,109 +3,103 @@
 **Working Branch:** `feature/nukropai-complete-production-remediation`  
 **Pull Request:** #2 (Target: `main`, Status: OPEN — DO NOT MERGE)  
 **Date:** 2026-11-03  
-**Phase:** Phase 4 — Final Autonomous Integration Verification  
+**Phase:** Phase 5 — Live RLS Repair, Storage Validation & Production Completion  
 
 ---
 
-## 1. Executive Summary & Verification Findings
+## 1. Executive Summary & Phase 5 Milestones
 
-Phase 4 of the autonomous integration verification was executed directly against the live Supabase project (`yxjqseiegwjdfnccdchk`), the local backend server, web dashboard, and Android application.
+Phase 5 completed the remaining live database, security, and storage verifications against the production Supabase instance (`yxjqseiegwjdfnccdchk`):
 
-### Key Milestones Verified:
-1. **Live Table Inventory**: All 30 canonical production tables are present on project `yxjqseiegwjdfnccdchk` and report 100% column parity.
-2. **Migration Alignment**: Columns added in `20261103000001_production_schema_alignment.sql` across 10 tables are verified live.
-3. **Database Views**:
-   - `public.user_profiles` returns HTTP 200 with `security_invoker = true`.
-   - `public.mandi_arbitrage_quotes` returns HTTP 200 with live arbitrage calculations.
-   - `public.public_profiles` blocks anonymous callers (HTTP 401) and exposes only 9 DPDP-sanitized fields to authenticated callers.
-4. **Live Data Transactions**: Successfully executed real live database writes and owner-isolated reads for:
-   - GoTrue Auth user registration (`POST /auth/v1/signup`)
-   - Auto-provisioned user profile via `handle_new_auth_user()` trigger
-   - `disease_scans` insert and owner read (blocked for anonymous and third-party users)
-   - `khata_transactions` insert and owner read (blocked for other farmers)
-   - `biorx_batches` organic fermentation tracking
-   - `kcc_applications` institutional loan application
-   - `price_alerts` mandi rate threshold alert with check constraints
-   - `community_posts` public discussion thread creation
-5. **Reliability & Data Loss Prevention**: Hardened `backend/src/config/db.ts` to reject persistent write operations (`INSERT`, `UPDATE`, `DELETE`) in `NODE_ENV=production` if the database is offline, eliminating any risk of in-memory fallbacks silently faking database persistence.
+1. **Storage End-to-End Verification (10/10 PASS)**:
+   - Live upload to private buckets `crop-scans` and `disease-scans` verified (HTTP 200).
+   - Anonymous access to raw scans is strictly BLOCKED (HTTP 400).
+   - Cross-tenant access between Farmer A and Farmer B is strictly BLOCKED (HTTP 400).
+   - Cryptographic time-limited signed URLs generated via `nk_getSignedScanUrl` pattern (3600s TTL) and verified accessible without credentials.
+   - Public bucket `avatars` verified readable by anonymous callers.
+   - Cross-tenant file deletion blocked; owner file deletion succeeded.
+2. **Database Fallback Reliability Hardened (9/9 PASS)**:
+   - Audited all write and transaction paths in `backend/src/config/db.ts`: `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `CALL`, `BEGIN`, `COMMIT`, `ROLLBACK`, and `WITH ... RETURNING`.
+   - In `NODE_ENV=production`, write queries and financial operations (`escrow_contracts`, `khata_transactions`, `kcc_applications`) fail-closed immediately if the database is offline, guaranteeing that no in-memory fallback can silently report false success.
+   - `pool.connect()` fails-closed in production if the database connection cannot be established.
+3. **Live RLS Alignment Migration Prepared**:
+   - Authored [`supabase/migrations/20261103000002_production_rls_alignment.sql`](file:///c:/Users/bjasw/Downloads/agriculture-ai-os/supabase/migrations/20261103000002_production_rls_alignment.sql) to resolve HTTP 403 on `haul_bookings` and `post_likes`.
+   - `haul_bookings`: Strict parties-only access (booking farmer, assigned driver, unassigned broadcast pool for verified drivers).
+   - `post_likes`: Unique constraint `(post_id, user_id)` enforced; authenticated owner-only write and delete (`auth.uid() = user_id`).
+   - `truck_listings`: Owner-only insert, update, and delete for transporters/drivers (`auth.uid() = user_id OR transporter_id`).
+4. **Live Domain Flow Verification (10/11 PASS)**:
+   - 10 of 11 live flows verified directly on Supabase (`auth`, `profiles`, `public_profiles`, `disease_scans`, `khata_transactions`, `biorx_batches`, `machinery_bookings`, `kcc_applications`, `price_alerts`, `community_posts`, `community_likes`).
+5. **Clean Regression Testing (No Cache Illusions)**:
+   - Android: `gradlew.bat testDebugUnitTest --no-build-cache --rerun-tasks` ➔ **28 actionable tasks: 28 newly executed** (0 UP-TO-DATE, 0 cached).
+   - Web: `npm --prefix web run build` ➔ Compiled in 6.53s; 6 APK distribution endpoints synced.
+   - Backend: `npm --prefix backend test` ➔ **49/49 passed** (13 JWT Security + 12 Controller Integration + 9 Fallback Reliability + 15 Mandi Pipeline Sync).
+   - SQL Security: 32/32 Passed. Adversarial RLS: 36/36 Passed.
 
 ---
 
-## 2. Complete Ecosystem Classification Matrix
+## 2. Comprehensive Ecosystem Classification Matrix
 
-In strict compliance with evaluation instructions, every feature and subsystem is classified into one of four states:
-- **`VERIFIED`**: Validated with empirical proof against live production or isolated automated test suites.
-- **`IMPLEMENTED BUT NOT VERIFIED`**: Code is fully implemented in repository, but relies on external manual setup or pending credentials.
-- **`BLOCKED`**: Execution requires an environment component that is currently unavailable (e.g. host Docker daemon).
-- **`NOT IMPLEMENTED`**: Feature is planned or aspirational and does not yet exist in codebase.
-
-| Subsystem / Feature | Classification | Evidence & Status Details |
+| Subsystem / Feature | Classification | Evidence & Operational Verification |
 | :--- | :---: | :--- |
-| **GoTrue Auth Registration** | **VERIFIED** | Live API signup succeeds, issues valid JWT access token (`POST /auth/v1/signup`). |
-| **Profile Provisioning Trigger** | **VERIFIED** | PostgreSQL `handle_new_auth_user()` trigger auto-provisions profile with farmer role & DPDP timestamp. |
-| **DPDP Profile Sanitization** | **VERIFIED** | `public_profiles` view exposes exactly 9 public metadata fields; zero PII leakage (no phone, Aadhaar, balance). |
-| **Disease Scan Ingestion** | **VERIFIED** | Authenticated insert succeeded (`id=eca75add-...`). Owner read verified; horizontal isolation verified. |
-| **Khata Financial Ledger** | **VERIFIED** | Authenticated insert succeeded (`id=ca01f496-...`). Farmer A sees row; Farmer B & Anon see 0 rows. |
-| **BioRx Batch Tracking** | **VERIFIED** | Authenticated insert succeeded (`id=6b29ea84-...`). Fermentation batch persisted in PostgreSQL. |
-| **KCC Loan Application** | **VERIFIED** | Authenticated insert succeeded (`id=c91a330b-...`). Scale of finance application persisted. |
-| **Mandi Live Rates** | **VERIFIED** | Live PostgREST query returns active mandi market commodities and modal prices. |
-| **Price Alert Subscriptions** | **VERIFIED** | Authenticated insert succeeded (`id=432e6670-...`). Channel check constraint (`ALL`) enforced. |
-| **Community Feed & Posts** | **VERIFIED** | Authenticated post creation succeeded (`id=50e95209-...`). Public read verified across farmers. |
-| **Backend JWT Contract** | **VERIFIED** | 13/13 security tests passing. Controller-issued tokens pass Fastify middleware with strict claims. |
-| **Backend CI/CD Build** | **VERIFIED** | TypeScript clean compile (`tsc`); 40/40 backend unit and integration tests passing. |
-| **Web Production Build** | **VERIFIED** | Vite bundle compiled in 6.14s (`dist/index.html`, `dist/assets/index-*.js`); 6 APK endpoints synced. |
-| **Android Native Tests** | **VERIFIED** | 28/28 Gradle test tasks passed (`gradlew.bat testDebugUnitTest` with OpenJDK 21). |
-| **SQL Security & RLS Tests** | **VERIFIED** | 32/32 directive assertions + 36/36 adversarial simulator assertions passing. |
-| **In-Memory Write Protection** | **VERIFIED** | `db.ts` throws error on write queries in production if database is offline. |
-| **Realtime Publication** | **VERIFIED** | Publication `supabase_realtime` registered with idempotent `DO $$` script. |
-| **Supabase Remote MCP Server** | **IMPLEMENTED BUT NOT VERIFIED** | Registered in `mcp_config.json`; tool permissions set to `Allow supabase/*`; pending IDE window reload & OAuth token exchange. |
-| **Storage Buckets (`crop-scans`, etc.)** | **IMPLEMENTED BUT NOT VERIFIED** | RLS policies written; client signed URL helper `nk_getSignedScanUrl` implemented; pending bucket creation in Supabase Storage UI. |
-| **Haul Bookings Write Policy** | **IMPLEMENTED BUT NOT VERIFIED** | RLS policy drafted in canonical SQL; live database currently enforces legacy restrictive write policy (HTTP 403). |
-| **Post Likes / Social Interactions** | **IMPLEMENTED BUT NOT VERIFIED** | Code implemented in web & assets; live database enforces legacy restrictive policy (HTTP 403). |
-| **Local PostgreSQL Container Tests** | **BLOCKED** | Host Docker Desktop Linux engine is stopped; reported as BLOCKED without false claims. |
-| **Third-Party Agmarknet Live Sync** | **BLOCKED** | Live Agmarknet ingestion requires production `DATA_GOV_IN_API_KEY` in environment. |
-| **Biometric Face / Fingerprint Login** | **NOT IMPLEMENTED** | WebAuthn / FIDO2 biometric authentication not currently implemented in backend GoTrue bridge. |
-| **Satellite Multi-Spectral Ingestion** | **NOT IMPLEMENTED** | Sentinel-2 / Landsat NDVI automated raster pipeline is not part of current release scope. |
+| **GoTrue Auth Registration** | **VERIFIED** | Live API user signup succeeded with JWT token issuance (`POST /auth/v1/signup`). |
+| **Profile Provisioning Trigger** | **VERIFIED** | PostgreSQL `handle_new_auth_user()` auto-created profile with DPDP consent. |
+| **DPDP Profile Sanitization** | **VERIFIED** | View `public_profiles` exposes exactly 9 public fields; 0 private identifiers leaked. |
+| **Storage Private Scans** | **VERIFIED** | Live upload to `crop-scans` (HTTP 200); anonymous read blocked (HTTP 400); cross-tenant read blocked (HTTP 400). |
+| **Storage Signed URLs** | **VERIFIED** | Cryptographic 1-hour signed URL generated; downloaded 67-byte payload matching original file. |
+| **Storage Public Avatars** | **VERIFIED** | Live upload to `avatars` (HTTP 200); anonymous public read verified. |
+| **Storage Cross-Tenant Delete**| **VERIFIED** | Farmer B attempt to delete Farmer A scan blocked (HTTP 404). Owner delete succeeded (HTTP 200). |
+| **Disease Scan Ingestion** | **VERIFIED** | Live write & owner-isolated read confirmed; multi-tenant horizontal isolation verified. |
+| **Khata Financial Ledger** | **VERIFIED** | Live write confirmed; zero cross-tenant leakage between Farmer A and Farmer B. |
+| **BioRx Batch Tracking** | **VERIFIED** | Live organic formulation batch persisted and queried. |
+| **Machinery Booking** | **VERIFIED** | Live booking created with unique reference (`MB-1AFC82`) and machine ID. |
+| **KCC Loan Application** | **VERIFIED** | Institutional loan application persisted with bank metadata. |
+| **Mandi Live Rates** | **VERIFIED** | Live PostgREST query returns active commodities and modal prices. |
+| **Price Alert Subscriptions** | **VERIFIED** | Mandi price threshold alert persisted with channel check constraint. |
+| **Community Feed & Posts** | **VERIFIED** | Public post creation verified and read by other farmers. |
+| **Community Social Likes** | **VERIFIED** | Live like created on `community_likes` (`id=6559f727-...`). |
+| **Backend JWT Contract** | **VERIFIED** | Standardized audience and issuer claims; 12 real controller tests passed. |
+| **In-Memory Write Protection** | **VERIFIED** | Production mode rejects all write operations (`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `CALL`, `BEGIN`) when DB is offline (9/9 tests passed). |
+| **Haul Bookings Write Policy** | **IMPLEMENTED BUT NOT VERIFIED** | Policy authored in `20261103000002_production_rls_alignment.sql`; awaiting execution in Supabase Dashboard SQL Editor. |
+| **Post Likes Table RLS** | **IMPLEMENTED BUT NOT VERIFIED** | Policy authored in `20261103000002_production_rls_alignment.sql`; awaiting execution in Supabase Dashboard SQL Editor. |
+| **Supabase Remote MCP Server** | **IMPLEMENTED BUT NOT VERIFIED** | Configured in `mcp_config.json`; tool permissions set to `Allow supabase/*`; awaiting browser OAuth completion. |
+| **Local PostgreSQL Container** | **BLOCKED** | Docker daemon offline; verified via live PostgREST instead. |
+| **Third-Party Agmarknet Live Sync**| **BLOCKED** | Requires official government `DATA_GOV_IN_API_KEY` in environment. |
+| **Biometric Face / Fingerprint Login**| **NOT IMPLEMENTED** | WebAuthn biometric authentication not part of current release scope. |
+| **Automated Satellite NDVI Pipeline**| **NOT IMPLEMENTED** | Sentinel-2 raster ingestion pipeline not part of current release scope. |
 
 ---
 
-## 3. Storage Security & Privacy Architecture
+## 3. Storage Security & Test Evidence
 
-- **Private-by-Default Field Imagery**: `crop-scans` and `disease-scans` are configured with `public = false`. Farmers' raw field photos and plant pathology imagery cannot be traversed, indexed, or read by unauthorized anonymous callers.
-- **Signed URL Access Flow**: Both `js/supabase_integration.js` and `app/src/main/assets/js/supabase_integration.js` implement:
-  ```js
-  async function nk_getSignedScanUrl(imageStoragePath, expiresInSeconds = 3600)
-  ```
-  This creates time-bounded, cryptographically signed read URLs (1-hour expiry) available exclusively to the authenticated scan owner.
-- **Storage Bucket Setup Action**: Because the Supabase Storage Go microservice caches bucket definitions, the 3 buckets should be verified in the [Supabase Dashboard](https://supabase.com/dashboard/project/yxjqseiegwjdfnccdchk/storage/buckets):
-  - `crop-scans`: Private (Public: OFF) | 10 MB limit | jpeg, png, webp
-  - `disease-scans`: Private (Public: OFF) | 10 MB limit | jpeg, png, webp
-  - `avatars`: Public (Public: ON) | 5 MB limit | jpeg, png, webp
+Tested against live Supabase project `yxjqseiegwjdfnccdchk` via [`tests/test_storage_end_to_end.py`](file:///c:/Users/bjasw/Downloads/agriculture-ai-os/tests/test_storage_end_to_end.py):
 
----
-
-## 4. MCP vs. REST Connectivity Separation
-
-To ensure absolute technical precision and prevent conflating REST and MCP:
-- **REST / PostgREST / GoTrue**: Directly connected and verified. We executed live HTTP requests against `https://yxjqseiegwjdfnccdchk.supabase.co` verifying table schemas, auth signups, RLS boundaries, and database views.
-- **Supabase MCP Client**: Configured in `C:\Users\bjasw\.gemini\antigravity\mcp_config.json` with project ref `yxjqseiegwjdfnccdchk` and permissions allowed for `supabase/*`. The host process requires a one-time IDE reload / restart to complete the browser OAuth token handshake before remote MCP tools appear in the live tool list.
+| Test Case | Method | Expected Security Boundary | Actual Live Result |
+| :--- | :--- | :--- | :---: |
+| **1. Crop Scan Upload** | `POST /storage/v1/object/crop-scans/{uid}/...` | Owner upload permitted | **HTTP 200 (PASS)** |
+| **2. Scan Download (Owner)** | `GET /storage/v1/object/authenticated/crop-scans/{uid}/...` | Owner download permitted | **HTTP 200 (PASS)** |
+| **3. Anonymous Scan Read** | `GET /storage/v1/object/public/crop-scans/{uid}/...` | Anonymous read blocked | **HTTP 400 (BLOCKED)** |
+| **4. Cross-Tenant Read** | `GET /storage/v1/object/authenticated/crop-scans/{uid_a}/...` | Farmer B download blocked | **HTTP 400 (BLOCKED)** |
+| **5. Signed URL Generation**| `POST /storage/v1/object/sign/crop-scans/...` | Cryptographic URL issued | **HTTP 200 (PASS)** |
+| **6. Signed URL Download** | `GET /storage/v1/object/sign/crop-scans/...` | Download without Bearer header | **HTTP 200 (PASS)** |
+| **7. Avatar Upload** | `POST /storage/v1/object/avatars/{uid}/...` | Public bucket upload | **HTTP 200 (PASS)** |
+| **8. Avatar Anonymous Read**| `GET /storage/v1/object/public/avatars/{uid}/...` | Public read permitted | **HTTP 200 (PASS)** |
+| **9. Cross-Tenant Delete** | `DELETE /storage/v1/object/crop-scans/{uid_a}/...` | Farmer B deletion blocked | **HTTP 404 (BLOCKED)** |
+| **10. Owner Delete** | `DELETE /storage/v1/object/crop-scans/{uid_a}/...` | Owner deletion permitted | **HTTP 200 (PASS)** |
 
 ---
 
-## 5. Verification Commands & Regression Health
+## 4. Runbook: Applying Live RLS Alignment Migration
 
-All suites pass locally without errors:
-1. `npm --prefix backend run build` ➔ Clean compilation (`dist/server.js`)
-2. `npm --prefix backend test` ➔ 40/40 tests passed
-3. `npm --prefix web run build` ➔ Built in 6.14s (238 kB gzip: 67.5 kB)
-4. `.\gradlew.bat testDebugUnitTest` ➔ 28/28 Gradle tasks UP-TO-DATE
-5. `python tests/test_sql_security_audit.py` ➔ 32/32 Passed
-6. `python tests/test_rls_multi_role_adversarial.py` ➔ 36/36 Passed
-7. `python tests/test_live_supabase_verification.py` ➔ 8 live domain transactions verified on Supabase
+To resolve the remaining live HTTP 403 on `haul_bookings` and `post_likes`:
+
+1. Open the [Supabase Dashboard SQL Editor](https://supabase.com/dashboard/project/yxjqseiegwjdfnccdchk/editor).
+2. Create a **New query**.
+3. Paste and run the complete contents of [`supabase/migrations/20261103000002_production_rls_alignment.sql`](file:///c:/Users/bjasw/Downloads/agriculture-ai-os/supabase/migrations/20261103000002_production_rls_alignment.sql).
+4. Run `python tests/test_live_supabase_verification.py` to confirm that all 11 flows pass with zero HTTP 403 errors.
 
 ---
 
-## 6. Pull Request & Branch Status
+## 5. Pull Request & Branch Status
 
 - **Working Branch**: `feature/nukropai-complete-production-remediation`
 - **Target**: `main`

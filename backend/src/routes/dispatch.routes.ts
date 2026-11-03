@@ -46,3 +46,4 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
     preHandler: [authenticate]
   }, trackBooking);
 }
+

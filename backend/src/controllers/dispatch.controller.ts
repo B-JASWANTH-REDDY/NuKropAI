@@ -729,3 +729,4 @@ export const trackBooking = async (request: FastifyRequest, reply: FastifyReply)
     }
   });
 };
+

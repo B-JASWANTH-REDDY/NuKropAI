@@ -117,6 +117,42 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun startDriverLocationService(driverId: String, driverName: String, vehiclePlate: String, vehicleType: String) {
+            runOnUiThread {
+                try {
+                    val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                        action = DriverLocationService.ACTION_START_TRACKING
+                        putExtra(DriverLocationService.EXTRA_DRIVER_ID, driverId)
+                        putExtra(DriverLocationService.EXTRA_DRIVER_NAME, driverName)
+                        putExtra(DriverLocationService.EXTRA_VEHICLE_PLATE, vehiclePlate)
+                        putExtra(DriverLocationService.EXTRA_VEHICLE_TYPE, vehicleType)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropLocation", "Failed to start driver location foreground service: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun stopDriverLocationService() {
+            runOnUiThread {
+                try {
+                    val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                        action = DriverLocationService.ACTION_STOP_TRACKING
+                    }
+                    startService(intent)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropLocation", "Failed to stop driver location foreground service: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun openDialer(phoneNumber: String) {
             runOnUiThread {
                 try {

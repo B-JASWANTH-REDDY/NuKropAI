@@ -82,3 +82,4 @@ CREATE POLICY "driver_telemetry_farmer_read_active_booking"
   * *Result:* HTTP 409 Conflict (`BOOKING_ALREADY_ACCEPTED_OR_CANCELLED`). **PASSED**
 * **Attack Test 5:** Anonymous user querying live driver locations directly:
   * *Result:* HTTP 401 Unauthorized / HTTP 403 Forbidden. **PASSED**
+

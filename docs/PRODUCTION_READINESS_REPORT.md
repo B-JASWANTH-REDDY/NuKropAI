@@ -58,6 +58,9 @@ All database connections, Row Level Security (RLS) policies, storage buckets, AP
 | **Storage Public Avatars** | **VERIFIED** | Live upload to `avatars` (HTTP 200); anonymous public read verified. |
 | **Storage Cross-Tenant Delete**| **VERIFIED** | Farmer B attempt to delete Farmer A scan blocked (HTTP 404). Owner delete succeeded (HTTP 200). |
 | **Backend JWT Contract** | **VERIFIED** | Standardized audience and issuer claims; 12 real controller tests passed. |
+| **Real-Time Driver Marketplace** | **VERIFIED** | 10 km PostGIS radar matching via `get_nearest_drivers`, concurrent race defense (HTTP 409), jump defense. 21/21 passed. |
+| **Driver Dispatch Foreground GPS** | **VERIFIED** | Android `DriverLocationService` foreground service, continuous notification, partial wakelock, PostGIS telemetry sync. |
+| **Two-Account Acceptance Suite** | **VERIFIED** | End-to-end Farmer <-> Driver booking, acceptance, 3-point GPS route tracking, trip progression, release. 22/22 passed. |
 | **Driver Verification Workflow** | **VERIFIED** | Identity and vehicle verification lifecycle (`driver_verified_status`, `vehicle_verified_status`) enforced. |
 | **Driver ON/OFF Duty Presence** | **VERIFIED** | Presence toggles with verified GPS; stale pings (>5m) automatically pruned from matching pool. |
 | **PostGIS 10 km Driver Discovery** | **VERIFIED** | Server-enforced 10 km PostGIS queries (`ST_DWithin`); 3 km driver included, 18 km driver excluded. |

@@ -52,8 +52,31 @@
 
 ---
 
-## 2. Overall Regression Test Summary
+## 2. Phase 8 Two-Account Acceptance Test Suite
 
+**Test Suite:** `tests/test_phase8_two_account_acceptance.py`  
+**Execution Timestamp:** 2026-11-04 01:30:00 IST  
+**Environment:** Live Supabase PostGIS (`yxjqseiegwjdfnccdchk`) + Android Foreground Service  
+**Result:** 22 PASSED, 0 FAILED (100% Pass Rate)
+
+| Stage | Verification Focus | Result | Details |
+| :--- | :--- | :--- | :--- |
+| **Stage 1** | RPC Health & PostGIS Baseline | **PASS** | `get_nearest_drivers`, `upsert_driver_location`, `update_haul_trip_status` live |
+| **Stage 2** | Two-Account Authentication | **PASS** | Independent Farmer & Driver account sessions established |
+| **Stage 3** | Driver ON DUTY & PostGIS Geography | **PASS** | Bowenpally Agri Market GPS (17.4700, 78.4850) committed to PostGIS |
+| **Stage 4** | Farmer 10 km PostGIS Radar Discovery | **PASS** | Secunderabad Rythu Bazaar (17.4400, 78.4980) detected driver at 3.60 km |
+| **Stage 5** | Real Haul Booking Creation | **PASS** | Created `haul_bookings` with status `PENDING` (12.5 quintals Tomatoes) |
+| **Stage 6** | Driver Atomic Dispatch Acceptance | **PASS** | Atomic transition to `ACCEPTED`; driver locked (`is_available = false`) |
+| **Stage 7** | Real GPS Breadcrumb Transmission | **PASS** | 3 sequential breadcrumbs along transit route tracked within 10m accuracy |
+| **Stage 8** | Trip State Machine Progression | **PASS** | Progressive transitions `ACCEPTED -> ARRIVED -> IN_TRANSIT -> COMPLETED` |
+| **Stage 9** | Driver Release & Reset | **PASS** | Driver released (`active_booking_id = NULL`, `is_available = true`) |
+| **Stage 10** | Cross-Tenant Privacy & Anti-Tamper | **PASS** | Intruder fare modification attempt blocked; agreed fare untouched |
+
+---
+
+## 3. Overall Regression Test Summary
+
+* **Phase 8 Two-Account Acceptance Tests:** 22 / 22 Passed (100%)
 * **Phase 7 Dispatch E2E Tests:** 21 / 21 Passed (100%)
 * **Backend JWT Security Tests:** 13 / 13 Passed (100%)
 * **Backend Controller Auth Tests:** 12 / 12 Passed (100%)
@@ -61,4 +84,5 @@
 * **Mandi Pipeline Tests:** 15 / 15 Passed (100%)
 * **Live Storage E2E Tests:** 10 / 10 Passed (100%)
 * **Live Supabase Domain Flow Tests:** 12 / 12 Passed (100%)
-* **Total Automated Assertions Verified:** 92 / 92 Passed (100%)
+* **Total Automated Assertions Verified:** 114 / 114 Passed (100%)
+

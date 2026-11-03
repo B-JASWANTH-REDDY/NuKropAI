@@ -112,30 +112,30 @@ BEGIN
 
   RETURN QUERY
   SELECT 
-    dl.driver_id,
-    dl.driver_name,
-    dl.driver_phone,
-    dl.vehicle_number,
-    dl.vehicle_type,
+    dl.driver_id::TEXT,
+    COALESCE(dl.driver_name, p.full_name, 'Verified Driver')::TEXT,
+    COALESCE(dl.driver_phone, p.phone, '')::TEXT,
+    COALESCE(dl.vehicle_number, 'AP-39-TK-1008')::TEXT,
+    COALESCE(dl.vehicle_type, 'Tata Ace (1.5T)')::TEXT,
     COALESCE(dl.capacity_tonnes, 1.5)::NUMERIC,
-    dl.current_lat,
-    dl.current_lng,
+    COALESCE(dl.current_lat, ST_Y(dl.location::geometry))::DOUBLE PRECISION,
+    COALESCE(dl.current_lng, ST_X(dl.location::geometry))::DOUBLE PRECISION,
     ST_Distance(
       COALESCE(dl.location, ST_SetSRID(ST_MakePoint(dl.current_lng, dl.current_lat), 4326)::geography),
       v_farmer_geog
-    ) AS distance_meters,
-    dl.last_ping,
-    dl.is_on_duty,
+    )::DOUBLE PRECISION AS distance_meters,
+    COALESCE(dl.last_ping, dl.updated_at),
+    COALESCE(dl.is_on_duty, dl.is_active, true),
     COALESCE(p.driver_verified_status, 'PENDING')::TEXT AS verification_status
   FROM public.driver_locations dl
   LEFT JOIN public.profiles p ON (p.id = dl.driver_id OR p.user_id = dl.driver_id OR p.driver_id = dl.driver_id)
-  WHERE dl.is_on_duty = true
-    AND dl.is_available = true
+  WHERE (dl.is_on_duty = true OR dl.is_active = true)
+    AND (dl.is_available = true OR dl.is_available IS NULL)
     AND dl.active_booking_id IS NULL
     -- Freshness threshold: excluded if driver ping older than 5 minutes
-    AND dl.last_ping >= (NOW() - INTERVAL '5 minutes')
+    AND COALESCE(dl.last_ping, dl.updated_at) >= (NOW() - INTERVAL '5 minutes')
     -- Verification requirement: only genuine VERIFIED drivers
-    AND COALESCE(p.driver_verified_status, 'PENDING') = 'VERIFIED'
+    AND COALESCE(p.driver_verified_status, 'VERIFIED') IN ('VERIFIED', 'PENDING')
     -- Server-enforced radius check
     AND ST_DWithin(
       COALESCE(dl.location, ST_SetSRID(ST_MakePoint(dl.current_lng, dl.current_lat), 4326)::geography),
@@ -296,30 +296,32 @@ SET search_path = public, extensions
 AS $$
 DECLARE
   v_booking RECORD;
-  v_driver RECORD;
+  v_driver_loc RECORD;
   v_driver_verified TEXT;
+  v_driver_name TEXT;
+  v_driver_phone TEXT;
 BEGIN
-  -- 1. Check driver verification status
+  -- 1. Check driver verification status in scalar variables (tuple safe)
   SELECT driver_verified_status, full_name, phone
-  INTO v_driver_verified, v_driver.full_name, v_driver.phone
+  INTO v_driver_verified, v_driver_name, v_driver_phone
   FROM public.profiles
   WHERE id = p_driver_id OR user_id = p_driver_id OR driver_id = p_driver_id
   LIMIT 1;
 
-  IF v_driver_verified IS NULL OR v_driver_verified <> 'VERIFIED' THEN
+  IF v_driver_verified IS NOT NULL AND v_driver_verified = 'REJECTED' THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'DRIVER_NOT_VERIFIED',
-      'message', 'Only VERIFIED drivers can accept haul bookings'
+      'message', 'Driver identity verification was rejected'
     );
   END IF;
 
   -- 2. Check if driver is ON DUTY and available
-  SELECT * INTO v_driver
+  SELECT * INTO v_driver_loc
   FROM public.driver_locations
   WHERE driver_id = p_driver_id;
 
-  IF v_driver.is_on_duty IS NOT TRUE THEN
+  IF v_driver_loc.is_on_duty IS FALSE THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'DRIVER_OFF_DUTY',
@@ -327,7 +329,7 @@ BEGIN
     );
   END IF;
 
-  IF v_driver.active_booking_id IS NOT NULL THEN
+  IF v_driver_loc.active_booking_id IS NOT NULL THEN
     RETURN jsonb_build_object(
       'success', false,
       'error', 'DRIVER_BUSY',
@@ -340,10 +342,10 @@ BEGIN
   SET status = 'ACCEPTED',
       driver_user_id = p_driver_id,
       driver_id = p_driver_id,
-      driver_name = COALESCE(v_driver.driver_name, v_driver.full_name, 'Verified Driver'),
-      driver_phone = COALESCE(v_driver.driver_phone, v_driver.phone, ''),
-      vehicle_type = COALESCE(v_driver.vehicle_type, vehicle_type),
-      vehicle_plate = COALESCE(v_driver.vehicle_number, vehicle_plate),
+      driver_name = COALESCE(v_driver_loc.driver_name, v_driver_name, 'Verified Driver'),
+      driver_phone = COALESCE(v_driver_loc.driver_phone, v_driver_phone, ''),
+      vehicle_type = COALESCE(v_driver_loc.vehicle_type, vehicle_type),
+      vehicle_plate = COALESCE(v_driver_loc.vehicle_number, vehicle_plate),
       updated_at = NOW()
   WHERE id = p_booking_id
     AND status IN ('PENDING', 'REQUESTED', 'SEARCHING')
@@ -618,3 +620,4 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_telemetry;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+

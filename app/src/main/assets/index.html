@@ -30140,10 +30140,19 @@ function startDriverRealGPSWatch() {
     window._driverGpsWatchId = null;
   }
 
-  const driverId = localStorage.getItem('nukrop_driver_phone') || localStorage.getItem('nukrop_driver_plate') || 'DRV-LIVE';
-  const driverName = localStorage.getItem('nukrop_driver_name') || 'Driver';
-  const driverPlate = localStorage.getItem('nukrop_driver_plate') || 'Active Fleet';
+  const driverId = localStorage.getItem('nukrop_user_uuid') || localStorage.getItem('nukrop_driver_phone') || localStorage.getItem('nukrop_driver_plate') || 'DRV-LIVE';
+  const driverName = localStorage.getItem('nukrop_user_name') || localStorage.getItem('nukrop_driver_name') || 'Driver';
+  const driverPlate = localStorage.getItem('nukrop_driver_plate') || 'AP-39-TK-1008';
   const vehicle = localStorage.getItem('nukrop_driver_vehicle') || 'Tata Ace Gold (1.5 Ton)';
+
+  // Activate Android Native Foreground GPS Service if running inside APK
+  if (window.AndroidBridge && typeof window.AndroidBridge.startDriverLocationService === 'function') {
+    try {
+      window.AndroidBridge.startDriverLocationService(driverId, driverName, driverPlate, vehicle);
+    } catch (e) {
+      console.warn('[DriverLocationService] Bridge start error:', e);
+    }
+  }
 
   window._driverGpsWatchId = navigator.geolocation.watchPosition(
     (pos) => {
@@ -30197,6 +30206,16 @@ function startDriverRealGPSWatch() {
           is_online: true,
           last_ping: new Date().toISOString()
         }], { onConflict: 'driver_id' }).then(() => {});
+
+        if (typeof window.sbClient.rpc === 'function') {
+          window.sbClient.rpc('upsert_driver_location', {
+            p_driver_id: driverId,
+            p_lon: curLon,
+            p_lat: curLat,
+            p_heading: heading,
+            p_speed_kmh: speedKmh
+          }).then(() => {}).catch(() => {});
+        }
       }
     },
     (err) => {
@@ -30210,6 +30229,13 @@ function startDriverRealGPSWatch() {
 window.startDriverRealGPSWatch = startDriverRealGPSWatch;
 
 function stopDriverRealGPSWatch() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.stopDriverLocationService === 'function') {
+    try {
+      window.AndroidBridge.stopDriverLocationService();
+    } catch (e) {
+      console.warn('[DriverLocationService] Bridge stop error:', e);
+    }
+  }
   if (window._driverGpsWatchId) {
     if (navigator.geolocation && typeof navigator.geolocation.clearWatch === 'function') {
       navigator.geolocation.clearWatch(window._driverGpsWatchId);

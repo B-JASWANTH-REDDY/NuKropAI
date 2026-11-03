@@ -318,3 +318,4 @@ print("=" * 80)
 if failed_tests > 0:
     sys.exit(1)
 sys.exit(0)
+

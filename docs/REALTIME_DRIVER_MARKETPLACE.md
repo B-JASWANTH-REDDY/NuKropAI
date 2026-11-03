@@ -127,3 +127,20 @@ sequenceDiagram
 | `POST` | `/api/dispatch/accept` | `driver`, `admin` | Concurrency-safe atomic booking acceptance. |
 | `POST` | `/api/dispatch/trip-status` | Participants | Advances lifecycle (`ARRIVED`, `IN_TRANSIT`, `COMPLETED`). |
 | `GET` | `/api/dispatch/track/:id` | Assigned Farmer/Driver | Live driver position, telemetry, and trip telemetry stream. |
+
+---
+
+## 7. Physical Android Device Foreground Service (`DriverLocationService`)
+
+To ensure uninterrupted GPS transmission when the driver minimizes the application, locks the device screen, or uses navigation assistance (e.g. Google Maps), NuKropAI implements a dedicated native Android foreground service:
+
+* **Service Class:** `com.example.DriverLocationService`
+* **Service Type:** `android:foregroundServiceType="location"`
+* **Permissions:** `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `ACCESS_FINE_LOCATION`, `WAKE_LOCK`
+* **Notification Channel:** `nukrop_driver_location_channel` ("Driver Dispatch GPS Telemetry")
+* **Ongoing Notification:** Displays driver duty status and assigned vehicle number (`TS 08 AB XXXX`).
+* **Update Interval:** 5,000ms regular, 3,000ms fastest, 5.0m distance displacement filter.
+* **Database Target:** Directly executes `SupabaseApi.upsertDriverLocation` (PostGIS `upsert_driver_location` RPC) over TLS, persisting coordinates regardless of WebView execution state.
+* **Bridge Invocation:** Controlled seamlessly from HTML/JS via `window.AndroidBridge.startDriverLocationService(...)` and `window.AndroidBridge.stopDriverLocationService()`.
+
+

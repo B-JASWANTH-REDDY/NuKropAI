@@ -63,3 +63,4 @@ tests/**/*.pyc
 !web/public/*.png
 !app/src/main/res/**/*.png
 !screenshots/**/*.png
+simulations/logs/*.jsonl

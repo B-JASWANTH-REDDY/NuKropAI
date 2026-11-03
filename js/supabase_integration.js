@@ -594,6 +594,29 @@ async function nk_saveDiseaScan(scanRecord) {
   else console.log('✅ Disease scan saved to Supabase.');
 }
 
+/**
+ * Generate temporary, authenticated signed URL for private scan images
+ * Bucket: 'crop-scans' / 'disease-scans' (Privacy-by-Default)
+ */
+async function nk_getSignedScanUrl(imageStoragePath, expiresInSeconds = 3600) {
+  if (!sbClient || !imageStoragePath) return null;
+  try {
+    const bucket = imageStoragePath.startsWith('disease-scans/') ? 'disease-scans' : 'crop-scans';
+    const cleanPath = imageStoragePath.replace(/^(crop-scans|disease-scans)\//, '');
+    const { data, error } = await sbClient.storage
+      .from(bucket)
+      .createSignedUrl(cleanPath, expiresInSeconds);
+    if (error) {
+      console.warn('Signed URL generation failed:', error.message);
+      return null;
+    }
+    return data?.signedUrl || null;
+  } catch (err) {
+    console.warn('Signed URL exception:', err);
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // 7. KHATA TRANSACTIONS (Farm Ledger)
 // Schema: khata_transactions(id, user_id,

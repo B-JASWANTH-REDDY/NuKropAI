@@ -146,26 +146,128 @@ FROM public.mandi_live_rates;
 GRANT SELECT ON public.mandi_arbitrage_quotes TO authenticated, service_role, anon;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- STEP 3: STORAGE BUCKETS CONFIGURATION (CROP SCANS & AVATARS)
+-- STEP 3: STORAGE BUCKETS CONFIGURATION (PRIVACY-BY-DEFAULT)
 -- ─────────────────────────────────────────────────────────────────────────────
-INSERT INTO storage.buckets (id, name, public)
+-- crop-scans and disease-scans are strictly PRIVATE (public = false) to prevent
+-- unauthorized access to farmers' personal field and pathology photos.
+-- Avatars are public for display across community feeds and driver profiles.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES 
-  ('crop-scans', 'crop-scans', true),
-  ('disease-scans', 'disease-scans', true),
-  ('avatars', 'avatars', true)
-ON CONFLICT (id) DO UPDATE SET public = true;
+  ('crop-scans', 'crop-scans', false, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]),
+  ('disease-scans', 'disease-scans', false, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]),
+  ('avatars', 'avatars', true, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp']::text[])
+ON CONFLICT (id) DO UPDATE SET 
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
 
+-- 1. Remove insecure public read policies if they exist
 DROP POLICY IF EXISTS "crop_scans_public_read" ON storage.objects;
-CREATE POLICY "crop_scans_public_read" ON storage.objects FOR SELECT USING (bucket_id = 'crop-scans');
-
-DROP POLICY IF EXISTS "crop_scans_auth_insert" ON storage.objects;
-CREATE POLICY "crop_scans_auth_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'crop-scans');
-
+DROP POLICY IF EXISTS "Allow public read on crop scans" ON storage.objects;
 DROP POLICY IF EXISTS "disease_scans_public_read" ON storage.objects;
-CREATE POLICY "disease_scans_public_read" ON storage.objects FOR SELECT USING (bucket_id = 'disease-scans');
+DROP POLICY IF EXISTS "Allow public read on disease scans" ON storage.objects;
 
-DROP POLICY IF EXISTS "disease_scans_auth_insert" ON storage.objects;
-CREATE POLICY "disease_scans_auth_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'disease-scans');
+-- 2. Enforce Private Owner-Only Read Policy (via auth.uid() and folder matching)
+DROP POLICY IF EXISTS "crop_scans_owner_read" ON storage.objects;
+CREATE POLICY "crop_scans_owner_read" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'crop-scans' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      owner = auth.uid()
+      OR (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+-- 3. Enforce Private Owner-Only Upload Policy
+DROP POLICY IF EXISTS "crop_scans_owner_upload" ON storage.objects;
+CREATE POLICY "crop_scans_owner_upload" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'crop-scans' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+-- 4. Enforce Private Owner-Only Delete Policy
+DROP POLICY IF EXISTS "crop_scans_owner_delete" ON storage.objects;
+CREATE POLICY "crop_scans_owner_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'crop-scans' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      owner = auth.uid()
+      OR (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+-- 5. Disease Scans Private Policies
+DROP POLICY IF EXISTS "disease_scans_owner_read" ON storage.objects;
+CREATE POLICY "disease_scans_owner_read" ON storage.objects
+  FOR SELECT USING (
+    bucket_id = 'disease-scans' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      owner = auth.uid()
+      OR (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+DROP POLICY IF EXISTS "disease_scans_owner_upload" ON storage.objects;
+CREATE POLICY "disease_scans_owner_upload" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'disease-scans' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+DROP POLICY IF EXISTS "disease_scans_owner_delete" ON storage.objects;
+CREATE POLICY "disease_scans_owner_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'disease-scans' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      owner = auth.uid()
+      OR (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+-- 6. Profile Avatars Policies (Public Read, Owner Upload & Delete)
+DROP POLICY IF EXISTS "avatars_public_read" ON storage.objects;
+CREATE POLICY "avatars_public_read" ON storage.objects
+  FOR SELECT USING (bucket_id = 'avatars');
+
+DROP POLICY IF EXISTS "avatars_owner_upload" ON storage.objects;
+CREATE POLICY "avatars_owner_upload" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'avatars' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
+
+DROP POLICY IF EXISTS "avatars_owner_delete" ON storage.objects;
+CREATE POLICY "avatars_owner_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'avatars' 
+    AND auth.uid() IS NOT NULL 
+    AND (
+      owner = auth.uid()
+      OR (storage.foldername(name))[1] = auth.uid()::text
+      OR name LIKE (auth.uid()::text || '/%')
+    )
+  );
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- STEP 4: SAFE IDEMPOTENT REALTIME REGISTRATION
@@ -212,3 +314,4 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+

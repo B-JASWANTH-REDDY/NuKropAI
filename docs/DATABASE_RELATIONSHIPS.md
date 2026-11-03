@@ -92,3 +92,4 @@ erDiagram
   - `user_id` -> `profiles(id)` (`ON DELETE RESTRICT`).
   - Indexed on `(user_id, transaction_date DESC)`.
   - Non-nullable audit trail.
+

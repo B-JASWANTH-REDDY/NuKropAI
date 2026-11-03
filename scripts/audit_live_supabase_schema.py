@@ -108,3 +108,4 @@ if missing_details:
         print(f'{tbl}:')
         for col, reason in miss:
             print(f'   - {col}: {reason}')
+

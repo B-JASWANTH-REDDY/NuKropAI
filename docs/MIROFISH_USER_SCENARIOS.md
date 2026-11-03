@@ -132,3 +132,4 @@ stateDiagram-v2
     COMPLETED --> ON_DUTY: Driver Released to Pool
     CANCELLED --> ON_DUTY: Driver Availability Restored
 ```
+

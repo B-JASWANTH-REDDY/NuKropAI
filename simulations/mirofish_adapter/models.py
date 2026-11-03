@@ -103,3 +103,4 @@ class ScenarioMetrics:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+

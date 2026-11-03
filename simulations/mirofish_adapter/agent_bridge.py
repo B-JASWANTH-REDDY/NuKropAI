@@ -9,6 +9,7 @@ Guarantees:
 - Realistic latency tracking and actions.jsonl event emission.
 """
 
+import os
 import time
 import json
 import uuid
@@ -18,16 +19,17 @@ from typing import Dict, Any, List, Optional, Tuple
 from .models import PersonaProfile, SimulationAction
 
 # Load environment configuration
-SUPABASE_URL = "https://yxjqseiegwjdfnccdchk.supabase.co"
-ANON_KEY = ""
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yxjqseiegwjdfnccdchk.supabase.co")
+ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
 for env_file in ["backend/.env", ".env"]:
     try:
         with open(env_file, "r", encoding="utf-8") as f:
             for line in f:
-                if line.startswith("SUPABASE_ANON_KEY="):
+                if line.startswith("SUPABASE_ANON_KEY=") and not ANON_KEY:
                     ANON_KEY = line.split("=", 1)[1].strip()
-                    break
+                elif line.startswith("SUPABASE_URL=") and "SUPABASE_URL" not in os.environ:
+                    SUPABASE_URL = line.split("=", 1)[1].strip()
         if ANON_KEY:
             break
     except Exception:
@@ -35,6 +37,19 @@ for env_file in ["backend/.env", ".env"]:
 
 if not ANON_KEY:
     raise RuntimeError("SUPABASE_ANON_KEY missing from environment.")
+
+# ── ENVIRONMENT SAFETY GUARD ──
+PRODUCTION_PROJECT = "yxjqseiegwjdfnccdchk"
+NUKROPAI_ENV = os.environ.get("NUKROPAI_ENV", "").lower()
+ALLOW_SIM = os.environ.get("NUKROPAI_ALLOW_SIMULATION", "").lower() in ("true", "1")
+
+if PRODUCTION_PROJECT in SUPABASE_URL and NUKROPAI_ENV not in ("staging", "test", "ci", "simulation") and not ALLOW_SIM:
+    raise EnvironmentError(
+        f"[SAFETY BLOCK] SUPABASE_URL targets the production project ({PRODUCTION_PROJECT}). "
+        "Swarm simulation against production is restricted to prevent dashboard error spikes. "
+        "Options: (1) Set SUPABASE_URL to a dedicated test project, or "
+        "(2) Set NUKROPAI_ENV=simulation or NUKROPAI_ALLOW_SIMULATION=true to explicitly confirm intent."
+    )
 
 class NuKropAIAgentBridge:
     """Dedicated simulation bridge communicating with NuKropAI via real APIs."""

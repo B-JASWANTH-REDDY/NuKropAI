@@ -1,7 +1,7 @@
 # NuKropAI — Synthetic User Multi-Agent Simulation & k6 Load Test Report
 
-**Engine:** MiroFish Swarm Intelligence Simulation Engine + k6 Staging Load Generator  
-**Environment:** Live Supabase PostGIS (`yxjqseiegwjdfnccdchk`)  
+**Engine:** MiroFish Swarm Intelligence Simulation Engine + k6 Load Generator  
+**Environment:** Live Supabase PostGIS (`yxjqseiegwjdfnccdchk`) — Single unified project (no separate staging instance exists)  
 **Execution Timestamp:** 2026-11-04 03:31 IST  
 **Branch:** `feature/nukropai-complete-production-remediation`  
 **Pull Request:** #2 (Target: `main`, Status: OPEN — DO NOT MERGE)  
@@ -19,7 +19,7 @@ This report documents the empirical results of integrating the open-source **Mir
 | :--- | :---: | :--- |
 | **Total Synthetic Personas Synthesized** | **69 Personas** | Generated across all 9 platform archetypes with authentic geographical coordinates. |
 | **Total Multi-Agent Scenarios Executed** | **5 Scenarios** | Pilot (8 agents), Scenario A (30 agents), Scenario C (11 agents), Scenario F (6 agents), Scenario G (15 agents). |
-| **Total Simulated API Operations** | **266 Operations** | Real authenticated HTTP REST & PostgREST RPC requests against staging. |
+| **Total Simulated API Operations** | **266 Operations** | Real authenticated HTTP REST & PostgREST RPC requests against the live Supabase project. |
 | **Average Simulated API Latency** | **193.7 ms** | End-to-end network roundtrip from client adapter to Supabase PostGIS. |
 | **k6 High-Concurrency Stress Test** | **1,014 Requests** | Executed across 50 concurrent Virtual Users (VUs) at 31.75 requests/second. |
 | **k6 95th Percentile Latency (p95)** | **143.84 ms** | Strict SLA: 95% of all marketplace operations responded under 145 ms (Threshold: <800 ms). |
@@ -75,12 +75,12 @@ All scenarios were executed using [`simulations/mirofish_adapter/run_simulation.
 
 ---
 
-## 3. k6 High-Concurrency Staging Load Test Results
+## 3. k6 High-Concurrency Load Test Results
 
 The k6 load generator executed [`simulations/k6/haul_dispatch_load.js`](file:///c:/Users/bjasw/Downloads/agriculture-ai-os/simulations/k6/haul_dispatch_load.js) using the native Windows binary (`C:\Program Files\k6\k6.exe`).
 
 ### 3.1 Test Profile
-* **Target:** Staging Supabase PostGIS (`https://yxjqseiegwjdfnccdchk.supabase.co`)
+* **Target:** Live Supabase PostGIS (`https://yxjqseiegwjdfnccdchk.supabase.co`) (Note: Environment safety guard now blocks direct unflagged execution)
 * **Concurrency:** Ramped from 2 to 50 Virtual Users (VUs) over 30 seconds.
 * **Workload:** Mixed transaction profile:
   - 33.3% PostGIS Spatial Radar Searches (`get_nearest_drivers`)
@@ -162,5 +162,8 @@ To maintain absolute fidelity with the project's verification standards:
 2. **GPS Waypoint Simulation:**
    - The GPS telemetry points streamed during simulations follow authentic road trajectories between Hyderabad hubs (Bowenpally, Secunderabad, Kothaguda, Shamshabad), but were transmitted by script rather than a moving vehicle.
    - Physical multi-vehicle road driving in physical traffic requires physical field testing once multiple phones are connected.
-3. **Staging Database Scope:**
-   - Simulations were executed against the live Supabase project configured for development and staging. Production environments must remain segregated.
+3. **Environment Scope & Isolation:**
+   - As audited in `docs/MIROFISH_ENVIRONMENT_ISOLATION_AUDIT.md`, a single unified Supabase project (`yxjqseiegwjdfnccdchk`) is currently active.
+   - Strict safety guards have been installed in `haul_dispatch_load.js` and `agent_bridge.py` to prevent any further unflagged synthetic load against this project.
+   - For future multi-hundred agent tests, a dedicated isolated Supabase test project should be provisioned.
+

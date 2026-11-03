@@ -284,3 +284,4 @@ def generate_population(
         population.append(generate_persona("platform_admin", hub_index=i))
         
     return population
+

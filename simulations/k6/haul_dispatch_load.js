@@ -45,8 +45,27 @@ export const options = {
   },
 };
 
-const BASE_URL = 'https://yxjqseiegwjdfnccdchk.supabase.co';
+// ── ENVIRONMENT SAFETY GUARD ──────────────────────────────────────────────────
+// Prevent accidental load testing against the single production Supabase project.
+// Override BASE_URL via SUPABASE_URL env var to target a dedicated test project.
+// To explicitly allow production targeting, set NUKROPAI_FORCE_PRODUCTION_TEST=true.
+// RECOMMENDED: Create a separate Supabase free-tier project for load testing.
+import { fail } from 'k6';
+
+const BASE_URL = __ENV.SUPABASE_URL || 'https://yxjqseiegwjdfnccdchk.supabase.co';
 const ANON_KEY = __ENV.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4anFzZWllZ3dqZGZuY2NkY2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDU2NTMsImV4cCI6MjEwMTUyMTY1M30.J4swglpV5qu3hRZFll3aqhG1Y2G9mUllvXMjKq6Ikmo';
+const FORCE_PRODUCTION = __ENV.NUKROPAI_FORCE_PRODUCTION_TEST === 'true';
+
+const PRODUCTION_PROJECT_REF = 'yxjqseiegwjdfnccdchk';
+if (BASE_URL.includes(PRODUCTION_PROJECT_REF) && !FORCE_PRODUCTION) {
+  fail(
+    '[SAFETY BLOCK] BASE_URL targets the production Supabase project (' + PRODUCTION_PROJECT_REF + '). ' +
+    'This load test must NOT run against production. ' +
+    'Options: (1) Set SUPABASE_URL to a dedicated test project URL, or ' +
+    '(2) Set NUKROPAI_FORCE_PRODUCTION_TEST=true to explicitly override (last resort only).'
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 const HEADERS = {
   'Content-Type': 'application/json',

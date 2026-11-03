@@ -2,7 +2,7 @@
 
 **Upstream Engine:** [666ghj/MiroFish](https://github.com/666ghj/MiroFish)  
 **System:** NuKropAI Agrarian Operating System  
-**Target Environment:** Staging Supabase PostGIS (`yxjqseiegwjdfnccdchk`) + k6 Load Engine  
+**Target Environment:** Supabase PostGIS (`yxjqseiegwjdfnccdchk`) + k6 Load Engine (Safety Guard Enforced)  
 **Working Branch:** `feature/nukropai-complete-production-remediation`  
 **PR #2 Status:** OPEN & UNMERGED (Target: `main`)
 
@@ -25,7 +25,7 @@ For NuKropAI, MiroFish has been adapted to solve a critical validation challenge
 │  [ NuKropAI Adapter Bridge ] ──> Translates Agent Intent to Real APIs        │
 │          │                       (Auth, Radar, Booking, Dispatch, GPS)      │
 │          ▼                                                                  │
-│  [ Staging Supabase PostGIS ] ──> Enforces RLS, Spatial Matching, State     │
+│  [ Supabase PostGIS DB ] ───> Enforces RLS, Spatial Matching, State         │
 │          ▲                        Machines & Concurrency Resolution         │
 │          │                                                                  │
 │  [ k6 Load Generator ] ──> Scales Traffic Volume (50-200 VUs)               │
@@ -127,3 +127,4 @@ To maintain rigorous engineering discipline, testing responsibilities are segreg
 3. **Zero RLS Bypass**: All database operations are subjected to live Row Level Security policies. Cross-tenant reads, unverified actions, and unauthorized modifications fail-closed.
 4. **Zero Financial Reality**: All fares and transport bookings are executed in a simulated staging context; zero real payment gateways or real SMS messages are triggered.
 5. **Automated Teardown**: The bridge provides `cleanup_synthetic_records()`, ensuring that all temporary haul bookings and driver presence entries are purged following simulation runs.
+

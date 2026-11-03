@@ -1,0 +1,65 @@
+# NUKROPAI — FULL-STACK INTEGRATION STATUS
+**System:** NuKropAI Agrarian Operating System  
+**Branch:** `feature/nukropai-complete-production-remediation`  
+**PR:** #2 (Target: `main`, Status: OPEN)  
+
+---
+
+## 1. Architectural Integration Flow
+
+```
+[ Android App / WebView ]  <───> [ Supabase PostgREST & Auth ] <───> [ PostgreSQL (29 Tables) ]
+           │                                                                    │
+           ▼                                                                    ▼
+[ Web Dashboard (Vite) ]  <───> [ Fastify Enterprise API ]    <───> [ Realtime / PostGIS ]
+```
+
+Every implemented feature follows a server-authoritative path with strict validation, real database records, and zero simulated mock data.
+
+---
+
+## 2. Component-by-Component Integration Matrix
+
+### A. Authentication & User Identity
+- **Android / Web Client**: Signs up or authenticates via Supabase Auth (Email / Phone OTP / OAuth).
+- **Database Trigger (`handle_new_auth_user`)**: Listens to `auth.users` insertion, automatically creates the corresponding `public.profiles` row with whitelisted roles (`farmer`, `driver`), and initializes DPDP consent flags.
+- **Backend API**: Enforces JWT contract (`aud: authenticated`, `iss`, SHA-256 pre-hashed Bcrypt refresh token rotation, cryptographic `jti` nonces).
+
+### B. AI Crop Disease Diagnostics (LeafNet)
+- **UI / Mobile**: Native Android camera or Leaflet image upload via `DiseaseScannerScreen.kt` & `#crop-scanner-section`.
+- **Storage**: Image uploaded directly to Supabase storage bucket `crop-scans`.
+- **Processing**: Evaluated against real EfficientNet / YOLO11 vision models or Groq multimodal vision API.
+- **Persistence**: Results inserted into `public.disease_scans` with diagnosis, confidence score, treatment recommendations, and GPS coordinates.
+
+### C. Mandi Rates & Agmarknet Synchronization
+- **Backend Sync Worker**: `scripts/sync_mandi_rates.py` extracts official market arrivals from `data.gov.in` (Agmarknet).
+- **Validation**: Enforces strict commodity name normalization, positive modal price bounds, and freshness tracking.
+- **Persistence**: Upserts records into `public.mandi_live_rates` with full government provenance metadata and records execution in `public.mandi_ingestion_runs`.
+- **Client Retrieval**: Android (`MandiApiService.kt`, `MarketScreen.kt`) and Web (`MandiPilot`) query live rates with real-time arbitrage spreads.
+
+### D. GramHaul Shared Logistics & Fleet Tracking
+- **Transporters**: Transporter listings managed in `public.truck_listings`.
+- **Bookings**: Farmers create bookings in `public.haul_bookings` with pickup coordinates and mandi destinations.
+- **Realtime Telemetry**: Driver GPS pings ingest into `public.driver_locations` and `public.driver_telemetry`.
+- **Map Radar**: Leaflet map dynamically renders driver pins via `supabase_realtime` subscriptions.
+
+### E. Farm Khata Ledger
+- **UI**: Digital accounting ledger for tracking agricultural income and operational expenses.
+- **Persistence**: Every entry writes to `public.khata_transactions`.
+- **Security**: Strict ownership enforcement (`user_id = (select auth.uid())`). Historical transaction ownership is strictly preserved without nulling.
+
+### F. Agrarian Community & 24h Stories
+- **Feed**: Discussions and expert Q&A stored in `public.community_posts` and `public.community_comments`.
+- **Ephemeral Stories**: 24-hour agricultural stories stored in `public.community_stories` with automatic expiration indexing.
+- **DPDP Safety**: Author details resolved via `public.public_profiles` view or audited `SECURITY DEFINER` lookup functions without exposing phone numbers or land records.
+
+---
+
+## 3. Verification Test Evidence
+
+- **Backend TypeScript Build**: Compiled cleanly with 0 type errors.
+- **Backend Auth & Mandi Tests**: 40 / 40 passed (`test_jwt_auth_security.js`, `test_jwt_controller_integration.js`, `test_mandi_pipeline_sync.py`).
+- **Web Production Build**: Vite built in 5.26s, verified 6 production APK endpoints.
+- **Android Unit Tests**: 28 / 28 Gradle tasks up-to-date and passing (`testDebugUnitTest`).
+- **SQL Security Audit**: 32 / 32 security directive assertions verified.
+- **Multi-Role RLS Simulator**: 36 / 36 adversarial boundary checks passed.

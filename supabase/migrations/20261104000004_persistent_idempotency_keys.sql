@@ -41,3 +41,4 @@ CREATE POLICY "idempotency_keys_service_all" ON public.idempotency_keys
 REVOKE ALL ON public.idempotency_keys FROM PUBLIC, anon;
 GRANT SELECT, INSERT ON public.idempotency_keys TO authenticated;
 GRANT ALL ON public.idempotency_keys TO service_role;
+

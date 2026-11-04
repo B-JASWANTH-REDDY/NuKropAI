@@ -1,0 +1,34 @@
+
+/* ═════════════════ MANDATORY STANDARDS: TABULAR NUMBERS ═════════════════ */
+.tabular-nums, .price-badge, .mandi-rate-val, .khata-amount, .counter, .stat-value, .ticker-val, [data-tabular], .trip-fare-val, .mandi-modal-rate, .modal-rate {
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" 1 !important;
+}
+
+/* ═════════════════ MANDATORY STANDARDS: BALANCED TYPOGRAPHY ═════════════════ */
+h1, h2, h3, .view-title, .modal-title, .card-title, .balanced-text {
+  text-wrap: balance !important;
+}
+
+/* ═════════════════ MANDATORY STANDARDS: ACCESSIBLE TOUCH TARGETS (>=44PX) ═════════════════ */
+button, input, select, textarea, .touch-target, .dock-tab-btn, [role="button"], a.btn {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+/* ═════════════════ MANDATORY STANDARDS: BLURHASH / PROGRESSIVE IMAGE PLACEHOLDERS ═════════════════ */
+.blurhash-placeholder {
+  background: linear-gradient(135deg, #E2E8F0 0%, #CBD5E1 100%);
+  filter: blur(8px);
+  transform: scale(1.02);
+  transition: filter 0.3s ease-out, opacity 0.3s ease-out;
+}
+.blurhash-loaded {
+  filter: blur(0px) !important;
+  opacity: 1 !important;
+}
+
+/* ═════════════════ MANDATORY STANDARDS: CONTINUOUS CORNER RADIUS (SQUIRCLES) ═════════════════ */
+.squircle-card, .custom-modal-sheet, .m3-card {
+  border-radius: 22px !important;
+}

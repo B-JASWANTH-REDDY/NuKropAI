@@ -47,6 +47,15 @@ def main():
     parser.add_argument("--scale", type=float, default=0.2, help="Population scale factor (default 0.2 for fast testing)")
     
     args = parser.parse_args()
+
+    # Fail-closed target validation BEFORE creating runner or sending any requests
+    try:
+        from .target_validator import verify_and_print_target
+        verify_and_print_target()
+    except Exception as e:
+        print(f"\n❌ [SAFETY ABORT] {e}", file=sys.stderr)
+        sys.exit(1)
+
     runner = ScenarioRunner()
     results: List[ScenarioMetrics] = []
 

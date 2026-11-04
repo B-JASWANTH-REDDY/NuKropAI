@@ -45,26 +45,58 @@ export const options = {
   },
 };
 
-// ── ENVIRONMENT SAFETY GUARD ──────────────────────────────────────────────────
-// Prevent accidental load testing against the single production Supabase project.
-// Override BASE_URL via SUPABASE_URL env var to target a dedicated test project.
-// To explicitly allow production targeting, set NUKROPAI_FORCE_PRODUCTION_TEST=true.
-// RECOMMENDED: Create a separate Supabase free-tier project for load testing.
+// ── FAIL-CLOSED ENVIRONMENT SAFETY GUARD ─────────────────────────────────────
+// The production Supabase project (yxjqseiegwjdfnccdchk) must NEVER be reachable
+// through load-test execution under ANY circumstances, flags, or overrides.
+// All bypasses have been permanently removed.
 import { fail } from 'k6';
 
-const BASE_URL = __ENV.SUPABASE_URL || 'https://yxjqseiegwjdfnccdchk.supabase.co';
-const ANON_KEY = __ENV.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4anFzZWllZ3dqZGZuY2NkY2hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDU2NTMsImV4cCI6MjEwMTUyMTY1M30.J4swglpV5qu3hRZFll3aqhG1Y2G9mUllvXMjKq6Ikmo';
-const FORCE_PRODUCTION = __ENV.NUKROPAI_FORCE_PRODUCTION_TEST === 'true';
-
 const PRODUCTION_PROJECT_REF = 'yxjqseiegwjdfnccdchk';
-if (BASE_URL.includes(PRODUCTION_PROJECT_REF) && !FORCE_PRODUCTION) {
+
+// Target URL must come from an explicitly configured test environment
+const BASE_URL = (__ENV.TEST_SUPABASE_URL || __ENV.SUPABASE_URL || '').trim();
+const ANON_KEY = (__ENV.TEST_SUPABASE_ANON_KEY || __ENV.SUPABASE_ANON_KEY || '').trim();
+
+if (!BASE_URL) {
   fail(
-    '[SAFETY BLOCK] BASE_URL targets the production Supabase project (' + PRODUCTION_PROJECT_REF + '). ' +
-    'This load test must NOT run against production. ' +
-    'Options: (1) Set SUPABASE_URL to a dedicated test project URL, or ' +
-    '(2) Set NUKROPAI_FORCE_PRODUCTION_TEST=true to explicitly override (last resort only).'
+    '[SAFETY BLOCK] Target Supabase URL is missing or empty. ' +
+    'Load tests require an explicitly configured isolated test environment. ' +
+    'Please configure TEST_SUPABASE_URL (e.g. https://your-test-project.supabase.co or http://localhost:54321).'
   );
 }
+
+if (!BASE_URL.startsWith('http://') && !BASE_URL.startsWith('https://')) {
+  fail('[SAFETY BLOCK] Invalid target URL format: "' + BASE_URL + '". Must start with http:// or https://.');
+}
+
+if (BASE_URL.toLowerCase().includes(PRODUCTION_PROJECT_REF)) {
+  fail(
+    '[SAFETY BLOCK: CRITICAL] BASE_URL targets the production Supabase project (' + PRODUCTION_PROJECT_REF + '). ' +
+    'Load testing against production is strictly prohibited. All bypass flags have been permanently removed. ' +
+    'You MUST specify an independently configured, isolated test project.'
+  );
+}
+
+if (!ANON_KEY) {
+  fail(
+    '[SAFETY BLOCK] Isolated test anon key is missing. ' +
+    'Please configure TEST_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY for your isolated test environment.'
+  );
+}
+
+if (ANON_KEY.toLowerCase().includes(PRODUCTION_PROJECT_REF)) {
+  fail(
+    '[SAFETY BLOCK: CRITICAL] The provided API key references the production project (' + PRODUCTION_PROJECT_REF + '). ' +
+    'Production API keys cannot be used in load tests.'
+  );
+}
+
+// Target verified successfully (sanitized output, zero secrets logged)
+console.log('----------------------------------------------------------------------');
+console.log('🛡️  k6 TARGET SAFETY VALIDATION: PASSED');
+console.log('  • Target URL:     ' + BASE_URL);
+console.log('  • Production Ref: ' + PRODUCTION_PROJECT_REF + ' (PROTECTED / BLOCKED)');
+console.log('----------------------------------------------------------------------');
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HEADERS = {

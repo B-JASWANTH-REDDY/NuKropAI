@@ -17,44 +17,49 @@ import urllib.request
 import urllib.error
 from typing import Dict, Any, List, Optional, Tuple
 from .models import PersonaProfile, SimulationAction
-
-# Load environment configuration
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yxjqseiegwjdfnccdchk.supabase.co")
-ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
-
-for env_file in ["backend/.env", ".env"]:
-    try:
-        with open(env_file, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("SUPABASE_ANON_KEY=") and not ANON_KEY:
-                    ANON_KEY = line.split("=", 1)[1].strip()
-                elif line.startswith("SUPABASE_URL=") and "SUPABASE_URL" not in os.environ:
-                    SUPABASE_URL = line.split("=", 1)[1].strip()
-        if ANON_KEY:
-            break
-    except Exception:
-        pass
-
-if not ANON_KEY:
-    raise RuntimeError("SUPABASE_ANON_KEY missing from environment.")
-
-# ── ENVIRONMENT SAFETY GUARD ──
-PRODUCTION_PROJECT = "yxjqseiegwjdfnccdchk"
-NUKROPAI_ENV = os.environ.get("NUKROPAI_ENV", "").lower()
-ALLOW_SIM = os.environ.get("NUKROPAI_ALLOW_SIMULATION", "").lower() in ("true", "1")
-
-if PRODUCTION_PROJECT in SUPABASE_URL and NUKROPAI_ENV not in ("staging", "test", "ci", "simulation") and not ALLOW_SIM:
-    raise EnvironmentError(
-        f"[SAFETY BLOCK] SUPABASE_URL targets the production project ({PRODUCTION_PROJECT}). "
-        "Swarm simulation against production is restricted to prevent dashboard error spikes. "
-        "Options: (1) Set SUPABASE_URL to a dedicated test project, or "
-        "(2) Set NUKROPAI_ENV=simulation or NUKROPAI_ALLOW_SIMULATION=true to explicitly confirm intent."
-    )
+from .target_validator import (
+    validate_simulation_target,
+    ProductionTargetSafetyError,
+    TargetConfigurationError,
+    PRODUCTION_PROJECT_REF,
+)
 
 class NuKropAIAgentBridge:
     """Dedicated simulation bridge communicating with NuKropAI via real APIs."""
 
-    def __init__(self, scenario_id: str, log_callback=None):
+    def __init__(
+        self,
+        scenario_id: str,
+        log_callback=None,
+        supabase_url: Optional[str] = None,
+        anon_key: Optional[str] = None
+    ):
+        # 1. Fail-closed target validation BEFORE creating clients or sending requests
+        validated_url, project_ref, env_label = validate_simulation_target(supabase_url, anon_key)
+        self.supabase_url = validated_url
+        self.project_ref = project_ref
+        self.env_label = env_label
+
+        # 2. Resolve and validate isolated test anon key
+        resolved_key = (
+            anon_key
+            or os.environ.get("TEST_SUPABASE_ANON_KEY")
+            or os.environ.get("SIMULATION_SUPABASE_ANON_KEY")
+            or os.environ.get("SUPABASE_ANON_KEY")
+        )
+        if not resolved_key or not str(resolved_key).strip():
+            raise TargetConfigurationError(
+                "[SAFETY BLOCK] Isolated test anon key is missing. "
+                "Please configure TEST_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY for your isolated test environment."
+            )
+        resolved_key = str(resolved_key).strip()
+        if PRODUCTION_PROJECT_REF in resolved_key.lower():
+            raise ProductionTargetSafetyError(
+                f"[SAFETY BLOCK: CRITICAL] Anon key references production project ({PRODUCTION_PROJECT_REF}). "
+                "Production keys must never be used in simulations."
+            )
+        self.anon_key = resolved_key
+
         self.scenario_id = scenario_id
         self.log_callback = log_callback
         self.action_history: List[SimulationAction] = []
@@ -70,8 +75,8 @@ class NuKropAIAgentBridge:
         headers: Optional[Dict[str, str]] = None
     ) -> Tuple[int, Any, float]:
         """Execute an HTTP request with accurate millisecond latency tracking."""
-        url = f"{SUPABASE_URL}{endpoint}" if endpoint.startswith("/") else endpoint
-        hdrs = {"Content-Type": "application/json", "apikey": ANON_KEY}
+        url = f"{self.supabase_url}{endpoint}" if endpoint.startswith("/") else endpoint
+        hdrs = {"Content-Type": "application/json", "apikey": self.anon_key}
         if headers:
             hdrs.update(headers)
 
@@ -182,14 +187,15 @@ class NuKropAIAgentBridge:
         else:
             # Fallback for transient auth rate limits
             agent.user_id = f"usr_{agent.agent_id}"
-            agent.auth_token = ANON_KEY
+            agent.auth_token = self.anon_key
             self._record_action(agent, "AUTHENTICATE", None, {"email": email, "fallback": True}, status, lat, True)
             return True
 
     def _get_agent_headers(self, agent: PersonaProfile) -> Dict[str, str]:
-        token = agent.auth_token or ANON_KEY
+        token = agent.auth_token or self.anon_key
         return {
-            "apikey": ANON_KEY,
+            "Content-Type": "application/json",
+            "apikey": self.anon_key,
             "Authorization": f"Bearer {token}"
         }
 

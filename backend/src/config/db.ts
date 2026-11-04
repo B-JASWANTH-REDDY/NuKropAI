@@ -48,7 +48,8 @@ export const memoryStore = {
   soilTelemetry: [] as any[],
   valveOperations: [] as any[],
   escrowContracts: [] as any[],
-  cropSimulations: [] as any[]
+  cropSimulations: [] as any[],
+  idempotencyKeys: new Map<string, any>()
 };
 
 
@@ -282,6 +283,35 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   if (queryStr.includes('select * from public.crop_simulations')) {
     const sims = memoryStore.cropSimulations.filter(s => s.user_id === params[0]);
     return { rows: sims };
+  }
+
+  // 8. Idempotency Keys (Persistent Deduplication)
+  if (queryStr.includes('select') && queryStr.includes('public.idempotency_keys')) {
+    const key = params[0];
+    const record = memoryStore.idempotencyKeys.get(key);
+    if (record) {
+      const isExpired = record.expires_at && new Date(record.expires_at).getTime() <= Date.now();
+      if (!isExpired) {
+        return { rows: [{ response_code: record.response_code, response_body: record.response_body }] };
+      }
+      memoryStore.idempotencyKeys.delete(key);
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('insert into public.idempotency_keys')) {
+    const key = params[0];
+    const record = {
+      key,
+      user_id: params[1],
+      operation: params[2],
+      response_code: params[3],
+      response_body: typeof params[4] === 'string' ? JSON.parse(params[4]) : params[4],
+      created_at: new Date(),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
+    memoryStore.idempotencyKeys.set(key, record);
+    return { rows: [record] };
   }
 
   return { rows: [] };

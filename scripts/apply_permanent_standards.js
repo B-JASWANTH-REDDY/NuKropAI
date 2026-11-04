@@ -131,6 +131,14 @@ if (content.includes(headerLangSelectStr) && !content.includes('openMobileQuickA
   console.log('Added Quick Actions button with shortcut hint to Top Header.');
 }
 
+// 8. Invalidate user cache on logout
+const logoutTokenClear = "localStorage.removeItem('nukrop_onboarding_completed');";
+const logoutSwrInvalidate = "localStorage.removeItem('nukrop_onboarding_completed');\n    if (typeof NuKropSWR !== 'undefined' && typeof NuKropSWR.invalidateUserCache === 'function') NuKropSWR.invalidateUserCache();";
+if (content.includes(logoutTokenClear) && !content.includes('NuKropSWR.invalidateUserCache()')) {
+  content = content.replace(logoutTokenClear, () => logoutSwrInvalidate);
+  console.log('Added NuKropSWR.invalidateUserCache() to logout flow.');
+}
+
 // Write back
 fs.writeFileSync(targetPath, content, 'utf8');
 console.log('Written to index.html. New length:', content.length);

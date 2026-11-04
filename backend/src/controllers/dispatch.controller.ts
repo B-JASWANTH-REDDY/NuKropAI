@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import axios from 'axios';
 import { pool } from '../config/db';
+import { IdempotencyService } from '../services/IdempotencyService';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
@@ -427,14 +428,11 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
 
   const idempotencyKey = ((request.headers['idempotency-key'] as string) || (request.body as any)?.idempotencyKey || '').trim();
   if (idempotencyKey) {
-    const existing = dispatchMemoryStore.idempotencyMap.get(idempotencyKey);
-    if (existing) {
-      return reply.status(200).send({
-        success: true,
-        idempotentReplay: true,
-        bookingId: existing.id,
-        status: existing.status,
-        booking: existing
+    const cached = await IdempotencyService.check(idempotencyKey);
+    if (cached) {
+      return reply.status(cached.statusCode || 200).send({
+        ...cached.responseBody,
+        idempotentReplay: true
       });
     }
   }
@@ -482,9 +480,17 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     updated_at: new Date().toISOString()
   };
 
+  const responsePayload = {
+    success: true,
+    bookingId,
+    status: 'PENDING',
+    booking: bookingRecord
+  };
+
   dispatchMemoryStore.bookings.set(bookingId, bookingRecord);
   if (idempotencyKey) {
     dispatchMemoryStore.idempotencyMap.set(idempotencyKey, bookingRecord);
+    await IdempotencyService.record(idempotencyKey, userId, 'CREATE_BOOKING', 201, responsePayload);
   }
 
   if (SUPABASE_URL) {
@@ -498,12 +504,7 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     } catch {}
   }
 
-  return reply.status(201).send({
-    success: true,
-    bookingId,
-    status: 'PENDING',
-    booking: bookingRecord
-  });
+  return reply.status(201).send(responsePayload);
 };
 
 /**
@@ -515,8 +516,14 @@ export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply
   const { bookingId } = request.body as any;
   const idempotencyKey = ((request.headers['idempotency-key'] as string) || (request.body as any)?.idempotencyKey || '').trim();
 
-  if (idempotencyKey && dispatchMemoryStore.idempotencyMap.has(idempotencyKey)) {
-    return reply.status(200).send(dispatchMemoryStore.idempotencyMap.get(idempotencyKey));
+  if (idempotencyKey) {
+    const cached = await IdempotencyService.check(idempotencyKey);
+    if (cached) {
+      return reply.status(cached.statusCode || 200).send({
+        ...cached.responseBody,
+        idempotentReplay: true
+      });
+    }
   }
 
   if (!driverId) {
@@ -606,6 +613,7 @@ export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply
 
   if (idempotencyKey) {
     dispatchMemoryStore.idempotencyMap.set(idempotencyKey, acceptResponse);
+    await IdempotencyService.record(idempotencyKey, driverId, 'ACCEPT_BOOKING', 200, acceptResponse);
   }
 
   return reply.send(acceptResponse);

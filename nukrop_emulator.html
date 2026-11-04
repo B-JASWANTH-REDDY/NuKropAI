@@ -2978,11 +2978,30 @@ window.generateIdempotencyKey = generateIdempotencyKey;
 /* ═════════════════ STALE-WHILE-REVALIDATE (SWR) DATA ENGINE ═════════════════ */
 const NuKropSWR = {
   _cache: new Map(),
-  get(key, fetcher, onFresh, ttlMs = 180000) {
-    let cached = this._cache.get(key);
+  _getUserScope() {
+    try {
+      const uid = (typeof getCurrentUserId === 'function' ? getCurrentUserId() : '') || 
+                  localStorage.getItem('nukrop_user_uuid') || 
+                  localStorage.getItem('nukrop_supabase_uid') || 
+                  'anon';
+      const role = (typeof authUserRole !== 'undefined' ? authUserRole : '') || 
+                   localStorage.getItem('nukrop_user_role') || 
+                   'farmer';
+      return `${uid}_${role}`;
+    } catch(e) {
+      return 'anon_farmer';
+    }
+  },
+  _resolveKey(key, isShared = false) {
+    if (isShared) return `shared_${key}`;
+    return `usr_${this._getUserScope()}_${key}`;
+  },
+  get(key, fetcher, onFresh, ttlMs = 180000, isShared = false) {
+    const scopedKey = this._resolveKey(key, isShared);
+    let cached = this._cache.get(scopedKey);
     if (!cached) {
       try {
-        const stored = localStorage.getItem('nk_swr_' + key);
+        const stored = localStorage.getItem('nk_swr_' + scopedKey);
         if (stored) cached = JSON.parse(stored);
       } catch(e) {}
     }
@@ -2997,8 +3016,8 @@ const NuKropSWR = {
       Promise.resolve(fetcher()).then(freshData => {
         if (freshData !== undefined && freshData !== null) {
           const record = { data: freshData, timestamp: Date.now() };
-          this._cache.set(key, record);
-          try { localStorage.setItem('nk_swr_' + key, JSON.stringify(record)); } catch(e) {}
+          this._cache.set(scopedKey, record);
+          try { localStorage.setItem('nk_swr_' + scopedKey, JSON.stringify(record)); } catch(e) {}
           if (typeof onFresh === 'function') {
             try { onFresh(freshData, false); } catch(err) { console.warn('SWR fresh callback error:', err); }
           }
@@ -3009,15 +3028,30 @@ const NuKropSWR = {
     }
     return cached ? cached.data : null;
   },
-  invalidate(keyPrefix) {
+  invalidate(key, isShared = false) {
+    const scopedKey = key ? this._resolveKey(key, isShared) : '';
     for (const k of this._cache.keys()) {
-      if (!keyPrefix || k.startsWith(keyPrefix)) this._cache.delete(k);
+      if (!scopedKey || k.startsWith(scopedKey) || (key && k.includes(key))) this._cache.delete(k);
     }
     try {
       const toRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith('nk_swr_' + (keyPrefix || ''))) toRemove.push(k);
+        if (k && (k.startsWith('nk_swr_' + scopedKey) || (key && k.includes(key)))) toRemove.push(k);
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+    } catch(e) {}
+  },
+  invalidateUserCache() {
+    const userScope = this._getUserScope();
+    for (const k of this._cache.keys()) {
+      if (k.startsWith(`usr_${userScope}`) || k.startsWith('usr_')) this._cache.delete(k);
+    }
+    try {
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith(`nk_swr_usr_${userScope}`) || k.startsWith('nk_swr_usr_'))) toRemove.push(k);
       }
       toRemove.forEach(k => localStorage.removeItem(k));
     } catch(e) {}
@@ -3036,7 +3070,7 @@ function renderAgrarianStateCard(stateType, options = {}) {
 
   switch (stateType) {
     case 'loading':
-      return skeletonHtml || (typeof renderMandiPricesSkeleton === 'function' ? renderMandiPricesSkeleton() : '<div class="agrarian-state-loading agrarian-loading-state skeleton-shimmer" style="height:120px;border-radius:18px;"></div>');
+      return '<div class="agrarian-state-loading agrarian-loading-state">' + (skeletonHtml || (typeof renderMandiPricesSkeleton === 'function' ? renderMandiPricesSkeleton() : '<div class="skeleton-shimmer" style="height:120px;border-radius:18px;"></div>')) + '</div>';
 
     case 'empty':
       return '<div class="agrarian-state-empty agrarian-empty-state squircle-card" style="background:#FFFFFF;border:1.5px dashed #CBD5E1;border-radius:22px;padding:36px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;margin:16px 0;box-shadow:0 2px 8px rgba(0,0,0,0.02);">' +
@@ -3058,8 +3092,8 @@ function renderAgrarianStateCard(stateType, options = {}) {
       return '<div class="agrarian-state-offline agrarian-offline-state squircle-card" style="background:#FFFBEB;border:1.5px solid #FCD34D;border-radius:20px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin:12px 0;">' +
           '<span style="font-size:24px;flex-shrink:0;">📡</span>' +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:13px;font-weight:900;color:#92400E;">Offline Mode Active</div>' +
-            '<div style="font-size:11px;color:#B45309;font-weight:600;">Displaying verified on-device cache. Changes will queue and sync when online.</div>' +
+            '<div style="font-size:13px;font-weight:900;color:#92400E;">' + (title || 'Offline Mode Active') + '</div>' +
+            '<div style="font-size:11px;color:#B45309;font-weight:600;">' + (subtitle || 'Displaying verified on-device cache. Changes will queue and sync when online.') + '</div>' +
           '</div>' +
           (actionText ? '<button onclick="' + onAction + '" style="min-height:36px;padding:6px 12px;background:#D97706;color:#FFFFFF;border:none;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">' + actionText + '</button>' : '') +
         '</div>';
@@ -3401,7 +3435,7 @@ function handleMobileBackPress() {
   const quickSheet = document.getElementById('nukrop-quick-actions-overlay');
   if (quickSheet) { quickSheet.remove(); return true; }
 
-  const modals = document.querySelectorAll('.custom-modal-overlay, #google-auth-modal, #driver-incoming-haul-modal, #driver-truck-reg-modal, #role-switch-auth-modal, #biorx-calculator-modal, #kcc-sanction-modal, #voice-advisory-modal');
+  const modals = document.querySelectorAll('.custom-modal-overlay, .active-modal, [id$="-modal"], #google-auth-modal, #driver-incoming-haul-modal, #driver-truck-reg-modal, #role-switch-auth-modal, #biorx-calculator-modal, #kcc-sanction-modal, #voice-advisory-modal');
   for (let i = modals.length - 1; i >= 0; i--) {
     if (modals[i] && modals[i].style.display !== 'none') {
       modals[i].remove ? modals[i].remove() : (modals[i].style.display = 'none');
@@ -22671,6 +22705,7 @@ async function toggleFollowUser(authorId, authorName) {
 }
 
 
+
 function isOwnCommunityPost(p) {
   if (!p) return false;
   const currentUserId = getCurrentUserId();
@@ -23835,6 +23870,7 @@ function executeSignOutToLogin(preferredRole = null) {
     localStorage.removeItem('gh_driver_online');
     localStorage.removeItem('nukrop_onboarding_plantix_completed');
     localStorage.removeItem('nukrop_onboarding_completed');
+    if (typeof NuKropSWR !== 'undefined' && typeof NuKropSWR.invalidateUserCache === 'function') NuKropSWR.invalidateUserCache();
   } catch(e) {}
 
   if (typeof currentSupabaseSession !== 'undefined') currentSupabaseSession = null;

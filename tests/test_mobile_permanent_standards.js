@@ -266,9 +266,9 @@ test('MPS.24: Precomputed agrarian matrices (BioRx dosages, spray windows, N-P-K
 test('MPS.25: Server-side idempotency replay in Fastify dispatch controller', () => {
   const dispatchPath = path.resolve(__dirname, '..', 'backend', 'src', 'controllers', 'dispatch.controller.ts');
   const dispatchCode = fs.readFileSync(dispatchPath, 'utf8');
-  assert.ok(dispatchCode.includes('idempotencyMap: new Map<string, any>()'), 'dispatchMemoryStore must have idempotencyMap');
-  assert.ok(dispatchCode.includes('idempotencyMap.get(idempotencyKey)'), 'createBookingRequest must check idempotencyMap');
-  assert.ok(dispatchCode.includes('dispatchMemoryStore.idempotencyMap.set(idempotencyKey, bookingRecord)'), 'createBookingRequest must store booking in idempotencyMap');
+  assert.ok(dispatchCode.includes('IdempotencyService'), 'dispatch controller must import IdempotencyService');
+  assert.ok(dispatchCode.includes('IdempotencyService.check(idempotencyKey)'), 'createBookingRequest must check IdempotencyService');
+  assert.ok(dispatchCode.includes('IdempotencyService.record'), 'createBookingRequest must record into IdempotencyService');
 });
 
 console.log('\n================================================================================');

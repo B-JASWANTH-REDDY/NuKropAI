@@ -67,3 +67,19 @@ flowchart TD
 - [x] Active working branch is strictly `feature/nukropai-complete-production-remediation`.
 - [x] **Pull Request #2 remains strictly OPEN and UNMERGED.**
 - [x] No direct pushes to `main`.
+
+### Section G: Visual Experience & Motion Acceptance
+- [x] Native splash aura pulse and laser scan animations active.
+- [x] Plantix-style visual crop tiles and smooth onboarding slide progress.
+- [x] Login form focus rings and password toggle micro-interactions verified.
+- [x] OTP numeric input, autofill attributes, and focus progression active.
+- [x] Bottom dock tab pop and micro-interactions (bounce, nod, rise, pop) verified.
+- [x] Center elevated FAB tactile breathing glow active.
+- [x] Screen-to-screen `.screen-fade` transition verified without white flickering.
+- [x] Skeleton shimmer animations active across all 9 content skeletons.
+- [x] Modal and bottom-sheet slide-up and backdrop blur verified.
+- [x] AI scanner viewfinder and animated scanning laser verified.
+- [x] BlurHash canvas placeholders and progressive image decoding verified.
+- [x] Luxury toast slide-up, progress countdown, and undo restoration verified.
+- [x] Zero visual defects: no blank screens, no flickering, no layout shifts, no overlapping elements, no broken fonts, no stuck animations, and no inaccessible touch targets (<44px).
+

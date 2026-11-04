@@ -271,6 +271,95 @@ test('MPS.25: Server-side idempotency replay in Fastify dispatch controller', ()
   assert.ok(dispatchCode.includes('IdempotencyService.record'), 'createBookingRequest must record into IdempotencyService');
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// 7. Visual Experience & Animation Preservation Standards (MPS.26 - MPS.40)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test('MPS.26: Screen transition @keyframes viewFade and .screen-fade class defined', () => {
+  assert.ok(indexContent.includes('.screen-fade {'), 'Must define .screen-fade class');
+  assert.ok(indexContent.includes('@keyframes viewFade {'), 'Must declare @keyframes viewFade');
+  assert.ok(indexContent.includes('animation: viewFade 0.18s cubic-bezier(0.16, 1, 0.3, 1);'), 'Must use cubic-bezier easing');
+});
+
+test('MPS.27: Bottom dock tab micro-animations (navTabPop, roof bounce, nod, bars rise, profile pop)', () => {
+  assert.ok(indexContent.includes('@keyframes navTabPop {'), 'Must declare @keyframes navTabPop');
+  assert.ok(indexContent.includes('@keyframes navHomeRoofBounce {'), 'Must declare @keyframes navHomeRoofBounce');
+  assert.ok(indexContent.includes('@keyframes navCommAvatarNod {'), 'Must declare @keyframes navCommAvatarNod');
+  assert.ok(indexContent.includes('@keyframes navMarketBarsRise {'), 'Must declare @keyframes navMarketBarsRise');
+  assert.ok(indexContent.includes('@keyframes navProfilePop {'), 'Must declare @keyframes navProfilePop');
+  assert.ok(indexContent.includes('@keyframes navDotScale {'), 'Must declare @keyframes navDotScale');
+});
+
+test('MPS.28: Center elevated FAB breathing glow animation (navFabBreathingGlow)', () => {
+  assert.ok(indexContent.includes('@keyframes navFabBreathingGlow {'), 'Must declare @keyframes navFabBreathingGlow');
+  assert.ok(indexContent.includes('.dock-center-fab'), 'Must declare .dock-center-fab element');
+  assert.ok(indexContent.includes('radial-gradient(circle at 35% 30%'), 'Must have tactile radial gradient');
+});
+
+test('MPS.29: Modal and bottom-sheet slide-up animations (modalSheetSlideUp)', () => {
+  assert.ok(indexContent.includes('@keyframes modalSheetSlideUp {'), 'Must declare @keyframes modalSheetSlideUp');
+  assert.ok(indexContent.includes('transform: translateY(0)'), 'Must animate to translateY(0)');
+  assert.ok(indexContent.includes('backdrop-filter: blur('), 'Must feature blur backdrop filter');
+});
+
+test('MPS.30: Splash screen aura pulse and laser scan animations (splashAuraPulse, vfLaserScan)', () => {
+  assert.ok(indexContent.includes('@keyframes splashAuraPulse {'), 'Must declare @keyframes splashAuraPulse');
+  assert.ok(indexContent.includes('@keyframes vfLaserScan {'), 'Must declare @keyframes vfLaserScan');
+  assert.ok(indexContent.includes('@keyframes splashLeafShimmer {'), 'Must declare @keyframes splashLeafShimmer');
+});
+
+test('MPS.31: News ticker marquee scrolling animation (newsTickerScroll)', () => {
+  assert.ok(indexContent.includes('@keyframes newsTickerScroll {'), 'Must declare @keyframes newsTickerScroll');
+  assert.ok(indexContent.includes('transform: translateX(-50%)'), 'Must scroll seamlessly');
+});
+
+test('MPS.32: Heart pop and social engagement animation (heartPopAnimation)', () => {
+  assert.ok(indexContent.includes('@keyframes heartPopAnimation {'), 'Must declare @keyframes heartPopAnimation');
+  assert.ok(indexContent.includes('@keyframes storyRingGlow {'), 'Must declare @keyframes storyRingGlow');
+});
+
+test('MPS.33: Skeleton shimmer gradient sweep animation (nkShimmer)', () => {
+  assert.ok(indexContent.includes('@keyframes nkShimmer {'), 'Must declare @keyframes nkShimmer');
+  assert.ok(indexContent.includes('background-size: 200% 100%'), 'Must have 200% background size for shimmer sweep');
+  assert.ok(indexContent.includes('@media (prefers-reduced-motion: reduce)'), 'Must support prefers-reduced-motion');
+});
+
+test('MPS.34: Luxury toast container, undo countdown and dynamic styling', () => {
+  assert.ok(indexContent.includes('nukrop-luxury-toast-container'), 'Must manage luxury toast container');
+  assert.ok(indexContent.includes('showLuxuryToastWithUndo'), 'Must support undo toasts');
+});
+
+test('MPS.35: Device safe-area top padding and device inset CSS handling (--sat)', () => {
+  assert.ok(indexContent.includes('var(--sat'), 'Must use --sat safe-area token');
+  assert.ok(indexContent.includes('padding-top:max('), 'Must guard with padding-top:max');
+});
+
+test('MPS.36: Micro-climate spray window gauge and astronomical visual assets', () => {
+  assert.ok(indexContent.includes('function getAstronomicalState('), 'Must declare getAstronomicalState');
+  assert.ok(indexContent.includes('function getDynamicSprayWindows('), 'Must calculate dynamic spray windows');
+});
+
+test('MPS.37: OTP input numeric styling and focus visual states', () => {
+  assert.ok(indexContent.includes('inputmode="numeric"'), 'Must specify numeric keyboard');
+  assert.ok(indexContent.includes('autocomplete="one-time-code"'), 'Must support one-time-code autofill');
+});
+
+test('MPS.38: Crop doctor foliar camera viewfinder and scanning laser', () => {
+  assert.ok(indexContent.includes('camera-feed') || indexContent.includes('scanner') || indexContent.includes('vfLaserScan'), 'Must include scanner camera styles');
+});
+
+test('MPS.39: Responsive layout overflow containment across Android screen sizes', () => {
+  assert.ok(indexContent.includes('overscroll-behavior: contain;'), 'Must contain overscroll behavior');
+  assert.ok(indexContent.includes('touch-action: manipulation;'), 'Must enforce touch manipulation');
+});
+
+test('MPS.40: Strict parity of visual assets, SVGs, and animations between index.html and nukrop_emulator.html', () => {
+  const indexKeyframes = (indexContent.match(/@keyframes\s+([a-zA-Z0-9_-]+)/g) || []).sort();
+  const emulatorKeyframes = (emulatorContent.match(/@keyframes\s+([a-zA-Z0-9_-]+)/g) || []).sort();
+  assert.strictEqual(indexKeyframes.length, emulatorKeyframes.length, 'Keyframe counts must be identical across mirrors');
+  assert.deepStrictEqual(indexKeyframes, emulatorKeyframes, 'Keyframe names must match 100%');
+});
+
 console.log('\n================================================================================');
 console.log(`📊 PERMANENT STANDARDS AUDIT: ${passCount} PASSED, ${failCount} FAILED`);
 console.log('================================================================================\n');

@@ -39,6 +39,11 @@ These requirements are permanent and apply automatically to all screens, compone
 - Do not hardcode fake market tickers or mock booking acceptances.
 - If a physical Android device or external cloud model is absent, honestly document it as `BLOCKED BY EXTERNAL DEPENDENCY`.
 
+### F. Permanent Visual Experience Preservation
+- Never break or remove existing animations, micro-interactions, skeleton shimmers, or responsive layouts.
+- Verify zero blank screens, zero layout shifts, zero flickering, and zero overlapping elements.
+- All 40 Permanent Mobile Standards (`tests/test_mobile_permanent_standards.js: MPS.1-MPS.40`) must pass.
+
 ---
 
 ## 3. VERIFICATION PROTOCOL

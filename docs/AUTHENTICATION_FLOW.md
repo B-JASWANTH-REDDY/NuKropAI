@@ -90,3 +90,4 @@ To eliminate role hijacking and cross-role privacy leaks:
   - Clears `sb_auth_session` and `nukrop_user_uuid`.
   - Calls `NuKropSWR.invalidateUserCache()` to purge private records.
   - Re-initializes login screen without crashing active WebView memory.
+

@@ -68,3 +68,4 @@ Farmers can re-open the onboarding and splash experience at any time without res
 - **Trigger**: Profile -> Settings -> `Replay Splash Tour` or `Manage Active Crops`.
 - **API**: `replayStartupExperience(slideIndex)` mounts `#startup-experience-overlay` without destroying the background dashboard state.
 - **Safe Exit**: `closeStartupExperienceAndReturn()` smoothly unmounts the overlay and returns the user to the active screen.
+

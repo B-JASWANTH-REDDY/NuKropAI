@@ -119,3 +119,45 @@ Every module is connected to real backend endpoints and local fallback caches:
 - **Purge**: `executeSignOutToLogin()` invalidates session tokens, purges user-partitioned SWR cache (`NuKropSWR.invalidateUserCache()`), and resets active screens.
 - **Cross-Account Safety**: Sensitive farm records and private chats are never exposed to subsequent users on the same physical handset.
 - **Shared Retention**: Public APMC mandi benchmarks and regional pest matrices remain cached for offline access.
+
+---
+
+## 3. Permanent Visual Experience Preservation & Motion Engineering Directives
+
+A feature is complete only when its functionality **AND** visual experience are verified. No animation may be replaced with a static placeholder.
+
+### The 15 Non-Negotiable Visual Experience Standards:
+1. **Native Splash Screen Animations & Timing**: Smooth aura pulse (`@keyframes splashAuraPulse`), leaf shimmer (`@keyframes splashLeafShimmer`), and laser scan (`@keyframes vfLaserScan`) with 1.2s–2.4s timing.
+2. **Onboarding Illustrations & Progress**: Tactile crop selector tiles, smooth progress bar (`plantix-progress-bar`), and fluid slide transitions.
+3. **Login & Registration Screen Layouts**: Responsive form cards, high-visibility input focus rings, and clean show/hide password micro-interactions.
+4. **OTP Animations, Input Focus & Autofill**: 6-digit split inputs, automatic focus advance, numeric keypad enforcement (`inputmode="numeric"`), and `autocomplete="one-time-code"`.
+5. **Dashboard Entrance & Stagger Animations**: Container fade-in (`.screen-fade` via `@keyframes viewFade`) preventing blank frames.
+6. **Bottom Navigation Transitions & Active States**: Distinct micro-interactions for active tabs:
+   - Home: `@keyframes navHomeRoofBounce`
+   - Community: `@keyframes navCommAvatarNod`
+   - Market: `@keyframes navMarketBarsRise`
+   - Profile: `@keyframes navProfilePop`
+   - Active Tab Pop: `@keyframes navTabPop` and `@keyframes navDotScale`
+   - Center Elevated FAB: Tactile breathing glow (`@keyframes navFabBreathingGlow`).
+7. **Screen-to-Screen Fluid Transitions**: Hardware-accelerated 180ms ease transitions (`cubic-bezier(0.16, 1, 0.3, 1)`).
+8. **Skeleton Shimmer Animations**: Linear gradient sweep (`@keyframes nkShimmer`, 1.5s infinite) matching the exact dimensions of incoming cards. Supports `prefers-reduced-motion`.
+9. **Modal & Bottom-Sheet Animations**: Smooth slide-up (`@keyframes modalSheetSlideUp`), backdrop blur (`backdrop-filter: blur(8px)`), and touch swipe-to-dismiss gesture tracking.
+10. **AI Scanner Viewfinder & Analysis Animations**: Circular radar ping (`@keyframes radarPulse`), scanning laser line (`@keyframes vfLaserScan`), and animated diagnosis confidence gauge.
+11. **Image Loading & BlurHash Progressive Transitions**: BlurHash canvas placeholder transitioning smoothly to high-res image via `.blurhash-loaded` fade-in.
+12. **Toast, Success, Error & Undo Animations**: Sliding luxury toast (`showLuxuryToastWithUndo`), 5-second progress countdown bar, and tactile undo button.
+13. **Charts, Graphs & Dashboard Visualizations**: APMC modal price comparison bars, 3-hour micro-climate spray window gauge, and NDVI zonal indicators.
+14. **Theme & Palette Consistency**: Agrarian luxury green (`#1B5E20`, `#16A34A`), deep slate text (`#0F172A`), high-contrast alert tags, and continuous squircles (`.squircle-card`).
+15. **Responsive Layouts Across Android Form Factors**: Strict safe-area insets (`env(safe-area-inset-top)` / `var(--sat)`), minimum 44px tap targets, and overscroll containment.
+
+### The 9 Prohibited Visual Defects:
+- **No Blank Screens**: Every transition must render skeletons, loaders, or previous content until fresh data arrives.
+- **No Flickering**: Transitions must use hardware-accelerated transforms and opacity.
+- **No Layout Shifts**: Containers must reserve aspect ratios and heights before media loads.
+- **No Overlapping Elements**: Floating action buttons, docks, and modals must honor z-index tiers (Dock: 40, FAB: 50, Modal: 9999).
+- **No Broken Fonts or Icons**: Local inline SVGs and system typography stacks prevent missing icon glyphs.
+- **No Missing Images**: Every image must feature a fallback SVG or BlurHash placeholder.
+- **No Stuck Animations**: All CSS animations must have defined completion states or infinite cycle bounds.
+- **No Inaccessible Buttons**: Every touch target must meet or exceed 44px by 44px with `touch-action: manipulation`.
+- **No Inconsistent Navigation Transitions**: Sub-screens must follow the standardized back-stack hierarchy.
+
+

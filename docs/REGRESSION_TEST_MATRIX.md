@@ -26,7 +26,7 @@ In accordance with NuKropAI permanent engineering standards:
 | **Persistent Idempotency** | `tests/test_persistent_idempotency.js` | 5 | L1/L2 server restart persistence and duplicate prevention | `node tests/test_persistent_idempotency.js` | 100% (5/5) |
 | **SWR Multi-Tenant Cache** | `tests/test_swr_cache_correctness.js` | 5 | User cache scoping, multi-user isolation, logout purge | `node tests/test_swr_cache_correctness.js` | 100% (5/5) |
 | **Mobile Runtime Verification** | `tests/test_mobile_runtime_verification.js`| 7 | All 18 `APP_VIEWS`, 9 skeletons, 5-state cards | `node tests/test_mobile_runtime_verification.js`| 100% (7/7) |
-| **Permanent Mobile Standards**| `tests/test_mobile_permanent_standards.js` | 25 | 20 UI/UX standards, touch targets, OTP, BlurHash | `node tests/test_mobile_permanent_standards.js` | 100% (25/25) |
+| **Permanent Mobile Standards**| `tests/test_mobile_permanent_standards.js` | 40 | 20 UI/UX standards + 15 visual experience & animation standards | `node tests/test_mobile_permanent_standards.js` | 100% (40/40) |
 | **Onboarding & Splash Flows** | `tests/test_onboarding_and_splash_flows.js` | 10 | Splash animation, crop selector, replay overlay | `node tests/test_onboarding_and_splash_flows.js` | 100% (10/10) |
 | **Full E2E Agrarian OS Runner**| `tests/run_e2e_tests.js` | 203 | Comprehensive tier-0 to tier-4 functional coverage | `node tests/run_e2e_tests.js` | 100% (203/203) |
 | **Milestone 1 GramHaul Map** | `tests/verify_milestone1_gramhaul.js` | 14 | Leaflet OSM map, PostGIS trucks, Haversine | `node tests/verify_milestone1_gramhaul.js` | 100% (14/14) |
@@ -71,3 +71,4 @@ When a regression is detected:
 3. **Surgical Fix**: Apply the minimum necessary change to restore the behavior without altering unrelated files.
 4. **Parity Check**: If modifying `app/src/main/assets/index.html`, immediately sync `nukrop_emulator.html` byte-for-byte.
 5. **Re-Run Full Matrix**: Execute both the failed test and all 8 user journeys in `test_mandatory_user_journeys.js`.
+

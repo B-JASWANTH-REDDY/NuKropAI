@@ -83,3 +83,4 @@ All payment-sensitive and duplicate-prone endpoints (`/api/v1/dispatch/book`, `/
 2. **Server L1**: In-memory LRU cache checked within <1ms.
 3. **Server L2**: PostgreSQL table `public.idempotency_keys` locked atomically via `ON CONFLICT (key) DO NOTHING`.
 4. **Replay**: Duplicate requests within the 24-hour TTL receive the identical cached response status and payload without duplicating bookings.
+

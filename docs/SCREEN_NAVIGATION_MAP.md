@@ -104,3 +104,4 @@ flowchart TD
   `openScreen('driver_dashboard')` is enforced, and a warning toast is shown.
 - If a user logged in as a **Farmer** attempts to open `driver_dashboard`, navigation is redirected to `openScreen('gramhaul')`.
 - Role switching requires an explicit sign-out via `executeSignOutToLogin(preferredRole)`.
+

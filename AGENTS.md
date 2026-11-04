@@ -38,6 +38,10 @@ Do not wait for the user to remind you. If you are starting a new session or sub
 6. **Zero-Regression & App Flow Preservation**:
    - Never remove existing screens, break navigation, skip onboarding steps, or replace working backend APIs with mocks.
    - All 8 Mandatory User Journeys (`tests/test_mandatory_user_journeys.js`) must pass 100% on every commit.
+7. **Permanent Visual Experience Preservation**:
+   - Never remove or break existing visual experiences, animations, transitions, or responsive layouts.
+   - A feature is complete only when its functionality AND visual experience are verified.
+   - All 40 Permanent Mobile Standards (`tests/test_mobile_permanent_standards.js: MPS.1-MPS.40`) must pass 100% on every commit.
 
 ---
 

@@ -199,16 +199,29 @@ class MainActivity : ComponentActivity() {
         fun pickDeviceGoogleAccount() {
             runOnUiThread {
                 try {
-                    val intent = android.accounts.AccountManager.newChooseAccountIntent(
-                        null,
-                        null,
-                        arrayOf("com.google"),
-                        false,
-                        null,
-                        null,
-                        null,
-                        null
-                    )
+                    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        android.accounts.AccountManager.newChooseAccountIntent(
+                            null,
+                            null,
+                            arrayOf("com.google"),
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.accounts.AccountManager.newChooseAccountIntent(
+                            null,
+                            null,
+                            arrayOf("com.google"),
+                            false,
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    }
                     startActivityForResult(intent, 1009)
                 } catch (e: Exception) {
                     android.util.Log.e("NuKropAuth", "Account picker error: ${e.message}")
@@ -217,14 +230,28 @@ class MainActivity : ComponentActivity() {
                         if (accounts.isNotEmpty()) {
                             val email = accounts[0].name
                             val name = email.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                            webView.evaluateJavascript("if(window.onNativeGoogleAccountSelected) window.onNativeGoogleAccountSelected('$email', '$name')", null)
+                            webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountSelected === 'function') window.onNativeGoogleAccountSelected('$email', '$name')", null)
                         } else {
-                            webView.evaluateJavascript("if(window.onNativeGoogleAccountNotFound) window.onNativeGoogleAccountNotFound()", null)
+                            webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
                         }
                     } catch (ex: Exception) {
-                        webView.evaluateJavascript("if(window.onNativeGoogleAccountNotFound) window.onNativeGoogleAccountNotFound()", null)
+                        webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
                     }
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun getDeviceAccountsJson(): String {
+            return try {
+                val accounts = android.accounts.AccountManager.get(this@MainActivity).getAccountsByType("com.google")
+                val jsonArr = org.json.JSONArray()
+                for (acc in accounts) {
+                    jsonArr.put(acc.name)
+                }
+                jsonArr.toString()
+            } catch (e: Exception) {
+                "[]"
             }
         }
     }
@@ -235,7 +262,7 @@ class MainActivity : ComponentActivity() {
             val accountName = data.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
             if (!accountName.isNullOrEmpty()) {
                 val name = accountName.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                webView.evaluateJavascript("if(window.onNativeGoogleAccountSelected) window.onNativeGoogleAccountSelected('$accountName', '$name')", null)
+                webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountSelected === 'function') window.onNativeGoogleAccountSelected('$accountName', '$name')", null)
             }
         }
     }

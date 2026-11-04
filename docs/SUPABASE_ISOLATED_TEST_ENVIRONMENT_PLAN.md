@@ -193,3 +193,4 @@ After completing simulations:
 - Local: Run `supabase db reset` to restore database to pristine state.
 - Cloud: Truncate or delete all records where `email LIKE '%@nukrop-sim.in'`.
 - Clean log artifacts: `simulations/logs/actions.jsonl` can be archived or cleared.
+

@@ -24,6 +24,14 @@ from .target_validator import (
     PRODUCTION_PROJECT_REF,
 )
 
+class SafeNoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Fail-closed redirect handler preventing automatic redirection during simulation."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ProductionTargetSafetyError(
+            f"[SAFETY BLOCK] HTTP redirect ({code}) to '{newurl}' detected. "
+            "Automatic redirects are strictly disabled for simulation safety to prevent destination tampering."
+        )
+
 class NuKropAIAgentBridge:
     """Dedicated simulation bridge communicating with NuKropAI via real APIs."""
 
@@ -32,12 +40,17 @@ class NuKropAIAgentBridge:
         scenario_id: str,
         log_callback=None,
         supabase_url: Optional[str] = None,
+        project_ref: Optional[str] = None,
         anon_key: Optional[str] = None
     ):
         # 1. Fail-closed target validation BEFORE creating clients or sending requests
-        validated_url, project_ref, env_label = validate_simulation_target(supabase_url, anon_key)
+        validated_url, ref, env_label = validate_simulation_target(
+            url=supabase_url,
+            project_ref=project_ref,
+            anon_key=anon_key
+        )
         self.supabase_url = validated_url
-        self.project_ref = project_ref
+        self.project_ref = ref
         self.env_label = env_label
 
         # 2. Resolve and validate isolated test anon key
@@ -45,12 +58,11 @@ class NuKropAIAgentBridge:
             anon_key
             or os.environ.get("TEST_SUPABASE_ANON_KEY")
             or os.environ.get("SIMULATION_SUPABASE_ANON_KEY")
-            or os.environ.get("SUPABASE_ANON_KEY")
         )
         if not resolved_key or not str(resolved_key).strip():
             raise TargetConfigurationError(
                 "[SAFETY BLOCK] Isolated test anon key is missing. "
-                "Please configure TEST_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY for your isolated test environment."
+                "Please configure TEST_SUPABASE_ANON_KEY for your isolated test environment."
             )
         resolved_key = str(resolved_key).strip()
         if PRODUCTION_PROJECT_REF in resolved_key.lower():
@@ -66,6 +78,7 @@ class NuKropAIAgentBridge:
         self.api_call_count = 0
         self.api_error_count = 0
         self.total_latency_ms = 0.0
+        self._opener = urllib.request.build_opener(SafeNoRedirectHandler())
 
     def _http_request(
         self,
@@ -87,7 +100,7 @@ class NuKropAIAgentBridge:
         self.api_call_count += 1
         
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with self._opener.open(req, timeout=15) as resp:
                 elapsed_ms = (time.perf_counter() - start_time) * 1000.0
                 self.total_latency_ms += elapsed_ms
                 raw_text = resp.read().decode("utf-8")

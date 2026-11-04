@@ -13,8 +13,8 @@ if __name__ == '__main__':
             localStorage.setItem('nukrop_onboarding_plantix_completed', 'true');
             localStorage.setItem('nukrop_auth_method', 'guest');
         """)
-        page.goto(f"file:///{html_path}")
-        page.wait_for_timeout(1000)
+        page.goto(f"file:///{html_path}", wait_until="domcontentloaded")
+        page.wait_for_timeout(2500)
 
         # 1. Community badge test
         b_before = page.evaluate('!!document.getElementById("community-badge")')
@@ -67,7 +67,7 @@ if __name__ == '__main__':
                 console.log(e);
             }
         })()''')
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(2500)
         print('save-presc-btn after startScannerDiagnostic():', page.evaluate('!!document.getElementById("save-presc-btn")'))
 
         browser.close()

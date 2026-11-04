@@ -1216,6 +1216,24 @@ html, body {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+    background: #E2E8F0 !important;
+  }
+}
+.stale-cache-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
 
 /* ═════════════════ RESPONSIVE DESKTOP CANVAS ═════════════════ */
 @media (min-width: 641px) {
@@ -24362,6 +24380,228 @@ function closeKhataModal(e) {
 }
 
 /* ═════════════════ SYSTEM HELPER ALIASES ═════════════════ */
+
+/* ═════════════════ FULL-STACK SKELETON LOADER SUITE (PHASE 13) ═════════════════ */
+function renderMandiPricesSkeleton() {
+  return `
+    <div class="mandi-skeleton-wrap" style="display:flex;flex-direction:column;gap:12px;margin-top:10px;" aria-label="Loading verified Mandi prices...">
+      ${[1, 2, 3].map(() => `
+        <div style="background:#FFFFFF;border-radius:18px;border:1.2px solid #E2E8F0;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.03);display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="skeleton-shimmer" style="width:40px;height:40px;border-radius:12px;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div class="skeleton-shimmer" style="width:110px;height:16px;border-radius:4px;"></div>
+                <div class="skeleton-shimmer" style="width:140px;height:12px;border-radius:4px;"></div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+              <div class="skeleton-shimmer" style="width:75px;height:20px;border-radius:6px;"></div>
+              <div class="skeleton-shimmer" style="width:50px;height:11px;border-radius:4px;"></div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #F1F5F9;">
+            <div class="skeleton-shimmer" style="width:120px;height:12px;border-radius:4px;"></div>
+            <div class="skeleton-shimmer" style="width:70px;height:12px;border-radius:4px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderScannerEvaluatingSkeleton() {
+  return `
+    <div style="background:#FFFFFF;border-radius:20px;border:1.5px solid #86EFAC;padding:18px;box-shadow:0 8px 30px rgba(22,163,74,0.12);display:flex;flex-direction:column;gap:14px;" aria-label="Analyzing foliar specimen with Vision AI...">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="skeleton-shimmer" style="width:46px;height:46px;border-radius:14px;"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+          <div class="skeleton-shimmer" style="width:65%;height:18px;border-radius:4px;"></div>
+          <div class="skeleton-shimmer" style="width:40%;height:13px;border-radius:4px;"></div>
+        </div>
+        <div class="skeleton-shimmer" style="width:60px;height:24px;border-radius:12px;"></div>
+      </div>
+      <div class="skeleton-shimmer" style="width:100%;height:44px;border-radius:10px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="skeleton-shimmer" style="height:76px;border-radius:12px;"></div>
+        <div class="skeleton-shimmer" style="height:76px;border-radius:12px;"></div>
+      </div>
+      <div class="skeleton-shimmer" style="width:100%;height:40px;border-radius:12px;"></div>
+    </div>
+  `;
+}
+
+function renderEquipmentMarketplaceSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:12px;" aria-label="Loading verified CHC machinery...">
+      ${[1, 2].map(() => `
+        <div style="background:#FFFFFF;border-radius:18px;border:1.2px solid #E2E8F0;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.03);display:flex;gap:12px;">
+          <div class="skeleton-shimmer" style="width:78px;height:78px;border-radius:14px;flex-shrink:0;"></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div class="skeleton-shimmer" style="width:110px;height:16px;border-radius:4px;"></div>
+              <div class="skeleton-shimmer" style="width:65px;height:16px;border-radius:6px;"></div>
+            </div>
+            <div class="skeleton-shimmer" style="width:130px;height:12px;border-radius:4px;"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+              <div class="skeleton-shimmer" style="width:80px;height:18px;border-radius:4px;"></div>
+              <div class="skeleton-shimmer" style="width:70px;height:26px;border-radius:10px;"></div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderCommunityFeedSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:14px;" aria-label="Loading farmer community feed...">
+      ${[1, 2].map(() => `
+        <div style="background:#FFFFFF;border-radius:18px;border:1.2px solid #E2ECE2;padding:16px;box-shadow:0 3px 12px rgba(0,0,0,0.03);display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="skeleton-shimmer" style="width:42px;height:42px;border-radius:50%;"></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:5px;">
+              <div class="skeleton-shimmer" style="width:120px;height:15px;border-radius:4px;"></div>
+              <div class="skeleton-shimmer" style="width:90px;height:11px;border-radius:4px;"></div>
+            </div>
+          </div>
+          <div class="skeleton-shimmer" style="width:90%;height:14px;border-radius:4px;"></div>
+          <div class="skeleton-shimmer" style="width:100%;height:160px;border-radius:14px;"></div>
+          <div style="display:flex;gap:12px;padding-top:4px;">
+            <div class="skeleton-shimmer" style="width:60px;height:24px;border-radius:8px;"></div>
+            <div class="skeleton-shimmer" style="width:60px;height:24px;border-radius:8px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderFarmKhataSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:14px;" aria-label="Loading Farm Khata ledger...">
+      <div style="background:#FFFFFF;border-radius:18px;border:1.2px solid #E2ECE2;padding:16px;display:flex;flex-direction:column;gap:10px;">
+        <div class="skeleton-shimmer" style="width:140px;height:12px;border-radius:4px;"></div>
+        <div class="skeleton-shimmer" style="width:180px;height:30px;border-radius:6px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
+          <div class="skeleton-shimmer" style="height:55px;border-radius:10px;"></div>
+          <div class="skeleton-shimmer" style="height:55px;border-radius:10px;"></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${[1, 2, 3].map(() => `
+          <div style="background:#FFFFFF;border-radius:14px;border:1px solid #E2E8F0;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <div class="skeleton-shimmer" style="width:110px;height:14px;border-radius:4px;"></div>
+              <div class="skeleton-shimmer" style="width:70px;height:11px;border-radius:4px;"></div>
+            </div>
+            <div class="skeleton-shimmer" style="width:65px;height:18px;border-radius:4px;"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderOutbreakAlertsSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:14px;" aria-label="Scanning regional pest radar...">
+      ${[1, 2].map(() => `
+        <div style="background:#FFFFFF;border-radius:18px;border:1.2px solid #E2ECE2;padding:16px;display:flex;flex-direction:column;gap:12px;">
+          <div class="skeleton-shimmer" style="width:100%;height:130px;border-radius:12px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="skeleton-shimmer" style="width:140px;height:16px;border-radius:4px;"></div>
+            <div class="skeleton-shimmer" style="width:80px;height:20px;border-radius:8px;"></div>
+          </div>
+          <div class="skeleton-shimmer" style="width:95%;height:13px;border-radius:4px;"></div>
+          <div class="skeleton-shimmer" style="width:100%;height:36px;border-radius:10px;"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderNearbyDriversSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:10px;" aria-label="Discovering verified drivers in 10 km radar...">
+      ${[1, 2, 3].map(() => `
+        <div style="background:#FFFFFF;border-radius:16px;border:1.2px solid #E2E8F0;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="skeleton-shimmer" style="width:38px;height:38px;border-radius:10px;"></div>
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <div class="skeleton-shimmer" style="width:100px;height:14px;border-radius:4px;"></div>
+              <div class="skeleton-shimmer" style="width:120px;height:11px;border-radius:4px;"></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+            <div class="skeleton-shimmer" style="width:50px;height:16px;border-radius:6px;"></div>
+            <div class="skeleton-shimmer" style="width:65px;height:12px;border-radius:4px;"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderWeatherDashboardSkeleton() {
+  return `
+    <div style="background:#FFFFFF;border-radius:18px;border:1.2px solid #E2ECE2;padding:16px;display:flex;flex-direction:column;gap:12px;" aria-label="Connecting to satellite meteorological radar...">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="skeleton-shimmer" style="width:120px;height:16px;border-radius:4px;"></div>
+        <div class="skeleton-shimmer" style="width:55px;height:24px;border-radius:12px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="skeleton-shimmer" style="width:50px;height:50px;border-radius:14px;"></div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div class="skeleton-shimmer" style="width:90px;height:28px;border-radius:6px;"></div>
+          <div class="skeleton-shimmer" style="width:130px;height:13px;border-radius:4px;"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding-top:8px;border-top:1px solid #F1F5F9;">
+        <div class="skeleton-shimmer" style="height:44px;border-radius:8px;"></div>
+        <div class="skeleton-shimmer" style="height:44px;border-radius:8px;"></div>
+        <div class="skeleton-shimmer" style="height:44px;border-radius:8px;"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderGovtSchemesSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:14px;" aria-label="Loading government welfare subsidies...">
+      <div class="skeleton-shimmer" style="width:100%;height:150px;border-radius:20px;"></div>
+      ${[1, 2].map(() => `
+        <div style="background:#FFFFFF;border-radius:16px;border:1.2px solid #E2E8F0;padding:14px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;justify-content:space-between;">
+            <div class="skeleton-shimmer" style="width:140px;height:16px;border-radius:4px;"></div>
+            <div class="skeleton-shimmer" style="width:70px;height:18px;border-radius:6px;"></div>
+          </div>
+          <div class="skeleton-shimmer" style="width:90%;height:12px;border-radius:4px;"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderNotificationsSkeleton() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:10px;" aria-label="Loading notifications...">
+      ${[1, 2, 3, 4].map(() => `
+        <div style="background:#FFFFFF;border-radius:14px;border:1px solid #E2E8F0;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;">
+          <div class="skeleton-shimmer" style="width:34px;height:34px;border-radius:50%;flex-shrink:0;"></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:5px;">
+            <div class="skeleton-shimmer" style="width:130px;height:14px;border-radius:4px;"></div>
+            <div class="skeleton-shimmer" style="width:90%;height:11px;border-radius:4px;"></div>
+          </div>
+          <div class="skeleton-shimmer" style="width:40px;height:10px;border-radius:3px;"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+
 function openLanguageModal() {
   if (typeof openLanguageSelectorModal === 'function') openLanguageSelectorModal();
 }
@@ -30140,10 +30380,19 @@ function startDriverRealGPSWatch() {
     window._driverGpsWatchId = null;
   }
 
-  const driverId = localStorage.getItem('nukrop_driver_phone') || localStorage.getItem('nukrop_driver_plate') || 'DRV-LIVE';
-  const driverName = localStorage.getItem('nukrop_driver_name') || 'Driver';
-  const driverPlate = localStorage.getItem('nukrop_driver_plate') || 'Active Fleet';
+  const driverId = localStorage.getItem('nukrop_user_uuid') || localStorage.getItem('nukrop_driver_phone') || localStorage.getItem('nukrop_driver_plate') || 'DRV-LIVE';
+  const driverName = localStorage.getItem('nukrop_user_name') || localStorage.getItem('nukrop_driver_name') || 'Driver';
+  const driverPlate = localStorage.getItem('nukrop_driver_plate') || 'AP-39-TK-1008';
   const vehicle = localStorage.getItem('nukrop_driver_vehicle') || 'Tata Ace Gold (1.5 Ton)';
+
+  // Activate Android Native Foreground GPS Service if running inside APK
+  if (window.AndroidBridge && typeof window.AndroidBridge.startDriverLocationService === 'function') {
+    try {
+      window.AndroidBridge.startDriverLocationService(driverId, driverName, driverPlate, vehicle);
+    } catch (e) {
+      console.warn('[DriverLocationService] Bridge start error:', e);
+    }
+  }
 
   window._driverGpsWatchId = navigator.geolocation.watchPosition(
     (pos) => {
@@ -30197,6 +30446,16 @@ function startDriverRealGPSWatch() {
           is_online: true,
           last_ping: new Date().toISOString()
         }], { onConflict: 'driver_id' }).then(() => {});
+
+        if (typeof window.sbClient.rpc === 'function') {
+          window.sbClient.rpc('upsert_driver_location', {
+            p_driver_id: driverId,
+            p_lon: curLon,
+            p_lat: curLat,
+            p_heading: heading,
+            p_speed_kmh: speedKmh
+          }).then(() => {}).catch(() => {});
+        }
       }
     },
     (err) => {
@@ -30210,6 +30469,13 @@ function startDriverRealGPSWatch() {
 window.startDriverRealGPSWatch = startDriverRealGPSWatch;
 
 function stopDriverRealGPSWatch() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.stopDriverLocationService === 'function') {
+    try {
+      window.AndroidBridge.stopDriverLocationService();
+    } catch (e) {
+      console.warn('[DriverLocationService] Bridge stop error:', e);
+    }
+  }
   if (window._driverGpsWatchId) {
     if (navigator.geolocation && typeof navigator.geolocation.clearWatch === 'function') {
       navigator.geolocation.clearWatch(window._driverGpsWatchId);
@@ -37689,6 +37955,13 @@ async function startScannerDiagnostic() {
     btn.disabled = true;
     btn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;"><span style="animation:spin 1s linear infinite;">⚡</span> ${TL('Connecting to Real AI Agronomist...', 'రియల్ AI ఆకును విశ్లేషిస్తోంది...', 'रीयल AI फसल का विश्लेषण कर रहा है...')}</span>`;
     btn.style.background = '#D97706';
+  }
+  const preDiagBox = document.getElementById('scan-diag-box');
+  const preResultContent = document.getElementById('scan-result-content');
+  if (preDiagBox && preResultContent && typeof renderScannerEvaluatingSkeleton === 'function') {
+    preDiagBox.style.display = 'block';
+    preResultContent.innerHTML = renderScannerEvaluatingSkeleton();
+    preDiagBox.scrollIntoView({ behavior: 'smooth' });
   }
 
   // Active crop context

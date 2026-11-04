@@ -26,24 +26,29 @@ import urllib.error
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
-SUPABASE_URL = 'https://yxjqseiegwjdfnccdchk.supabase.co'
-ANON_KEY = ''
+# ── SAFETY & ISOLATED TEST ENVIRONMENT VALIDATION ──
+# Enforce Phase 13 Safety Rules: NEVER connect to production (yxjqseiegwjdfnccdchk)
+TEST_SUPABASE_URL = os.environ.get('TEST_SUPABASE_URL', '').strip()
+TEST_SUPABASE_ANON_KEY = os.environ.get('TEST_SUPABASE_ANON_KEY', '').strip()
+TEST_PROJECT_REF = os.environ.get('TEST_SUPABASE_PROJECT_REF', '').strip()
 
-for env_file in ['backend/.env', '.env']:
-    try:
-        with open(env_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.startswith('SUPABASE_ANON_KEY='):
-                    ANON_KEY = line.split('=', 1)[1].strip()
-                    break
-        if ANON_KEY:
-            break
-    except Exception:
-        pass
+if not TEST_SUPABASE_URL or not TEST_SUPABASE_ANON_KEY:
+    print("================================================================================")
+    print("BLOCKED: Phase 9 tests require a validated isolated test Supabase environment.")
+    print("Safety Rules 6 and 7: Production project (yxjqseiegwjdfnccdchk) is strictly blocked.")
+    print("To execute, configure TEST_SUPABASE_URL, TEST_SUPABASE_ANON_KEY, and TEST_SUPABASE_PROJECT_REF.")
+    print("================================================================================")
+    sys.exit(0)
 
-if not ANON_KEY:
-    print("FATAL: SUPABASE_ANON_KEY not found in environment files.")
+try:
+    from simulations.mirofish_adapter.target_validator import validate_test_target_url
+    validate_test_target_url(TEST_SUPABASE_URL, TEST_PROJECT_REF)
+except Exception as e:
+    print(f"FATAL: Target safety validation failed: {e}")
     sys.exit(1)
+
+SUPABASE_URL = TEST_SUPABASE_URL
+ANON_KEY = TEST_SUPABASE_ANON_KEY
 
 def http_request(url, method='GET', data=None, headers=None):
     hdrs = {'Content-Type': 'application/json'}

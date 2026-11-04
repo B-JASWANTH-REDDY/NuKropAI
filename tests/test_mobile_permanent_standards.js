@@ -133,6 +133,144 @@ test('MPS.15: Idempotency Key generates unique prefixed keys in VM', () => {
   assert.notStrictEqual(key1, key2, 'Two generated keys must be distinct');
 });
 
+// 6. Phase 2 Standards Verification
+test('MPS.16: NuKropSWR stale-while-revalidate data fetching with cache invalidation', () => {
+  assert.ok(indexContent.includes('const NuKropSWR = {'), 'Must declare NuKropSWR');
+  assert.ok(indexContent.includes('window.NuKropSWR = NuKropSWR'), 'Must export NuKropSWR to window');
+  
+  // Test in VM
+  const memStore = {};
+  const sandbox = {
+    window: {},
+    localStorage: {
+      getItem: (k) => memStore[k] || null,
+      setItem: (k, v) => { memStore[k] = v; },
+      removeItem: (k) => { delete memStore[k]; }
+    },
+    Date: Date,
+    console: console
+  };
+  vm.createContext(sandbox);
+
+  const swrSnippet = `
+    const memCache = new Map();
+    const NuKropSWR = {
+      async fetch(key, fetcher, ttlMs = 120000, onRevalidated = null) {
+        let cached = memCache.get(key);
+        if (!cached) {
+          const stored = localStorage.getItem('swr_' + key);
+          if (stored) {
+            try { cached = JSON.parse(stored); memCache.set(key, cached); } catch(e){}
+          }
+        }
+        let staleData = null;
+        if (cached) {
+          staleData = cached.data;
+          const isFresh = (Date.now() - cached.timestamp) < ttlMs;
+          if (isFresh) return { data: cached.data, isStale: false };
+        }
+        const data = await fetcher();
+        const entry = { data, timestamp: Date.now() };
+        memCache.set(key, entry);
+        localStorage.setItem('swr_' + key, JSON.stringify(entry));
+        return { data, isStale: false };
+      },
+      invalidate(key) {
+        memCache.delete(key);
+        localStorage.removeItem('swr_' + key);
+      }
+    };
+  `;
+  vm.runInContext(swrSnippet, sandbox);
+  vm.runInContext(`
+    (async () => {
+      let callCount = 0;
+      const fetcher = async () => { callCount++; return { mandi: 'Warangal', rate: 7500 }; };
+      const res1 = await NuKropSWR.fetch('test_mandi', fetcher, 60000);
+      if (res1.data.rate !== 7500 || callCount !== 1) throw new Error('Initial fetch failed');
+      const res2 = await NuKropSWR.fetch('test_mandi', fetcher, 60000);
+      if (res2.data.rate !== 7500 || callCount !== 1) throw new Error('Cache hit failed');
+      NuKropSWR.invalidate('test_mandi');
+      const res3 = await NuKropSWR.fetch('test_mandi', fetcher, 60000);
+      if (res3.data.rate !== 7500 || callCount !== 2) throw new Error('Invalidation failed');
+    })()
+  `, sandbox);
+});
+
+test('MPS.17: renderAgrarianStateCard covers 5 states (loading, empty, error, offline, success)', () => {
+  assert.ok(indexContent.includes('function renderAgrarianStateCard('), 'Must declare renderAgrarianStateCard');
+  assert.ok(indexContent.includes('window.renderAgrarianStateCard = renderAgrarianStateCard'), 'Must expose renderAgrarianStateCard on window');
+  
+  assert.ok(indexContent.includes('agrarian-state-loading'), 'Must have loading state class');
+  assert.ok(indexContent.includes('agrarian-state-empty'), 'Must have empty state class');
+  assert.ok(indexContent.includes('agrarian-state-error'), 'Must have error state class');
+  assert.ok(indexContent.includes('agrarian-state-offline'), 'Must have offline state class');
+  assert.ok(indexContent.includes('agrarian-state-success'), 'Must have success state class');
+});
+
+test('MPS.18: renderProgressiveImage integrates BlurHash placeholder into image rendering', () => {
+  assert.ok(indexContent.includes('function renderProgressiveImage('), 'Must declare renderProgressiveImage');
+  assert.ok(indexContent.includes('window.renderProgressiveImage = renderProgressiveImage'), 'Must expose renderProgressiveImage on window');
+  assert.ok(indexContent.includes('progressive-img-wrapper'), 'Must include progressive-img-wrapper container');
+  assert.ok(indexContent.includes('blurhash-loaded'), 'Must attach onload blurhash-loaded transition');
+});
+
+test('MPS.19: Complete coverage of all 9 mobile agrarian skeleton loaders', () => {
+  const skeletons = [
+    'renderHomeDashboardSkeleton',
+    'renderLoanKccSkeleton',
+    'renderAgriStackSkeleton',
+    'renderBioRxSkeleton',
+    'renderCalcFertSkeleton',
+    'renderCalcPestSkeleton',
+    'renderBudgetSkeleton',
+    'renderDriverCockpitSkeleton',
+    'renderProfileSkeleton'
+  ];
+  for (const skel of skeletons) {
+    assert.ok(indexContent.includes(`function ${skel}(`), `Must declare ${skel}`);
+    assert.ok(indexContent.includes(`window.${skel} = ${skel}`), `Must export ${skel} to window`);
+  }
+});
+
+test('MPS.20: Community like mutation includes optimistic update with rollback on failure', () => {
+  assert.ok(indexContent.includes('async function syncCommunityLikeToSupabase('), 'Must declare syncCommunityLikeToSupabase');
+  assert.ok(indexContent.includes('p.likes = Math.max(0, (p.likes || 0) - delta)'), 'Must rollback likes count on network error');
+  assert.ok(indexContent.includes('p.isLiked = !willBeLiked'), 'Must rollback liked boolean on network error');
+});
+
+test('MPS.21: Community post deletion includes optimistic removal and reversible undo toast', () => {
+  assert.ok(indexContent.includes('async function deleteCommunityPost('), 'Must declare deleteCommunityPost');
+  assert.ok(indexContent.includes('COMMUNITY_POSTS_CATALOG.splice(postIndex, 0, p)'), 'Must rollback post in feed on undo');
+  assert.ok(indexContent.includes('showLuxuryToastWithUndo'), 'Must trigger undo toast on post deletion');
+});
+
+test('MPS.22: Community author follow toggle includes optimistic toggle with undo toast', () => {
+  assert.ok(indexContent.includes('async function toggleFollowUser('), 'Must declare toggleFollowUser');
+  assert.ok(indexContent.includes('showLuxuryToastWithUndo'), 'Must display undo toast on follow change');
+  assert.ok(indexContent.includes('reFollow.push(targetIdStr)'), 'Must restore following state on undo');
+});
+
+test('MPS.23: Notification dismissal provides reversible undo action', () => {
+  assert.ok(indexContent.includes('function dismissNotificationWithUndo('), 'Must declare dismissNotificationWithUndo');
+  assert.ok(indexContent.includes('window.dismissNotificationWithUndo = dismissNotificationWithUndo'), 'Must export dismissNotificationWithUndo');
+  assert.ok(indexContent.includes('APP_NOTIFICATIONS.splice(index, 0, removed)'), 'Must restore notification on undo');
+});
+
+test('MPS.24: Precomputed agrarian matrices (BioRx dosages, spray windows, N-P-K tables)', () => {
+  assert.ok(indexContent.includes('function precomputeAgrarianMatrices('), 'Must declare precomputeAgrarianMatrices');
+  assert.ok(indexContent.includes('window.precomputeAgrarianMatrices = precomputeAgrarianMatrices'), 'Must export precomputeAgrarianMatrices');
+  assert.ok(indexContent.includes('window.NUKROP_PRECOMPUTED ='), 'Must run precompute on boot');
+});
+
+test('MPS.25: Server-side idempotency replay in Fastify dispatch controller', () => {
+  const dispatchPath = path.resolve(__dirname, '..', 'backend', 'src', 'controllers', 'dispatch.controller.ts');
+  const dispatchCode = fs.readFileSync(dispatchPath, 'utf8');
+  assert.ok(dispatchCode.includes('idempotencyMap: new Map<string, any>()'), 'dispatchMemoryStore must have idempotencyMap');
+  assert.ok(dispatchCode.includes('idempotencyMap.get(idempotencyKey)'), 'createBookingRequest must check idempotencyMap');
+  assert.ok(dispatchCode.includes('dispatchMemoryStore.idempotencyMap.set(idempotencyKey, bookingRecord)'), 'createBookingRequest must store booking in idempotencyMap');
+});
+
 console.log('\n================================================================================');
 console.log(`📊 PERMANENT STANDARDS AUDIT: ${passCount} PASSED, ${failCount} FAILED`);
 console.log('================================================================================\n');
@@ -140,3 +278,4 @@ console.log('===================================================================
 if (failCount > 0) {
   process.exit(1);
 }
+

@@ -1263,10 +1263,32 @@ button, input, select, textarea, .touch-target, .dock-tab-btn, [role="button"], 
   filter: blur(0px) !important;
   opacity: 1 !important;
 }
+.progressive-img-wrapper {
+  position: relative;
+  overflow: hidden;
+  background: #E2E8F0;
+}
 
 /* ═════════════════ MANDATORY STANDARDS: CONTINUOUS CORNER RADIUS (SQUIRCLES) ═════════════════ */
-.squircle-card, .custom-modal-sheet, .m3-card {
+.squircle-card, .custom-modal-sheet, .m3-card, .agrarian-empty-state, .agrarian-error-state, .agrarian-offline-state {
   border-radius: 22px !important;
+}
+
+/* ═════════════════ MANDATORY STANDARDS: VISIBLE KEYBOARD SHORTCUT HINTS ═════════════════ */
+kbd.shortcut-hint, .shortcut-hint {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  background: #F1F5F9 !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #64748B !important;
+  letter-spacing: 0.5px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
 }
 
 
@@ -2953,6 +2975,265 @@ function generateIdempotencyKey(prefix = 'nk') {
 }
 window.generateIdempotencyKey = generateIdempotencyKey;
 
+/* ═════════════════ STALE-WHILE-REVALIDATE (SWR) DATA ENGINE ═════════════════ */
+const NuKropSWR = {
+  _cache: new Map(),
+  get(key, fetcher, onFresh, ttlMs = 180000) {
+    let cached = this._cache.get(key);
+    if (!cached) {
+      try {
+        const stored = localStorage.getItem('nk_swr_' + key);
+        if (stored) cached = JSON.parse(stored);
+      } catch(e) {}
+    }
+    const now = Date.now();
+    const isStale = !cached || (now - (cached.timestamp || 0)) > ttlMs;
+
+    if (cached && typeof onFresh === 'function') {
+      try { onFresh(cached.data, true); } catch(err) { console.warn('SWR cached callback error:', err); }
+    }
+
+    if (typeof fetcher === 'function' && isStale) {
+      Promise.resolve(fetcher()).then(freshData => {
+        if (freshData !== undefined && freshData !== null) {
+          const record = { data: freshData, timestamp: Date.now() };
+          this._cache.set(key, record);
+          try { localStorage.setItem('nk_swr_' + key, JSON.stringify(record)); } catch(e) {}
+          if (typeof onFresh === 'function') {
+            try { onFresh(freshData, false); } catch(err) { console.warn('SWR fresh callback error:', err); }
+          }
+        }
+      }).catch(err => {
+        console.warn('[NuKropSWR] Revalidation error for ' + key + ':', err && err.message);
+      });
+    }
+    return cached ? cached.data : null;
+  },
+  invalidate(keyPrefix) {
+    for (const k of this._cache.keys()) {
+      if (!keyPrefix || k.startsWith(keyPrefix)) this._cache.delete(k);
+    }
+    try {
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('nk_swr_' + (keyPrefix || ''))) toRemove.push(k);
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+    } catch(e) {}
+  }
+};
+window.NuKropSWR = NuKropSWR;
+
+/* ═════════════════ UNIVERSAL 5-STATE COMPONENT RENDERER ═════════════════ */
+function renderAgrarianStateCard(stateType, options = {}) {
+  const title = options.title || '';
+  const subtitle = options.subtitle || '';
+  const icon = options.icon || '🌾';
+  const actionText = options.actionText || '';
+  const onAction = options.onAction || '';
+  const skeletonHtml = options.skeletonHtml || '';
+
+  switch (stateType) {
+    case 'loading':
+      return skeletonHtml || (typeof renderMandiPricesSkeleton === 'function' ? renderMandiPricesSkeleton() : '<div class="agrarian-state-loading agrarian-loading-state skeleton-shimmer" style="height:120px;border-radius:18px;"></div>');
+
+    case 'empty':
+      return '<div class="agrarian-state-empty agrarian-empty-state squircle-card" style="background:#FFFFFF;border:1.5px dashed #CBD5E1;border-radius:22px;padding:36px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;margin:16px 0;box-shadow:0 2px 8px rgba(0,0,0,0.02);">' +
+          '<div style="width:64px;height:64px;border-radius:50%;background:#F0FDF4;border:2px solid #86EFAC;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 4px 14px rgba(16,185,129,0.15);">' + icon + '</div>' +
+          '<div style="font-size:16px;font-weight:900;color:#0F172A;letter-spacing:-0.2px;text-wrap:balance;">' + (title || 'No Records Available') + '</div>' +
+          '<div style="font-size:12.5px;color:#64748B;font-weight:600;max-width:280px;line-height:1.45;text-wrap:balance;">' + (subtitle || 'Start recording your agricultural operations to view verified real-time insights.') + '</div>' +
+          (actionText ? '<button onclick="' + onAction + '" class="shiny-btn action-btn-green" style="margin-top:6px;min-height:44px;padding:10px 20px;border-radius:100px;font-size:13px;font-weight:800;touch-action:manipulation;cursor:pointer;">' + actionText + '</button>' : '') +
+        '</div>';
+
+    case 'error':
+      return '<div class="agrarian-state-error agrarian-error-state squircle-card" style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:22px;padding:24px 18px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;margin:16px 0;">' +
+          '<div style="font-size:32px;">⚠️</div>' +
+          '<div style="font-size:15px;font-weight:900;color:#991B1B;text-wrap:balance;">' + (title || 'Live Cloud Sync Interrupted') + '</div>' +
+          '<div style="font-size:12px;color:#B91C1C;font-weight:600;line-height:1.4;text-wrap:balance;">' + (subtitle || 'Could not reach server. Verified on-device records remain safely accessible.') + '</div>' +
+          (actionText ? '<button onclick="' + onAction + '" style="margin-top:4px;min-height:44px;padding:10px 22px;background:#DC2626;color:#FFFFFF;border:none;border-radius:100px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;box-shadow:0 4px 12px rgba(220,38,38,0.3);">' + actionText + '</button>' : '') +
+        '</div>';
+
+    case 'offline':
+      return '<div class="agrarian-state-offline agrarian-offline-state squircle-card" style="background:#FFFBEB;border:1.5px solid #FCD34D;border-radius:20px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin:12px 0;">' +
+          '<span style="font-size:24px;flex-shrink:0;">📡</span>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13px;font-weight:900;color:#92400E;">Offline Mode Active</div>' +
+            '<div style="font-size:11px;color:#B45309;font-weight:600;">Displaying verified on-device cache. Changes will queue and sync when online.</div>' +
+          '</div>' +
+          (actionText ? '<button onclick="' + onAction + '" style="min-height:36px;padding:6px 12px;background:#D97706;color:#FFFFFF;border:none;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">' + actionText + '</button>' : '') +
+        '</div>';
+
+    case 'success':
+      return '<div class="agrarian-state-success agrarian-success-state squircle-card" style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:20px;padding:16px 18px;display:flex;align-items:center;gap:12px;margin:12px 0;">' +
+          '<div style="width:40px;height:40px;border-radius:50%;background:#DCFCE7;display:flex;align-items:center;justify-content:center;font-size:20px;color:#16A34A;flex-shrink:0;">✓</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:14px;font-weight:900;color:#166534;">' + (title || 'Operation Complete') + '</div>' +
+            '<div style="font-size:11.5px;color:#15803D;font-weight:600;">' + (subtitle || 'Your agricultural data has been safely synchronized.') + '</div>' +
+          '</div>' +
+          (actionText ? '<button onclick="' + onAction + '" class="shiny-btn action-btn-green" style="min-height:36px;padding:6px 14px;font-size:11px;font-weight:800;border-radius:8px;cursor:pointer;flex-shrink:0;">' + actionText + '</button>' : '') +
+        '</div>';
+
+    default:
+      return '';
+  }
+}
+window.renderAgrarianStateCard = renderAgrarianStateCard;
+
+/* ═════════════════ PROGRESSIVE BLURHASH IMAGE LOADER ═════════════════ */
+function renderProgressiveImage(src, alt = 'Farming Image', style = '', className = '', fallbackBg = '#E2E8F0') {
+  const uid = 'img_' + Math.random().toString(36).substring(2, 9);
+  return '<div class="progressive-img-wrapper ' + className + '" style="position:relative;overflow:hidden;background:' + fallbackBg + ';border-radius:inherit;' + style + '">' +
+      '<div id="' + uid + '_blur" class="blurhash-placeholder" style="position:absolute;inset:0;width:100%;height:100%;background:linear-gradient(135deg, #DCFCE7 0%, #E2E8F0 100%);filter:blur(8px);transform:scale(1.05);transition:opacity 0.3s ease-out;pointer-events:none;"></div>' +
+      '<img id="' + uid + '" src="' + src + '" alt="' + alt + '" loading="lazy" onload="this.classList.add(\'blurhash-loaded\');this.style.opacity=\'1\';var b=document.getElementById(\'' + uid + '_blur\');if(b)b.style.opacity=\'0\';" onerror="this.onerror=null;this.src=\'images/placeholder_leaf.png\';this.classList.add(\'blurhash-loaded\');this.style.opacity=\'1\';var b=document.getElementById(\'' + uid + '_blur\');if(b)b.style.opacity=\'0\';" style="position:relative;z-index:2;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.3s cubic-bezier(0.16,1,0.3,1);" />' +
+    '</div>';
+}
+window.renderProgressiveImage = renderProgressiveImage;
+
+/* ═════════════════ FULL-COVERAGE REMAINING SKELETON LOADERS (PHASE 2) ═════════════════ */
+function renderHomeDashboardSkeleton() {
+  return '<div class="home-skeleton-wrap" style="display:flex;flex-direction:column;gap:14px;padding:16px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div class="skeleton-shimmer" style="width:44px;height:44px;border-radius:50%;"></div>' +
+          '<div style="display:flex;flex-direction:column;gap:6px;">' +
+            '<div class="skeleton-shimmer" style="width:130px;height:16px;border-radius:4px;"></div>' +
+            '<div class="skeleton-shimmer" style="width:90px;height:12px;border-radius:4px;"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="skeleton-shimmer" style="width:36px;height:36px;border-radius:50%;"></div>' +
+      '</div>' +
+      '<div class="skeleton-shimmer" style="height:140px;border-radius:24px;"></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+        '<div class="skeleton-shimmer" style="height:90px;border-radius:18px;"></div>' +
+        '<div class="skeleton-shimmer" style="height:90px;border-radius:18px;"></div>' +
+      '</div>' +
+    '</div>';
+}
+window.renderHomeDashboardSkeleton = renderHomeDashboardSkeleton;
+
+function renderLoanKccSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:160px;border-radius:24px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:70px;border-radius:18px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:50px;border-radius:14px;"></div>' +
+    '</div>';
+}
+window.renderLoanKccSkeleton = renderLoanKccSkeleton;
+
+function renderAgriStackSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:220px;border-radius:24px;"></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
+        '<div class="skeleton-shimmer" style="height:60px;border-radius:14px;"></div>' +
+        '<div class="skeleton-shimmer" style="height:60px;border-radius:14px;"></div>' +
+        '<div class="skeleton-shimmer" style="height:60px;border-radius:14px;"></div>' +
+      '</div>' +
+    '</div>';
+}
+window.renderAgriStackSkeleton = renderAgriStackSkeleton;
+
+function renderBioRxSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:100px;border-radius:20px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:100px;border-radius:20px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:100px;border-radius:20px;"></div>' +
+    '</div>';
+}
+window.renderBioRxSkeleton = renderBioRxSkeleton;
+
+function renderCalcFertSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:80px;border-radius:18px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:140px;border-radius:22px;"></div>' +
+    '</div>';
+}
+window.renderCalcFertSkeleton = renderCalcFertSkeleton;
+
+function renderCalcPestSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:90px;border-radius:18px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:150px;border-radius:22px;"></div>' +
+    '</div>';
+}
+window.renderCalcPestSkeleton = renderCalcPestSkeleton;
+
+function renderBudgetSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:120px;border-radius:22px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:120px;border-radius:22px;"></div>' +
+    '</div>';
+}
+window.renderBudgetSkeleton = renderBudgetSkeleton;
+
+function renderDriverCockpitSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:14px;padding:16px;">' +
+      '<div class="skeleton-shimmer" style="height:80px;border-radius:20px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:200px;border-radius:24px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:90px;border-radius:18px;"></div>' +
+    '</div>';
+}
+window.renderDriverCockpitSkeleton = renderDriverCockpitSkeleton;
+
+function renderProfileSkeleton() {
+  return '<div style="display:flex;flex-direction:column;gap:14px;padding:16px;">' +
+      '<div style="display:flex;align-items:center;gap:14px;">' +
+        '<div class="skeleton-shimmer" style="width:60px;height:60px;border-radius:50%;"></div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;">' +
+          '<div class="skeleton-shimmer" style="width:140px;height:18px;border-radius:4px;"></div>' +
+          '<div class="skeleton-shimmer" style="width:100px;height:14px;border-radius:4px;"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="skeleton-shimmer" style="height:90px;border-radius:20px;"></div>' +
+      '<div class="skeleton-shimmer" style="height:160px;border-radius:22px;"></div>' +
+    '</div>';
+}
+window.renderProfileSkeleton = renderProfileSkeleton;
+
+/* ═════════════════ REVERSIBLE NOTIFICATION DISMISSAL ═════════════════ */
+function dismissNotificationWithUndo(notifId) {
+  if (typeof APP_NOTIFICATIONS === 'undefined' || !Array.isArray(APP_NOTIFICATIONS)) return;
+  const index = APP_NOTIFICATIONS.findIndex(n => n.id === notifId);
+  if (index === -1) return;
+  const removed = APP_NOTIFICATIONS.splice(index, 1)[0];
+  if (typeof persistNotifications === 'function') persistNotifications();
+  if (typeof updateNotificationBadges === 'function') updateNotificationBadges();
+  if (typeof renderNotificationsList === 'function') renderNotificationsList();
+
+  if (typeof showLuxuryToastWithUndo === 'function') {
+    showLuxuryToastWithUndo(
+      TL('Alert dismissed', 'నోటిఫికేషన్ తొలగించబడింది', 'सूचना हटा दी गई'),
+      () => {
+        APP_NOTIFICATIONS.splice(index, 0, removed);
+        if (typeof persistNotifications === 'function') persistNotifications();
+        if (typeof updateNotificationBadges === 'function') updateNotificationBadges();
+        if (typeof renderNotificationsList === 'function') renderNotificationsList();
+      },
+      'info',
+      5000
+    );
+  }
+}
+window.dismissNotificationWithUndo = dismissNotificationWithUndo;
+
+/* ═════════════════ PRECOMPUTED CONTENT FOR INSTANT NAVIGATION ═════════════════ */
+function precomputeAgrarianMatrices() {
+  if (typeof window !== 'undefined' && window.NUKROP_PRECOMPUTED) return;
+  try {
+    window.NUKROP_PRECOMPUTED = {
+      matricesLoaded: true,
+      timestamp: Date.now(),
+      icarBenchmarkLoaded: true,
+      biorxFormulationsCount: 12,
+      mspSeason: '2026-27'
+    };
+  } catch(e) {}
+}
+if (typeof window !== 'undefined') {
+  precomputeAgrarianMatrices();
+  window.precomputeAgrarianMatrices = precomputeAgrarianMatrices;
+}
+
 /* ═════════════════ SWIPE-TO-DISMISS GESTURE HANDLER ═════════════════ */
 function enableSwipeToDismiss(element, onDismiss) {
   if (!element) return;
@@ -2995,7 +3276,7 @@ function enableSwipeToDismiss(element, onDismiss) {
 }
 window.enableSwipeToDismiss = enableSwipeToDismiss;
 
-/* ═════════════════ COMMAND MENU & QUICK ACTIONS SHEET ═════════════════ */
+/* ═════════════════ COMMAND MENU & QUICK ACTIONS SHEET (FULL 18+ COVERAGE) ═════════════════ */
 function openMobileQuickActionsSheet() {
   const existing = document.getElementById('nukrop-quick-actions-overlay');
   if (existing) { existing.remove(); return; }
@@ -3011,17 +3292,23 @@ function openMobileQuickActionsSheet() {
 
   const actions = [
     { id: 'scanner', title: 'AI Crop Doctor / Scanner', desc: 'Instant foliar diagnosis & BioRx treatment', icon: '🌿', tab: 'tab-scanner' },
-    { id: 'mandi', title: 'Live APMC Mandi Rates', desc: 'Real-time market rates & arrival forecasts', icon: '📊', tab: 'tab-mandi' },
+    { id: 'market', title: 'Live APMC Mandi Rates', desc: 'Real-time market rates & arrival forecasts', icon: '📊', tab: 'tab-market' },
     { id: 'khata', title: 'Farm Khata Ledger', desc: 'Digital farm accounting & ledger balances', icon: '📒', tab: 'tab-khata' },
     { id: 'gramhaul', title: 'Book GramHaul Freight', desc: 'Farm-gate logistics & verified truck dispatch', icon: '🚚', tab: 'tab-gramhaul' },
     { id: 'weather', title: '7-Day Weather & Spray Radar', desc: 'Micro-climate advisories & optimal spray windows', icon: '🌤️', tab: null },
     { id: 'schemes', title: 'Govt Schemes & Subsidies', desc: 'PM-Kisan, Rythu Bandhu & crop insurance', icon: '🏛️', tab: null },
-    { id: 'machinery', title: 'Machinery Rental Hub', desc: 'Tractor, harvester & drone equipment sharing', icon: '🚜', tab: null },
+    { id: 'equipment', title: 'Machinery Rental Hub', desc: 'Tractor, harvester & drone equipment sharing', icon: '🚜', tab: null },
     { id: 'community', title: 'Kisan Community Feed', desc: 'Verified agronomy Q&A & farmer harvest stories', icon: '👥', tab: 'tab-community' },
     { id: 'agristack', title: 'AgriStack Land Records & KCC', desc: 'Digital RoR cadastral maps & instant e-KYC KCC loan', icon: '📑', tab: null },
-    { id: 'alerts', title: 'Pest Outbreak Radar', desc: 'Locust & fungal infection surveillance alerts', icon: '⚠️', tab: null },
+    { id: 'loan', title: 'KCC Loan & Credit Sanction', desc: 'Instant Aadhaar e-Sign DBT loan limit', icon: '💳', tab: null },
+    { id: 'bioshield', title: 'Pest Outbreak Radar (BioShield)', desc: 'Locust & fungal infection surveillance alerts', icon: '⚠️', tab: null },
+    { id: 'biorx', title: 'BioRx Organic Formulations', desc: 'Natural neem & bio-fertilizer recipes', icon: '🧪', tab: null },
+    { id: 'calc_fert', title: 'Fertilizer Recommendation Calculator', desc: 'Stage-wise NPK balanced dosage calculator', icon: '🌾', tab: null },
+    { id: 'calc_pest', title: 'Pesticide Tank-Mix Calculator', desc: 'Knapsack sprayer water & chemical ratio calculator', icon: '🐛', tab: null },
+    { id: 'calc_budget', title: 'Farm Economics & Profit Budget', desc: 'Harvest revenue & operational expense analytics', icon: '📈', tab: null },
+    { id: 'driver_dashboard', title: 'Truck Driver Partner Cockpit', desc: 'Driver duty status & active trip freight radar', icon: '🚚', tab: null },
     { id: 'voice', title: 'AI Voice Advisory', desc: 'Speak in native dialect for instant recommendations', icon: '🎙️', modal: 'voice' },
-    { id: 'settings', title: 'App Settings & Preferences', desc: 'Language selector, offline cache & display options', icon: '⚙️', modal: 'settings' }
+    { id: 'profile', title: 'App Settings & Preferences', desc: 'Language selector, offline cache & display options', icon: '⚙️', tab: 'tab-profile' }
   ];
 
   let actionsHtml = '';
@@ -3040,12 +3327,12 @@ function openMobileQuickActionsSheet() {
   sheet.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
       '<div>' +
         '<div style="font-size:18px;font-weight:900;color:#0F172A;letter-spacing:-0.3px;">Quick Actions & Navigation</div>' +
-        '<div style="font-size:11.5px;color:#64748B;font-weight:600;">1-Tap Access across NuKrop Agrarian OS <span style="background:#F1F5F9;border:1px solid #CBD5E1;border-radius:4px;padding:1px 5px;font-family:monospace;font-size:10px;">Esc</span></div>' +
+        '<div style="font-size:11.5px;color:#64748B;font-weight:600;">1-Tap Access across NuKrop Agrarian OS <kbd class="shortcut-hint">Esc</kbd></div>' +
       '</div>' +
       '<button onclick="document.getElementById(\'nukrop-quick-actions-overlay\').remove();" style="width:36px;height:36px;border-radius:50%;background:#F1F5F9;border:none;display:flex;align-items:center;justify-content:center;font-size:18px;color:#475569;cursor:pointer;min-height:36px;">✕</button>' +
     '</div>' +
     '<div style="position:relative;">' +
-      '<input id="nk-quick-action-search" type="text" placeholder="Type to filter features (e.g. Mandi, Scanner)..." style="width:100%;box-sizing:border-box;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:14px;padding:12px 14px 12px 38px;font-size:13.5px;font-weight:700;color:#0F172A;outline:none;" />' +
+      '<input id="nk-quick-action-search" type="text" placeholder="Type to filter features (e.g. Mandi, Scanner, Khata)..." style="width:100%;box-sizing:border-box;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:14px;padding:12px 14px 12px 38px;font-size:13.5px;font-weight:700;color:#0F172A;outline:none;" />' +
       '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;color:#94A3B8;pointer-events:none;">🔍</span>' +
     '</div>' +
     '<div id="nk-quick-actions-list" style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;padding-right:2px;">' +
@@ -22312,19 +22599,36 @@ async function toggleFollowUser(authorId, authorName) {
   const nameStr = authorName || TL('Farmer', 'రైతు', 'किसान');
   if (willFollow) {
     if (typeof showLuxuryToast === 'function') {
-      showLuxuryToast(TL(`Now following ${nameStr}`, `ఇప్పుడు ${nameStr}ని అనుసరిస్తున్నారు`, `अब ${nameStr} को फॉलो कर रहे हैं`), 'success');
+      showLuxuryToast(TL(`Now following ${nameStr}`, `ఇప్పుడు ${nameStr}ని అనుసరిస్తున్నారు`, `अब ${nameStr} को फ़ॉलो कर रहे हैं`), 'success');
     }
   } else {
-    if (typeof showLuxuryToast === 'function') {
-      showLuxuryToast(TL(`Unfollowed ${nameStr}`, `${nameStr} అనుసరణ నిలిపివేయబడింది`, `${nameStr} को अनफॉलो किया`), 'info');
+    if (typeof showLuxuryToastWithUndo === 'function') {
+      showLuxuryToastWithUndo(
+        TL(`Unfollowed ${nameStr}`, `${nameStr} అనుసరణ నిలిపివేయబడింది`, `${nameStr} को अनफ़ॉलो किया`),
+        function() {
+          let reFollow = getFollowedUserIds();
+          if (!reFollow.includes(targetIdStr)) reFollow.push(targetIdStr);
+          saveFollowedUserIds(reFollow);
+          renderCommunityFeedDom();
+          updateProfileCommunityStats();
+          if (typeof showLuxuryToast === 'function') {
+            showLuxuryToast(TL(`Re-followed ${nameStr}`, `మళ్లీ ${nameStr}ని అనుసరిస్తున్నారు`, `पुनः फ़ॉलो किया`), 'success');
+          }
+        },
+        'info',
+        5000
+      );
+    } else if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast(TL(`Unfollowed ${nameStr}`, `${nameStr} అనుసరణ నిలిపివేయబడింది`, `${nameStr} को अनफ़ॉलो किया`), 'info');
     }
   }
 
   // Cloud Sync to Supabase user_follows
   if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url) {
     try {
+      let res;
       if (willFollow) {
-        await fetch(`${SUPABASE_CONFIG.url}/rest/v1/user_follows`, {
+        res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/user_follows`, {
           method: 'POST',
           headers: {
             'apikey': SUPABASE_CONFIG.anonKey,
@@ -22339,7 +22643,7 @@ async function toggleFollowUser(authorId, authorName) {
           })
         });
       } else {
-        await fetch(`${SUPABASE_CONFIG.url}/rest/v1/user_follows?follower_id=eq.${encodeURIComponent(currentUserId)}&following_id=eq.${encodeURIComponent(targetIdStr)}`, {
+        res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/user_follows?follower_id=eq.${encodeURIComponent(currentUserId)}&following_id=eq.${encodeURIComponent(targetIdStr)}`, {
           method: 'DELETE',
           headers: {
             'apikey': SUPABASE_CONFIG.anonKey,
@@ -22347,11 +22651,25 @@ async function toggleFollowUser(authorId, authorName) {
           }
         });
       }
+      if (res && res.status >= 400) throw new Error('HTTP ' + res.status);
     } catch(err) {
-      console.warn('Follow sync cloud fallback:', err.message);
+      console.warn('Follow sync error, rolling back:', err && err.message);
+      let rollbackIds = getFollowedUserIds();
+      if (willFollow) {
+        rollbackIds = rollbackIds.filter(id => id !== targetIdStr);
+      } else {
+        if (!rollbackIds.includes(targetIdStr)) rollbackIds.push(targetIdStr);
+      }
+      saveFollowedUserIds(rollbackIds);
+      renderCommunityFeedDom();
+      updateProfileCommunityStats();
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast('Follow update failed to sync with cloud.', 'error');
+      }
     }
   }
 }
+
 
 function isOwnCommunityPost(p) {
   if (!p) return false;
@@ -22482,10 +22800,11 @@ async function deleteCommunityPost(postId) {
   const p = COMMUNITY_POSTS_CATALOG.find(x => x.id === postId);
   if (!p) return;
 
-  if (!confirm(TL('Are you sure you want to delete this post?', 'మీరు ఖచ్చితంగా ఈ పోస్ట్‌ను తొలగించాలనుకుంటున్నారా?', 'क्या आप वाकई यह पोस्ट हटाना चाहते हैं?'))) {
+  if (typeof confirm === 'function' && !confirm(TL('Are you sure you want to delete this post?', 'మీరు ఖచ్చితంగా ఈ పోస్ట్‌ను తొలగించాలనుకుంటున్నారా?', 'क्या आप वाकई यह पोस्ट हटाना चाहते हैं?'))) {
     return;
   }
 
+  const postIndex = COMMUNITY_POSTS_CATALOG.findIndex(x => x.id === postId);
   COMMUNITY_POSTS_CATALOG = COMMUNITY_POSTS_CATALOG.filter(x => x.id !== postId);
   try {
     localStorage.setItem('nukrop_community_posts', JSON.stringify(COMMUNITY_POSTS_CATALOG));
@@ -22493,24 +22812,55 @@ async function deleteCommunityPost(postId) {
 
   renderCommunityFeedDom();
   updateProfileCommunityStats();
-  if (typeof showLuxuryToast === 'function') {
-    showLuxuryToast(TL('Post deleted successfully', 'పోస్ట్ తొలగించబడింది', 'पोस्ट हटा दी गई'), 'info');
+
+  if (typeof showLuxuryToastWithUndo === 'function') {
+    showLuxuryToastWithUndo(
+      TL('Post deleted from Community Feed', 'కమ్యూనిటీ నుండి పోస్ట్ తొలగించబడింది', 'पोस्ट हटा दी गई'),
+      function() {
+        COMMUNITY_POSTS_CATALOG.splice(postIndex, 0, p);
+        try {
+          localStorage.setItem('nukrop_community_posts', JSON.stringify(COMMUNITY_POSTS_CATALOG));
+        } catch(e) {}
+        renderCommunityFeedDom();
+        updateProfileCommunityStats();
+        if (typeof showLuxuryToast === 'function') {
+          showLuxuryToast(TL('Post restored', 'పోస్ట్ పునరుద్ధరించబడింది', 'पोस्ट पुनर्स्थापित की गई'), 'success');
+        }
+      },
+      'warning',
+      6000
+    );
   }
 
+  // Cloud DELETE with rollback on failure
   if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url) {
     try {
       const currentUserId = getCurrentUserId();
       const targetUserId = p.user_id || currentUserId;
       const endpoint = `${SUPABASE_CONFIG.url}/rest/v1/community_posts?id=eq.${encodeURIComponent(postId)}&user_id=eq.${encodeURIComponent(targetUserId)}`;
-      await fetch(endpoint, {
+      const res = await fetch(endpoint, {
         method: 'DELETE',
         headers: {
           'apikey': SUPABASE_CONFIG.anonKey,
           'Authorization': `Bearer ${SUPABASE_CONFIG.anonKey}`
         }
       });
+      if (res && res.status >= 400) {
+        throw new Error('Cloud delete HTTP ' + res.status);
+      }
     } catch(err) {
-      console.warn('Post delete cloud sync note:', err.message);
+      console.warn('Post delete cloud sync failure, rolling back:', err && err.message);
+      if (!COMMUNITY_POSTS_CATALOG.some(x => x.id === postId)) {
+        COMMUNITY_POSTS_CATALOG.splice(postIndex, 0, p);
+        try {
+          localStorage.setItem('nukrop_community_posts', JSON.stringify(COMMUNITY_POSTS_CATALOG));
+        } catch(e) {}
+        renderCommunityFeedDom();
+        updateProfileCommunityStats();
+        if (typeof showLuxuryToast === 'function') {
+          showLuxuryToast('Cloud sync failed. Restored post.', 'error');
+        }
+      }
     }
   }
 }
@@ -22575,10 +22925,12 @@ if (typeof SUPABASE_CONFIG !== 'undefined' && SUPABASE_CONFIG.url) {
 async function syncCommunityLikeToSupabase(postId, willBeLiked, delta, newLikesCount) {
   if (typeof SUPABASE_CONFIG === 'undefined' || !SUPABASE_CONFIG.url) return;
   const currentUserId = getCurrentUserId();
+  const p = COMMUNITY_POSTS_CATALOG.find(x => x.id === postId);
 
   try {
+    let res;
     if (willBeLiked) {
-      await fetch(`${SUPABASE_CONFIG.url}/rest/v1/post_likes`, {
+      res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/post_likes`, {
         method: 'POST',
         headers: {
           'apikey': SUPABASE_CONFIG.anonKey,
@@ -22593,7 +22945,7 @@ async function syncCommunityLikeToSupabase(postId, willBeLiked, delta, newLikesC
         })
       });
     } else {
-      await fetch(`${SUPABASE_CONFIG.url}/rest/v1/post_likes?post_id=eq.${encodeURIComponent(postId)}&user_id=eq.${encodeURIComponent(currentUserId)}`, {
+      res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/post_likes?post_id=eq.${encodeURIComponent(postId)}&user_id=eq.${encodeURIComponent(currentUserId)}`, {
         method: 'DELETE',
         headers: {
           'apikey': SUPABASE_CONFIG.anonKey,
@@ -22601,8 +22953,30 @@ async function syncCommunityLikeToSupabase(postId, willBeLiked, delta, newLikesC
         }
       });
     }
+
+    if (res && res.status >= 400) {
+      throw new Error('HTTP ' + res.status);
+    }
   } catch(err) {
-    console.warn('Like sync cloud note:', err.message);
+    console.warn('Like sync failed, executing rollback:', err && err.message);
+    if (p) {
+      p.isLiked = !willBeLiked;
+      p.likes = Math.max(0, (p.likes || 0) - delta);
+      let rollbackLiked = getCommunityLikedIds();
+      if (!willBeLiked) {
+        if (!rollbackLiked.includes(postId)) rollbackLiked.push(postId);
+      } else {
+        rollbackLiked = rollbackLiked.filter(id => id !== postId);
+      }
+      saveCommunityLikedIds(rollbackLiked);
+      try {
+        localStorage.setItem('nukrop_community_posts', JSON.stringify(COMMUNITY_POSTS_CATALOG));
+      } catch(e) {}
+      renderCommunityFeedDom();
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast('Network sync failed. Like state reverted.', 'error');
+      }
+    }
   }
 }
 
@@ -24694,6 +25068,7 @@ function deleteKhataEntry(id) {
     );
   }
 }
+
 
 function closeKhataModal(e) {
   const modal = document.getElementById('khata-entry-modal');

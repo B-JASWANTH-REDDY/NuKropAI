@@ -10,7 +10,8 @@ export const dispatchMemoryStore = {
   driverLocations: new Map<string, any>(),
   bookings: new Map<string, any>(),
   telemetry: [] as any[],
-  profiles: new Map<string, any>()
+  profiles: new Map<string, any>(),
+  idempotencyMap: new Map<string, any>()
 };
 
 function getHeaders(authToken?: string) {
@@ -424,6 +425,20 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     return reply.status(401).send({ error: 'Unauthorized: Farmer authentication required' });
   }
 
+  const idempotencyKey = ((request.headers['idempotency-key'] as string) || (request.body as any)?.idempotencyKey || '').trim();
+  if (idempotencyKey) {
+    const existing = dispatchMemoryStore.idempotencyMap.get(idempotencyKey);
+    if (existing) {
+      return reply.status(200).send({
+        success: true,
+        idempotentReplay: true,
+        bookingId: existing.id,
+        status: existing.status,
+        booking: existing
+      });
+    }
+  }
+
   const {
     pickupVillage,
     destinationMandi,
@@ -468,6 +483,9 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
   };
 
   dispatchMemoryStore.bookings.set(bookingId, bookingRecord);
+  if (idempotencyKey) {
+    dispatchMemoryStore.idempotencyMap.set(idempotencyKey, bookingRecord);
+  }
 
   if (SUPABASE_URL) {
     const authHeader = request.headers.authorization?.replace(/^Bearer\s+/, '') || SUPABASE_ANON_KEY;
@@ -495,6 +513,11 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
 export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply) => {
   const driverId = request.user?.id;
   const { bookingId } = request.body as any;
+  const idempotencyKey = ((request.headers['idempotency-key'] as string) || (request.body as any)?.idempotencyKey || '').trim();
+
+  if (idempotencyKey && dispatchMemoryStore.idempotencyMap.has(idempotencyKey)) {
+    return reply.status(200).send(dispatchMemoryStore.idempotencyMap.get(idempotencyKey));
+  }
 
   if (!driverId) {
     return reply.status(401).send({ error: 'Unauthorized: Driver authentication required' });
@@ -573,13 +596,19 @@ export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply
     } catch {}
   }
 
-  return reply.send({
+  const acceptResponse = {
     success: true,
     bookingId,
     status: 'ACCEPTED',
     assignedDriverId: driverId,
     message: 'Booking accepted successfully. Live GPS tracking engaged.'
-  });
+  };
+
+  if (idempotencyKey) {
+    dispatchMemoryStore.idempotencyMap.set(idempotencyKey, acceptResponse);
+  }
+
+  return reply.send(acceptResponse);
 };
 
 /**

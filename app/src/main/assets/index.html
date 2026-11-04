@@ -380,7 +380,10 @@ body {
   align-items: center !important;
   white-space: nowrap !important;
   gap: 14px !important;
-  animation: newsTickerScroll 32s linear infinite !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  animation: newsTickerScroll 28s linear infinite !important;
+  -webkit-animation: newsTickerScroll 28s linear infinite !important;
   will-change: transform !important;
 }
 
@@ -2823,14 +2826,21 @@ button[onclick*="openPriceAlertModal"]:hover svg {
 <script>
 
 /* ═════════════════ LUXURY TOAST NOTIFICATION SYSTEM ═════════════════ */
-function showLuxuryToast(message, type = 'info', duration = 3200) {
+function showLuxuryToast(message, type = 'info', duration = 3000) {
   if (!message) return;
   let toastContainer = document.getElementById('nukrop-luxury-toast-container');
   if (!toastContainer) {
     toastContainer = document.createElement('div');
     toastContainer.id = 'nukrop-luxury-toast-container';
-    toastContainer.style.cssText = 'position:fixed;top:calc(var(--sat, 52px) + 12px);left:50%;transform:translateX(-50%);z-index:999999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:90%;max-width:390px;';
+    toastContainer.style.cssText = 'position:fixed;top:calc(var(--sat, 52px) + 8px);left:50%;transform:translateX(-50%);z-index:999999;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:90%;max-width:390px;';
     document.body.appendChild(toastContainer);
+  } else if (toastContainer && toastContainer.children) {
+    // Clear any previous active toasts to prevent multi-pill overlap clutter
+    Array.from(toastContainer.children).forEach(oldToast => {
+      oldToast.style.opacity = '0';
+      oldToast.style.transform = 'translateY(-10px) scale(0.95)';
+      setTimeout(() => { try { oldToast.remove(); } catch(e){} }, 180);
+    });
   }
 
   const toast = document.createElement('div');
@@ -2858,8 +2868,8 @@ function showLuxuryToast(message, type = 'info', duration = 3200) {
     icon = 'ℹ️';
   }
 
-  toast.style.cssText = `pointer-events:auto;background:${bg};color:${textColor};border:1.5px solid ${border};border-radius:999px;padding:10px 18px;box-shadow:0 10px 30px -4px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.2);font-size:13px;font-weight:700;letter-spacing:0.01em;display:inline-flex;align-items:center;gap:10px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transform:translateY(-16px) scale(0.96);transition:all 260ms cubic-bezier(0.16,1,0.3,1);max-width:100%;word-break:break-word;`;
-  toast.innerHTML = `<span style="font-size:15px;flex-shrink:0;">${icon}</span><span style="flex:1;">${message}</span>`;
+  toast.style.cssText = `pointer-events:auto;background:${bg};color:${textColor};border:1.5px solid ${border};border-radius:999px;padding:9px 16px;box-shadow:0 8px 24px -2px rgba(0,0,0,0.35);font-size:12.5px;font-weight:700;letter-spacing:0.01em;display:inline-flex;align-items:center;gap:8px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transform:translateY(-14px) scale(0.96);transition:all 220ms cubic-bezier(0.16,1,0.3,1);max-width:100%;word-break:break-word;`;
+  toast.innerHTML = `<span style="font-size:14px;flex-shrink:0;">${icon}</span><span style="flex:1;">${message}</span>`;
   toastContainer.appendChild(toast);
 
   if (typeof requestAnimationFrame !== 'undefined') {
@@ -21362,12 +21372,19 @@ function getMandiDefaults(slug, preferredState = null) {
 }
 
 function formatMandiBadge(badge, tradeDate) {
-  if (!badge) return tradeDate ? `🏛️ Agmarknet · ${tradeDate}` : '🏛️ Agmarknet Live';
-  let clean = badge.replace(/\s*\(\d{2}\/\d{2}\/\d{4}\)/g, '').replace(/·\s*\d{2}\/\d{2}\/\d{4}/g, '').trim();
-  if (tradeDate) {
-    return `${clean} · ${tradeDate}`;
+  const dateStr = tradeDate || '';
+  if (!badge) {
+    return dateStr ? `🏛️ Agmarknet · ${dateStr}` : '🏛️ Agmarknet Live';
   }
-  return clean;
+  let clean = badge
+    .replace(/\s*\(\d{1,2}\/\d{1,2}\/\d{2,4}\)/g, '')
+    .replace(/\s*·\s*\d{1,2}\/\d{1,2}\/\d{2,4}/g, '')
+    .replace(/\s*\d{1,2}\/\d{1,2}\/\d{2,4}/g, '')
+    .trim();
+  if (!clean.startsWith('🏛️') && !clean.startsWith('🌾')) {
+    clean = '🏛️ ' + clean;
+  }
+  return dateStr ? `${clean} · ${dateStr}` : clean;
 }
 window.formatMandiBadge = formatMandiBadge;
 
@@ -21427,54 +21444,116 @@ async function refreshMandiRatesLive() {
 function resolveCropSvgFile(path, slug, name) {
   const combined = ((slug || '') + ' ' + (name || '') + ' ' + (path || '')).toLowerCase();
 
-  // Pattern matching for diverse commodities from official Agmarknet records
+  // 1. Okra / Bhindi / Ladies Finger
   if (/bhindi|okra|ladies.*finger|bhendi/i.test(combined)) return 'bhindi.svg';
+
+  // 2. Banana
   if (/banana/i.test(combined)) return 'banana.svg';
+
+  // 3. Cucumber
   if (/cucum|kheera|khira|kakdi/i.test(combined)) return 'cucumber.svg';
-  if (/green.*fresh.*veg|vegetable|greens|leafy|collard|palak|spinach/i.test(combined)) return 'collard-greens.svg';
-  if (/tomat|tamatar/i.test(combined)) return 'tomato.svg';
-  if (/onion|pyaz|kanda|ullipayalu/i.test(combined)) return 'red-onion.svg';
+
+  // 4. Gourds & Squashes (Bitter, Bottle, Ridge, Snake, Sponge, Kundru, Parval)
+  if (/bitter.*gourd|karela/i.test(combined)) return 'acorn-squash.svg';
+  if (/bottle.*gourd|lauki|kaddu|ghia/i.test(combined)) return 'zucchini.svg';
+  if (/ridge.*g|tori|turai/i.test(combined)) return 'zucchini.svg';
+  if (/snake.*g|potlakaya/i.test(combined)) return 'zucchini.svg';
+  if (/sponge.*g|luffa/i.test(combined)) return 'zucchini.svg';
+  if (/pointed.*gourd|parval|kundru|little.*gourd/i.test(combined)) return 'zucchini.svg';
+  if (/pumpkin|kaddu/i.test(combined)) return 'pumpkin.svg';
+  if (/squash/i.test(combined)) return 'yellow-squash.svg';
+
+  // 5. Beans & Peas
+  if (/green.*pea|field.*pea|peas|matar|pea.*pod/i.test(combined)) return 'snap-pea.svg';
+  if (/bean|frasbean|anumulu|cluster|chavli|guar/i.test(combined)) return 'broad-bean.svg';
+
+  // 6. Root & Tuber Crops (Potato, Carrot, Beetroot, Radish, Yam, Taro)
   if (/potato|aloo|batata/i.test(combined)) return 'russet-potato.svg';
-  if (/chilli|chili|mirchi|mirch/i.test(combined)) return 'chilli.svg';
-  if (/cotton|kapas|patti/i.test(combined)) return 'cotton.svg';
-  if (/wheat|gehun/i.test(combined)) return 'wheat.svg';
-  if (/paddy|rice|dhan|chawal/i.test(combined)) return 'rice.svg';
-  if (/corn|maize|makka/i.test(combined)) return 'corn.svg';
-  if (/cabbage|patta.*gobhi/i.test(combined)) return 'green-cabbage.svg';
-  if (/cauliflower|phool.*gobhi/i.test(combined)) return 'yellow-cauliflower.svg';
-  if (/brinjal|eggplant|baingan|vankaya/i.test(combined)) return 'eggplant.svg';
+  if (/sweet.*potato|shakarkand/i.test(combined)) return 'sweet-potato.svg';
   if (/carrot|gajar/i.test(combined)) return 'carrot.svg';
-  if (/garlic|lahsun/i.test(combined)) return 'garlic.svg';
-  if (/ginger|adrak/i.test(combined)) return 'ginger.svg';
-  if (/mango|aam/i.test(combined)) return 'mango.svg';
-  if (/apple|seb/i.test(combined)) return 'generic-apple.svg';
-  if (/watermelon|tarbooz/i.test(combined)) return 'watermelon.svg';
+  if (/beet|chukandar/i.test(combined)) return 'beet.svg';
+  if (/radish|raddish|mooli/i.test(combined)) return 'cherry-bell-radish.svg';
+  if (/yam|ratalu|suran|amorphophallus/i.test(combined)) return 'japanese-yam.svg';
+  if (/colacasia|arbi|taro|chamagadda/i.test(combined)) return 'taro.svg';
+  if (/knool.*khol|kohlrabi|knolkhol/i.test(combined)) return 'kohlrabi.svg';
+
+  // 7. Alliums (Onion, Garlic)
+  if (/green.*onion|spring.*onion/i.test(combined)) return 'spring-onion.svg';
+  if (/onion|pyaz|kanda|ullipayalu/i.test(combined)) return 'red-onion.svg';
+  if (/garlic|lahsun|vellulli/i.test(combined)) return 'garlic.svg';
+
+  // 8. Solanaceous (Tomato, Chilli, Capsicum, Brinjal)
+  if (/tomat|tamatar/i.test(combined)) return 'tomato.svg';
+  if (/brinjal|eggplant|baingan|vankaya/i.test(combined)) return 'eggplant.svg';
+  if (/capsicum|shimla.*mirch/i.test(combined)) return 'green-bell-pepper.svg';
+  if (/chilli|chili|mirchi|mirch/i.test(combined)) return 'chilli.svg';
+
+  // 9. Leafy & Greens
+  if (/coriander|dhaniya|kothimeera/i.test(combined)) return 'coriander.svg';
+  if (/methi|fenugreek/i.test(combined)) return 'spinach.svg';
+  if (/spinach|palak/i.test(combined)) return 'spinach.svg';
+  if (/mint|pudina/i.test(combined)) return 'mint.svg';
+  if (/drumstick|munagakaya|sahjan/i.test(combined)) return 'collard-greens.svg';
+  if (/cabbage|patta.*gobhi/i.test(combined)) return 'green-cabbage.svg';
+  if (/cauliflower|phool.*gobhi/i.test(combined)) return 'cauliflower.svg';
+  if (/green.*fresh.*veg|leafy|greens|collard|sarson|colza/i.test(combined)) return 'collard-greens.svg';
+
+  // 10. Fruits
+  if (/water.*melon|tarbooz/i.test(combined)) return 'watermelon.svg';
+  if (/musk.*melon|karbuja|kharbooja|cantaloupe/i.test(combined)) return 'cantaloupe.svg';
+  if (/sweet.*lime|mosambi|mousambi/i.test(combined)) return 'sweetlime.svg';
+  if (/lemon|lime|nimbu/i.test(combined)) return 'lemon.svg';
+  if (/orange|santra/i.test(combined)) return 'orange-bell-pepper.svg';
   if (/pomegranate|anar/i.test(combined)) return 'pomegranate.svg';
   if (/papaya|papita/i.test(combined)) return 'papaya.svg';
   if (/guava|amrud/i.test(combined)) return 'guava.svg';
-  if (/lemon|nimbu/i.test(combined)) return 'lemon.svg';
-  if (/sweetlime|mosambi/i.test(combined)) return 'sweetlime.svg';
+  if (/mango|aam/i.test(combined)) return 'mango.svg';
+  if (/apple|seb/i.test(combined)) return 'generic-apple.svg';
+  if (/grapes|angoor/i.test(combined)) return 'bing-cherry.svg';
   if (/coconut|nariyal/i.test(combined)) return 'coconut.svg';
-  if (/capsicum|shimla/i.test(combined)) return 'capsicum.svg';
-  if (/turmeric|haldi/i.test(combined)) return 'turmeric.svg';
-  if (/groundnut|peanut|moongphali/i.test(combined)) return 'groundnut.svg';
-  if (/soybean|soy/i.test(combined)) return 'soybean.svg';
-  if (/sugarcane|ganna/i.test(combined)) return 'sugarcane.svg';
-  if (/bajra|pearl.*millet/i.test(combined)) return 'bajra.svg';
-  if (/jowar|sorghum/i.test(combined)) return 'jowar.svg';
-  if (/ragi|finger.*millet/i.test(combined)) return 'ragi.svg';
-  if (/blackgram|urad/i.test(combined)) return 'blackgram.svg';
-  if (/greengram|moong/i.test(combined)) return 'greengram.svg';
-  if (/redgram|arhar|tur/i.test(combined)) return 'redgram.svg';
-  if (/chickpea|chana|bengal.*gram/i.test(combined)) return 'chickpea.svg';
-  if (/coriander|dhaniya/i.test(combined)) return 'coriander.svg';
-  if (/cumin|jeera/i.test(combined)) return 'cumin.svg';
-  if (/mustard|sarson/i.test(combined)) return 'mustard.svg';
+  if (/jack.*fruit|kathal/i.test(combined)) return 'butternut-squash.svg';
+  if (/chikoos|sapota|sapodilla/i.test(combined)) return 'japanese-yam.svg';
 
-  if (path && typeof path === 'string' && path.includes('.svg')) {
-    const filename = path.split('/').pop();
-    if (filename) return filename;
-  }
+  // 11. Commercial & Cash Crops (Cotton, Sugarcane, Tobacco)
+  if (/cotton|kapas|patti/i.test(combined)) return 'cotton.svg';
+  if (/sugar.*cane|ganna/i.test(combined)) return 'sugarcane.svg';
+  if (/gur|jaggery/i.test(combined)) return 'sugarcane.svg';
+  if (/tobacco|tambaku/i.test(combined)) return 'tobacco.svg';
+
+  // 12. Cereals & Millets
+  if (/wheat|gehun/i.test(combined)) return 'wheat.svg';
+  if (/paddy|rice|dhan|chawal/i.test(combined)) return 'rice.svg';
+  if (/corn|maize|makka/i.test(combined)) return 'corn.svg';
+  if (/bajra|pearl.*millet|cumbu/i.test(combined)) return 'bajra.svg';
+  if (/jowar|sorghum|chari/i.test(combined)) return 'jowar.svg';
+  if (/ragi|finger.*millet/i.test(combined)) return 'ragi.svg';
+  if (/millet|varagu/i.test(combined)) return 'sorghum-millet.svg';
+
+  // 13. Pulses & Oilseeds
+  if (/bengal.*gram|chickpea|chana/i.test(combined)) return 'chickpea.svg';
+  if (/red.*gram|tur|arhar/i.test(combined)) return 'redgram.svg';
+  if (/black.*gram|urd/i.test(combined)) return 'blackgram.svg';
+  if (/green.*gram|moong/i.test(combined)) return 'greengram.svg';
+  if (/soyabean|soybean/i.test(combined)) return 'soybean.svg';
+  if (/ground.*nut|peanut|mungfali/i.test(combined)) return 'groundnut.svg';
+  if (/sesame|sesamum|til|gingelly/i.test(combined)) return 'sesame.svg';
+  if (/mustard|rai/i.test(combined)) return 'mustard.svg';
+  if (/sunflower|surajmukhi/i.test(combined)) return 'sunflower.svg';
+  if (/castor|arandi/i.test(combined)) return 'castor.svg';
+
+  // 14. Spices & Plantation
+  if (/ginger|adrak/i.test(combined)) return 'ginger.svg';
+  if (/turmeric|haldi/i.test(combined)) return 'turmeric.svg';
+  if (/cashew|kaju/i.test(combined)) return 'cashew.svg';
+  if (/tamarind|imli/i.test(combined)) return 'broad-bean.svg';
+  if (/coffee/i.test(combined)) return 'coffee.svg';
+  if (/tea/i.test(combined)) return 'tea.svg';
+  if (/cardamom|elaichi/i.test(combined)) return 'cardamom.svg';
+
+  // Generic fallback: check if it's agricultural produce
+  if (/wood/i.test(combined)) return 'corn.svg';
+  if (/thogrikai|seemebadnekai/i.test(combined)) return 'broad-bean.svg';
+  if (/behada|buttery/i.test(combined)) return 'collard-greens.svg';
 
   return 'cotton.svg';
 }
@@ -21682,97 +21761,14 @@ let activeInstagramStoryIdx = 0;
 
 let userAttachedMedia = { photos: [], videos: [], voiceNote: null };
 
-// ── AUTHENTIC KISAN COMMUNITY STORIES CATALOG (ICAR, KVK & PROGRESSIVE FARMERS) ──
-let COMMUNITY_STORIES_CATALOG = [
-  {
-    id: 'story-kvk-1',
-    user_id: 'usr_kvk_warangal',
-    author: { en: 'Dr. Srinivas Rao (KVK)', te: 'డా. శ్రీనివాస్ రావు (KVK)', hi: 'डॉ. श्रीनिवास राव (KVK)' },
-    role: 'Verified ICAR Agronomist',
-    avatar: '👨‍🔬',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    mediaUrl: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=80',
-    tag: '⚡ KVK Advisory',
-    title: {
-      en: 'Pink Bollworm Radar Alert: Install Pheromone Traps & Spray Neem Oil',
-      te: 'గులాబీ రంగు పురుగు హెచ్చరిక: లింగాకర్షక బుట్టలు అమర్చండి & వేప నూనె పిచికారీ చేయండి',
-      hi: 'गुलाबी सुंडी चेतावनी: फेरोमोन ट्रैप लगाएं और नीम तेल का छिड़काव करें'
-    },
-    audioText: {
-      en: 'Farmers in Warangal and Karimnagar belts, night temperatures have triggered pink bollworm emergence. Install 5 pheromone traps per acre immediately and maintain evening zero-drift spray window.',
-      te: 'వరంగల్ మరియు కరీంనగర్ రైతులకు ముఖ్య గమనిక. రాత్రి ఉష్ణోగ్రతలు గులాబీ రంగు పురుగుల పెరుగుదలకు అనుకూలంగా ఉన్నాయి. వెంటనే ఎకరానికి 5 లింగాకర్షక బుట్టలు పెట్టండి.',
-      hi: 'वारंगल क्षेत्र के किसान ध्यान दें। रात के तापमान से गुलाबी सुंडी का प्रकोप बढ़ा है। तुरंत 5 फेरोमोन ट्रैप लगाएं और शाम को नीम तेल का छिड़काव करें।'
-    },
-    timeAgo: '15m ago',
-    likes: 128
-  },
-  {
-    id: 'story-farmer-2',
-    user_id: 'usr_ramesh_patel',
-    author: { en: 'Ramesh Patel', te: 'రమేష్ పటేల్', hi: 'रमेश पटेल' },
-    role: 'Progressive Chilli Farmer',
-    avatar: '👨‍🌾',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    mediaUrl: 'https://images.unsplash.com/photo-1568584711075-3d021a7c3ca3?w=800&auto=format&fit=crop&q=80',
-    tag: '🌶️ Chilli Harvest',
-    title: {
-      en: 'First picking of Guntur Teja Chilli — 18 Quintals/Acre bumper yield!',
-      te: 'గుంటూరు తేజ మిరప మొదటి కోత — ఎకరానికి 18 క్వింటాళ్ల అద్భుత దిగుబడి!',
-      hi: 'गुंटूर तेजा मिर्च की पहली तुड़ाई — 18 क्विंटल प्रति एकड़ बंपर पैदावार!'
-    },
-    audioText: {
-      en: 'Brothers, balanced fertigation with BioRx organic booster gave 18 quintals in first picking. Fruit color and pungency are grade 1.',
-      te: 'రైతు సోదరులారా, బయోరిక్స్ సేంద్రీయ ఎరువుల వాడకంతో మొదటి కోతలోనే ఎకరానికి 18 క్వింటాళ్ల దిగుబడి వచ్చింది.',
-      hi: 'किसान भाइयों, संतुलित उर्वरक और जैविक बूस्टर के इस्तेमाल से पहली तुड़ाई में 18 क्विंटल पैदावार मिली।'
-    },
-    timeAgo: '1h ago',
-    likes: 85
-  },
-  {
-    id: 'story-drone-3',
-    user_id: 'usr_telangana_drones',
-    author: { en: 'FPO Telangana Drones', te: 'ఎఫ్‌పీఓ డ్రోన్ల బృందం', hi: 'एफपीओ ड्रोन टीम' },
-    role: 'Precision Agriculture Lead',
-    avatar: '🚜',
-    avatarUrl: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?w=150&auto=format&fit=crop&q=80',
-    mediaUrl: 'https://images.unsplash.com/photo-1586771107445-d3ca888129ff?w=800&auto=format&fit=crop&q=80',
-    tag: '🚁 Drone Sprayer Demo',
-    title: {
-      en: 'Foliar spray completed across 12 acres in 45 minutes flat!',
-      te: '45 నిమిషాల్లోనే 12 ఎకరాల వరి పొలాల్లో డ్రోన్ స్ప్రేయింగ్ పూర్తి!',
-      hi: 'धान के 12 एकड़ खेत में मात्र 45 मिनट में ड्रोन से छिड़काव संपन्न!'
-    },
-    audioText: {
-      en: 'FPO agricultural drone demonstration saves 90% water and 100% labor fatigue. Book through GramHaul machinery portal.',
-      te: 'ఎఫ్‌పీఓ వ్యవసాయ డ్రోన్‌తో 90 శాతం నీరు ఆదా అవుతుంది. గ్రామ్‌హాల్ పోర్టల్ ద్వారా డ్రోన్ బుక్ చేసుకోండి.',
-      hi: 'कृषि ड्रोन प्रदर्शन से 90% पानी और समय की भारी बचत। ग्रामहॉल पोर्टल से ड्रोन बुक करें।'
-    },
-    timeAgo: '3h ago',
-    likes: 194
-  },
-  {
-    id: 'story-farmer-4',
-    user_id: 'usr_kavitha_reddy',
-    author: { en: 'Kavitha Reddy', te: 'కవితా రెడ్డి', hi: 'कविता रेड्डी' },
-    role: 'Natural Farming Pioneer',
-    avatar: '👩‍🌾',
-    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    mediaUrl: 'https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=800&auto=format&fit=crop&q=80',
-    tag: '🧪 BioRx Organic',
-    title: {
-      en: 'Jeevamrit & Neem seed kernel extract trial — Zero chemical residue',
-      te: 'జీవామృతం & వేప గింజల కషాయం ప్రయోగం — విషరసాయనాలు లేని పత్తి!',
-      hi: 'जीवामृत और नीम काढ़ा का सफल प्रयोग — बिना किसी रसायन के स्वस्थ कपास!'
-    },
-    audioText: {
-      en: 'Zero chemical expenditure for the last 30 days. Beneficial predatory insects like ladybird beetles are thriving in our fields.',
-      te: 'గత 30 రోజులుగా ఒక్క రసాయన మందు కూడా వాడలేదు. మిత్ర పురుగులు బాగా వృద్ధి చెందాయి.',
-      hi: 'पिछले 30 दिनों से कोई रासायनिक कीटनाशक नहीं डाला। मित्र कीट फसलों की प्राकृतिक रक्षा कर रहे हैं।'
-    },
-    timeAgo: '5h ago',
-    likes: 67
-  }
-];
+// ── AUTHENTIC KISAN COMMUNITY STORIES CATALOG ──
+let COMMUNITY_STORIES_CATALOG = (function() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nukrop_community_stories') || '[]');
+    if (Array.isArray(saved) && saved.length > 0) return saved;
+  } catch(e) {}
+  return [];
+})();
 
 function getCurrentFarmerVillage() {
   const savedVillage = localStorage.getItem('nukrop_farmer_village');
@@ -24802,7 +24798,7 @@ function closeMachineryListingModal(e) {
 
 function callEquipmentOwner(itemId) {
   const item = MACHINERY_CATALOG.find(m => m.id === itemId) || MACHINERY_CATALOG[0];
-  const cleanPhone = (item.phone || '9848022338').replace(/[^0-9+]/g, '');
+  const cleanPhone = (item.phone || '18001801551').replace(/[^0-9+]/g, '');
   const ownerName = (item.owner && (item.owner[currentLang] || item.owner.en)) || item.owner || 'Equipment Owner';
   const modelName = (item.name && (item.name[currentLang] || item.name.en)) || item.name || 'Machinery';
 
@@ -30072,8 +30068,8 @@ const GRAMHAUL_TIER_AVAILABLE_VEHICLES = {
     img: 'images/trucks/tata_ace.png',
     driver: 'Suresh Yadav',
     driverName: 'Suresh Yadav',
-    phone: '+91 94401 55667',
-    driverPhone: '+91 94401 55667',
+    phone: '',
+    driverPhone: '',
     plate: 'TS 03 UB 4491',
     rating: '★ 4.9',
     coords: [17.3940, 78.4850],
@@ -30092,8 +30088,8 @@ const GRAMHAUL_TIER_AVAILABLE_VEHICLES = {
     img: 'images/trucks/bolero_maxi.png',
     driver: 'K. Anjaiah',
     driverName: 'K. Anjaiah',
-    phone: '+91 98492 11048',
-    driverPhone: '+91 98492 11048',
+    phone: '',
+    driverPhone: '',
     plate: 'TS 09 XY 8821',
     rating: '★ 4.8',
     coords: [17.3970, 78.4790],
@@ -30112,8 +30108,8 @@ const GRAMHAUL_TIER_AVAILABLE_VEHICLES = {
     img: 'images/trucks/ashok_leyland_dost.png',
     driver: 'Md. Ismail Khan',
     driverName: 'Md. Ismail Khan',
-    phone: '+91 97014 33290',
-    driverPhone: '+91 97014 33290',
+    phone: '',
+    driverPhone: '',
     plate: 'TS 08 AB 1102',
     rating: '★ 4.9',
     coords: [17.3890, 78.4950],
@@ -30132,8 +30128,8 @@ const GRAMHAUL_TIER_AVAILABLE_VEHICLES = {
     img: 'images/trucks/tata_407.png',
     driver: 'Ramesh Yadav',
     driverName: 'Ramesh Yadav',
-    phone: '+91 98491 88441',
-    driverPhone: '+91 98491 88441',
+    phone: '',
+    driverPhone: '',
     plate: 'TS 03 TA 5512',
     rating: '★ 4.9',
     coords: [17.3910, 78.5100],
@@ -30152,8 +30148,8 @@ const GRAMHAUL_TIER_AVAILABLE_VEHICLES = {
     img: 'images/trucks/eicher_pro.png',
     driver: 'S. Venkat',
     driverName: 'S. Venkat',
-    phone: '+91 94403 66120',
-    driverPhone: '+91 94403 66120',
+    phone: '',
+    driverPhone: '',
     plate: 'TS 07 EA 9901',
     rating: '★ 4.9',
     coords: [17.4020, 78.5300],
@@ -30775,7 +30771,7 @@ function displayDriverIncomingHaulModal(trip) {
   } catch(e) {}
 
   const fName = trip.farmer_id || trip.farmerName || 'Farmer';
-  const fPhone = trip.farmer_phone || trip.farmerPhone || '+91 94401 55667';
+  const fPhone = trip.farmer_phone || trip.farmerPhone || '';
   const crop = trip.crop_name || trip.crop || 'Produce';
   const sacks = trip.load_quintals ? (trip.load_quintals + ' Quintals') : (trip.sacks || '40 Bags');
   const pickup = trip.pickup_village || trip.pickup || 'Farm Location';
@@ -31303,22 +31299,22 @@ const APP_VIEWS = {
     <!-- Location-Based Live Mandi Banner (Clean White & Premium) -->
     <div style="margin:0 18px 12px;" class="m3-card">
       <div id="home-mandi-card-container" style="padding:14px 16px;background:#FFFFFF;border-radius:20px;border:1px solid #E2E8F0;box-shadow:0 2px 10px rgba(0,0,0,0.03);transition:all 0.3s ease;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;" onclick="openScreen('market',null);syncSideNav('btn-market')">
-          <div style="display:flex;align-items:center;gap:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;gap:10px;" onclick="openScreen('market',null);syncSideNav('btn-market')">
+          <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
             <div style="width:40px;height:40px;border-radius:12px;background:#F0FDF4;border:1px solid #DCFCE7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             </div>
-            <div>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <div style="font-size:13px;font-weight:800;color:#0F172A;line-height:1.2;">${t.liveMandiTitle} · ${cropName}</div>
-                <button id="home-mandi-refresh-btn" onclick="event.stopPropagation();refreshMandiRatesLive();" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0;color:#64748B;line-height:1;" title="Refresh live rate"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></button>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+                <div style="font-size:13.5px;font-weight:800;color:#0F172A;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.liveMandiTitle} · ${cropName}</div>
+                <button id="home-mandi-refresh-btn" onclick="event.stopPropagation();refreshMandiRatesLive();" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0;color:#64748B;line-height:1;flex-shrink:0;" title="Refresh live rate"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></button>
               </div>
-              <div style="font-size:12px;color:#64748B;margin-top:2px;font-weight:500;">📍 ${mandiName}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${mandiName}</div>
             </div>
           </div>
-          <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;">
-            <div id="home-mandi-live-price" style="font-size:20px;font-weight:900;color:#0F172A;line-height:1.2;">${mandiInfo.price} <span style="font-size:11px;color:#64748B;font-weight:700;">${mandiInfo.unit}</span></div>
-            <div id="home-mandi-live-change" style="font-size:10.5px;font-weight:800;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;white-space:nowrap;">${formatMandiBadge(mandiInfo.catalogItem && mandiInfo.catalogItem.badge, mandiInfo.catalogItem && mandiInfo.catalogItem.tradeDate)}</div>
+          <div style="text-align:right;flex-shrink:0;margin-left:6px;display:flex;flex-direction:column;align-items:flex-end;">
+            <div id="home-mandi-live-price" style="font-size:20px;font-weight:900;color:#0F172A;line-height:1.2;white-space:nowrap;">${mandiInfo.price} <span style="font-size:11px;color:#64748B;font-weight:700;">${mandiInfo.unit}</span></div>
+            <div id="home-mandi-live-change" style="font-size:10px;font-weight:800;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;white-space:nowrap;">${formatMandiBadge(mandiInfo.catalogItem && mandiInfo.catalogItem.badge, mandiInfo.catalogItem && mandiInfo.catalogItem.tradeDate)}</div>
           </div>
         </div>
 
@@ -33633,7 +33629,7 @@ const APP_VIEWS = {
     const tripDrop    = isAccepted ? (activeTrip.mandi || 'APMC Yard') : '';
     const tripFare    = isAccepted ? (activeTrip.fare || '380') : '0';
     const tripFarmerName = isAccepted ? (activeTrip.farmerName || 'B. Jaswanth Reddy') : '';
-    const tripFarmerPhone = isAccepted ? (activeTrip.farmerPhone || '+91 94401 55667') : '';
+    const tripFarmerPhone = isAccepted ? (activeTrip.farmerPhone || '') : '';
     const tripStep = (isAccepted && typeof activeTrip?.step === 'number') ? activeTrip.step : 0;
 
     // ─── STYLES ───────────────────────────────────────────────────────
@@ -35564,7 +35560,7 @@ function autoDetectMandiLocation() {
 
 function driverCallFarmer(phone, name) {
   const fName = name || 'B. Jaswanth Reddy';
-  const fPhone = phone || '+91 94401 55667';
+  const fPhone = phone || '';
   const cleanPhone = fPhone.replace(/[^0-9+]/g, '');
 
   const modalId = 'driver-call-farmer-modal';
@@ -35613,7 +35609,7 @@ function driverCallFarmer(phone, name) {
 
 function openLiveHaulChat(tripId, userRole, peerName, peerPhone) {
   const pName = peerName || (userRole === 'driver' ? 'Farmer' : 'Driver');
-  const pPhone = peerPhone || (userRole === 'driver' ? '+91 94401 55667' : '+91 98765 44910');
+  const pPhone = peerPhone || (userRole === 'driver' ? '' : '+91 98765 44910');
   const tId = tripId || 'GH-4192';
   const role = userRole || 'driver';
 
@@ -36419,7 +36415,7 @@ function getInitialSeedTrucks(lat, lon) {
     {
       id: 'TRK-8419',
       driver_name: 'Ramesh Yadav',
-      driver_phone: '+91 98492 11048',
+      driver_phone: '',
       vehicle_type: 'Tata 407 (Heavy Duty)',
       vehicle_plate: 'TS-03-UB-8419',
       capacity_tonnes: 3.5,
@@ -36432,7 +36428,7 @@ function getInitialSeedTrucks(lat, lon) {
     {
       id: 'TRK-9022',
       driver_name: 'K. Srinivas Rao',
-      driver_phone: '+91 94401 55667',
+      driver_phone: '',
       vehicle_type: 'Eicher Pro 2049 (4 Ton)',
       vehicle_plate: 'TS-09-EA-8821',
       capacity_tonnes: 4.0,
@@ -36445,7 +36441,7 @@ function getInitialSeedTrucks(lat, lon) {
     {
       id: 'TRK-3310',
       driver_name: 'Mohammed Ali',
-      driver_phone: '+91 98480 33110',
+      driver_phone: '',
       vehicle_type: 'Mahindra Bolero Maxi Truck',
       vehicle_plate: 'TS-03-TA-4491',
       capacity_tonnes: 2.0,
@@ -37605,7 +37601,7 @@ function closeAddTruckDriverModal() {
 
 function submitDriverTruckListing() {
   const name = document.getElementById('drv-name-input')?.value || 'Suresh Goud';
-  const phone = document.getElementById('drv-phone-input')?.value || '+91 98491 22334';
+  const phone = document.getElementById('drv-phone-input')?.value || '';
   const vehicle = document.getElementById('drv-vehicle-input')?.value || 'Tata 407 (Heavy Duty)';
   const plate = document.getElementById('drv-plate-input')?.value || 'TS-03-XY-5512';
   const origin = document.getElementById('drv-origin-input')?.value || 'Narsampet Rural';
@@ -40558,7 +40554,7 @@ async function fetchRealTruckListings() {
     {
       id: '315f2cb5-ded6-4907-a8c0-7bc181ed038d',
       driver_name: 'Srinivas Rao',
-      driver_phone: '+91 94401 55667',
+      driver_phone: '',
       truck_type: 'Eicher Pro 2049 (4 Ton)',
       vehicle_plate: 'TS-09-EA-8821',
       capacity_tonnes: 4.0,
@@ -40570,7 +40566,7 @@ async function fetchRealTruckListings() {
     {
       id: 'TRK-8419',
       driver_name: 'Ramesh Yadav',
-      driver_phone: '+91 98492 11048',
+      driver_phone: '',
       truck_type: 'Tata 407 (Heavy Duty)',
       vehicle_plate: 'TS-03-UB-8419',
       capacity_tonnes: 3.5,
@@ -40893,7 +40889,7 @@ function executeRealGramhaulDispatch() {
   const v = (typeof GRAMHAUL_TIER_AVAILABLE_VEHICLES !== 'undefined' && GRAMHAUL_TIER_AVAILABLE_VEHICLES[tier]) ? GRAMHAUL_TIER_AVAILABLE_VEHICLES[tier] : {
     name: 'Tata Ace Gold (1.5T)',
     driver: 'Suresh Yadav',
-    phone: '+91 94401 55667',
+    phone: '',
     plate: 'TS 03 UB 4491',
     rating: '★ 4.9',
     coords: [17.3940, 78.4850],
@@ -40927,7 +40923,7 @@ function executeRealGramhaulDispatch() {
     vehicle: v.name,
     driverColor: v.color,
     farmerName: localStorage.getItem('nukrop_farmer_name') || 'B. Jaswanth Reddy',
-    farmerPhone: localStorage.getItem('nukrop_farmer_phone') || '+91 94401 55667',
+    farmerPhone: localStorage.getItem('nukrop_farmer_phone') || '',
     status: 'SEARCHING',
     start_otp: startOtp,
     otp: startOtp,
@@ -41704,7 +41700,7 @@ function toggleTripDetailsDrawer() {
 
 // REAL PHONE CALL REDIRECTION (NO FAKE IN-APP AUDIO MODAL)
 function triggerDriverCall(driverName, phone) {
-  const cleanPhone = (phone || '+919440155667').replace(/[^0-9+]/g, '');
+  const cleanPhone = (phone || '').replace(/[^0-9+]/g, '');
   if (window.AndroidBridge && typeof AndroidBridge.makePhoneCall === 'function') {
     AndroidBridge.makePhoneCall(cleanPhone);
   } else {

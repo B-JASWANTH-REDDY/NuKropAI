@@ -244,12 +244,16 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun getDeviceAccountsJson(): String {
             return try {
-                val accounts = android.accounts.AccountManager.get(this@MainActivity).getAccountsByType("com.google")
-                val jsonArr = org.json.JSONArray()
-                for (acc in accounts) {
-                    jsonArr.put(acc.name)
+                if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.GET_ACCOUNTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    val accounts = android.accounts.AccountManager.get(this@MainActivity).getAccountsByType("com.google")
+                    val jsonArr = org.json.JSONArray()
+                    for (acc in accounts) {
+                        jsonArr.put(acc.name)
+                    }
+                    jsonArr.toString()
+                } else {
+                    "[]"
                 }
-                jsonArr.toString()
             } catch (e: Exception) {
                 "[]"
             }
@@ -258,11 +262,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 1009 && resultCode == Activity.RESULT_OK && data != null) {
-            val accountName = data.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
-            if (!accountName.isNullOrEmpty()) {
-                val name = accountName.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountSelected === 'function') window.onNativeGoogleAccountSelected('$accountName', '$name')", null)
+        if (requestCode == 1009) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                val accountName = data.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
+                if (!accountName.isNullOrEmpty()) {
+                    val name = accountName.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                    webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountSelected === 'function') window.onNativeGoogleAccountSelected('$accountName', '$name')", null)
+                } else {
+                    webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
+                }
+            } else {
+                webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
             }
         }
     }

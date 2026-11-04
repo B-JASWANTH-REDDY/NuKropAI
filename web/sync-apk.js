@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 // Production release candidates ONLY - debug builds must never overwrite production endpoints
 const releaseCandidates = [
   path.resolve(__dirname, '../app/build/outputs/apk/release/app-release.apk'),
+  path.resolve(__dirname, '../NuKropAI.apk'),
   path.resolve(__dirname, '../NuKropAI_v3_Production.apk')
 ];
 

@@ -7,8 +7,11 @@ Welcome, coding agent. This file is the permanent, persistent source of truth fo
 ## 1. MANDATORY READING BEFORE ANY TASK
 
 Before writing or modifying a single line of code, you MUST read:
-1. `docs/ENGINEERING_QUALITY_STANDARD.md` — The authoritative 20 UI/UX and 20 Security standards.
-2. `docs/FEATURE_DEFINITION_OF_DONE.md` — The mandatory quality checklist required for every completed task.
+1. `docs/APP_FLOW_MASTER.md` — The canonical 10-stage application lifecycle and flow preservation directives.
+2. `docs/SCREEN_NAVIGATION_MAP.md` — Authoritative routing, 18 `APP_VIEWS`, and back-navigation stack.
+3. `docs/ENGINEERING_QUALITY_STANDARD.md` — The authoritative 20 UI/UX and 20 Security standards.
+4. `docs/FEATURE_DEFINITION_OF_DONE.md` — The mandatory quality checklist required for every completed task.
+5. `docs/REGRESSION_TEST_MATRIX.md` — The master zero-regression test matrix.
 
 Do not wait for the user to remind you. If you are starting a new session or subagent, these standards apply unconditionally.
 
@@ -32,6 +35,9 @@ Do not wait for the user to remind you. If you are starting a new session or sub
    - If an external dependency or hardware sensor is unavailable, honestly report it as `BLOCKED BY EXTERNAL DEPENDENCY` or use clearly labeled fallback data.
 5. **No Secret Leaks**:
    - Never commit `.env`, service-role keys, or private tokens.
+6. **Zero-Regression & App Flow Preservation**:
+   - Never remove existing screens, break navigation, skip onboarding steps, or replace working backend APIs with mocks.
+   - All 8 Mandatory User Journeys (`tests/test_mandatory_user_journeys.js`) must pass 100% on every commit.
 
 ---
 
@@ -53,7 +59,7 @@ Do not wait for the user to remind you. If you are starting a new session or sub
 For EVERY task (feature, bugfix, UI change, refactor, API endpoint, migration):
 
 ### Step 1: Pre-Flight Audit
-- Review `docs/ENGINEERING_QUALITY_STANDARD.md`.
+- Review `docs/APP_FLOW_MASTER.md` and `docs/ENGINEERING_QUALITY_STANDARD.md`.
 - Identify which of the 20 UI/UX standards and 20 Security standards apply.
 - Check existing unit and E2E tests for the affected feature.
 
@@ -65,6 +71,7 @@ For EVERY task (feature, bugfix, UI change, refactor, API endpoint, migration):
 
 ### Step 3: Verification Suites
 Run the relevant automated verification commands before reporting completion:
+- **Mandatory User Journeys**: `node tests/test_mandatory_user_journeys.js` (8 journeys A-H)
 - **Backend Tests**: `npm --prefix backend test` (13 JWT + 12 Controller + 9 Fallback + 15 Mandi sync = 49 tests)
 - **Android Tests**: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew testDebugUnitTest`
 - **Web Build**: `npm --prefix web run build`

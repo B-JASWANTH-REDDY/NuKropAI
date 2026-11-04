@@ -8,8 +8,9 @@ This document establishes the permanent behavioral directives for the Gemini / A
 
 Whenever you receive a prompt or begin a new turn in this repository:
 1. **Immediately reference `AGENTS.md`** for repository-wide instructions.
-2. **Review `docs/ENGINEERING_QUALITY_STANDARD.md`** for the 20 UI/UX and 20 Security standards.
-3. **Comply with `docs/FEATURE_DEFINITION_OF_DONE.md`** before declaring any task complete.
+2. **Review `docs/APP_FLOW_MASTER.md`** for the 10-stage lifecycle and zero-regression rules.
+3. **Review `docs/ENGINEERING_QUALITY_STANDARD.md`** for the 20 UI/UX and 20 Security standards.
+4. **Comply with `docs/FEATURE_DEFINITION_OF_DONE.md`** before declaring any task complete.
 
 These requirements are permanent and apply automatically to all screens, components, backend APIs, and migrations.
 
@@ -29,7 +30,11 @@ These requirements are permanent and apply automatically to all screens, compone
 - Every change made to `app/src/main/assets/index.html` MUST immediately be copied to `nukrop_emulator.html`.
 - Automated test suites enforce 100% SHA-256 byte-for-byte identity. Any difference will fail the CI/CD pipeline.
 
-### D. No Mock Facades or Artificial Vehicles
+### D. Zero-Regression & Complete User Journey Preservation
+- Never remove working screens, replace backend APIs with mocks, or alter navigation paths without authority.
+- All 8 Mandatory User Journeys in `tests/test_mandatory_user_journeys.js` must pass with 100% success on every commit.
+
+### E. No Mock Facades or Artificial Vehicles
 - Do not introduce `setInterval` timers pretending to animate moving trucks.
 - Do not hardcode fake market tickers or mock booking acceptances.
 - If a physical Android device or external cloud model is absent, honestly document it as `BLOCKED BY EXTERNAL DEPENDENCY`.
@@ -39,6 +44,7 @@ These requirements are permanent and apply automatically to all screens, compone
 ## 3. VERIFICATION PROTOCOL
 
 Before concluding your response, you MUST execute the relevant test suites and report their exact results:
+- Mandatory User Journeys: `node tests/test_mandatory_user_journeys.js`
 - Backend: `npm --prefix backend test`
 - Android: `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; .\gradlew testDebugUnitTest`
 - Web: `npm --prefix web run build`

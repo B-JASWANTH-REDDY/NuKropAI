@@ -26,7 +26,8 @@ import {
   bookRental,
   extendRental,
   getMyRentals,
-  updateRentalStatus
+  updateRentalStatus,
+  handleRentalPaymentCallback
 } from '../controllers/dispatch.controller';
 import { authenticate, requireRole } from '../middleware/auth';
 
@@ -166,4 +167,11 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
   fastify.post('/rentals/:rentalId/status', {
     preHandler: [authenticate]
   }, updateRentalStatus);
+
+  // ── 11. RENTAL FINANCIAL SETTLEMENT & PAYMENT CALLBACK ──
+  fastify.post('/rentals/:rentalId/payment-callback', {
+    preHandler: [authenticate]
+  }, handleRentalPaymentCallback);
+
+  fastify.post('/rentals/payment-webhook', handleRentalPaymentCallback);
 }

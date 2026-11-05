@@ -2,7 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import axios from 'axios';
 import crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
+import { EventEmitter } from 'events';
 import { pool } from '../config/db';
+import { redisClient } from '../config/redis';
 import { IdempotencyService } from '../services/IdempotencyService';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -64,35 +66,96 @@ export const dispatchMemoryStore = {
   profiles: new Map<string, any>(),
   idempotencyMap: new Map<string, any>(),
   farmerPlaintextOtps: new Map<string, string>(),
+  farmerEncryptedOtps: new Map<string, any>(),
   otpResendCooldowns: new Map<string, number>(),
-  activeTrackingSubscribers: new Map<string, Set<any>>()
+  activeTrackingSubscribers: new Map<string, Set<any>>(),
+  bookingTrackingSeq: new Map<string, number>(),
+  bookingTrackingHistory: new Map<string, any[]>(),
+  processedPaymentCallbacks: new Set<string>()
 };
 
+// ── DISTRIBUTED EVENT BUS & WEBSOCKET BROADCASTING ──
+export const trackingEventBus = new EventEmitter();
+trackingEventBus.setMaxListeners(300);
+
 export function broadcastBookingTrackingEvent(bookingId: string, event: string, payload: any) {
+  const currentSeq = (dispatchMemoryStore.bookingTrackingSeq.get(bookingId) || 0) + 1;
+  dispatchMemoryStore.bookingTrackingSeq.set(bookingId, currentSeq);
+
+  const messageObj = {
+    event,
+    bookingId,
+    seq: currentSeq,
+    version: 1,
+    timestamp: Date.now(),
+    ...payload
+  };
+
+  // 1. Emit to local in-process event bus for multi-listener / cross-instance subscribers
+  trackingEventBus.emit(`tracking:${bookingId}`, messageObj);
+
+  // 2. Publish to Redis if connected
+  try {
+    if (redisClient && (redisClient as any).status === 'ready') {
+      redisClient.publish(`dispatch:tracking:${bookingId}`, JSON.stringify(messageObj));
+    }
+  } catch {}
+
+  // 3. Append to rolling replay buffer (up to 50 items)
+  let history = dispatchMemoryStore.bookingTrackingHistory.get(bookingId);
+  if (!history) {
+    history = [];
+    dispatchMemoryStore.bookingTrackingHistory.set(bookingId, history);
+  }
+  history.push(messageObj);
+  if (history.length > 50) history.shift();
+
+  // 4. Deliver to local active sockets
   const sockets = dispatchMemoryStore.activeTrackingSubscribers.get(bookingId);
-  if (!sockets || sockets.size === 0) return;
-  const msg = JSON.stringify({ event, bookingId, timestamp: Date.now(), ...payload });
-  for (const client of sockets) {
-    try {
-      const sock = client?.socket || client;
-      if (sock && sock.readyState === 1 && typeof sock.send === 'function') {
-        sock.send(msg);
-      }
-    } catch {}
+  if (sockets && sockets.size > 0) {
+    const rawMsg = JSON.stringify(messageObj);
+    for (const client of sockets) {
+      try {
+        const sock = client?.socket || client;
+        if (sock && sock.readyState === 1 && typeof sock.send === 'function') {
+          sock.send(rawMsg);
+        }
+      } catch {}
+    }
   }
 
-  if (payload.status === 'CANCELLED' || payload.status === 'COMPLETED') {
-    setTimeout(() => {
+  // 5. Terminal booking state handling: broadcast terminal event and graceful close
+  if (payload.status === 'CANCELLED' || payload.status === 'COMPLETED' || payload.status === 'TRIP_COMPLETED') {
+    const termMsg = JSON.stringify({
+      event: 'terminal_state',
+      bookingId,
+      status: payload.status,
+      finalSeq: currentSeq,
+      reason: `Trip terminated with status ${payload.status}`
+    });
+
+    if (sockets && sockets.size > 0) {
       for (const client of sockets) {
         try {
           const sock = client?.socket || client;
-          if (sock && sock.readyState === 1 && typeof sock.close === 'function') {
-            sock.close(1000, `Tracking terminated: Trip ${payload.status}`);
+          if (sock && sock.readyState === 1 && typeof sock.send === 'function') {
+            sock.send(termMsg);
           }
         } catch {}
       }
-      dispatchMemoryStore.activeTrackingSubscribers.delete(bookingId);
-    }, 50);
+
+      setTimeout(() => {
+        for (const client of sockets) {
+          try {
+            const sock = client?.socket || client;
+            if (sock && sock.readyState === 1 && typeof sock.close === 'function') {
+              sock.close(1000, `Tracking terminated: Trip ${payload.status}`);
+            }
+          } catch {}
+        }
+        dispatchMemoryStore.activeTrackingSubscribers.delete(bookingId);
+      }, 50);
+    }
   }
 }
 
@@ -106,14 +169,149 @@ function getHeaders(authToken?: string) {
   };
 }
 
+// ── SERVER-SECRET KEYED HMAC & AES-256-GCM OTP SECURITY ARCHITECTURE ──
+export const OTP_HMAC_SECRET = process.env.DISPATCH_OTP_SECRET || process.env.JWT_SECRET || 'nukropai_dispatch_master_hmac_secret_2026';
+export const OTP_PURPOSE_PICKUP = 'PICKUP_VERIFICATION';
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(OTP_HMAC_SECRET).digest(); // 32 bytes for AES-256
+
+export function computeOtpHmac(
+  otp: string,
+  bookingId: string,
+  purpose: string = OTP_PURPOSE_PICKUP,
+  secret: string = OTP_HMAC_SECRET
+): string {
+  const message = `${bookingId}:${purpose}:${otp.trim()}`;
+  return crypto.createHmac('sha256', secret).update(message).digest('hex');
+}
+
+export function constantTimeOtpCompare(
+  candidateOtp: string,
+  bookingId: string,
+  expectedHashOrHmac: string,
+  purpose: string = OTP_PURPOSE_PICKUP,
+  salt?: string,
+  secret: string = OTP_HMAC_SECRET
+): boolean {
+  if (!candidateOtp || !expectedHashOrHmac) return false;
+
+  // 1. Primary: Constant-time comparison with Keyed HMAC construction
+  const candidateHmac = computeOtpHmac(candidateOtp, bookingId, purpose, secret);
+  const candBuf = Buffer.from(candidateHmac, 'hex');
+  const expBuf = Buffer.from(expectedHashOrHmac, 'hex');
+
+  if (candBuf.length === expBuf.length && crypto.timingSafeEqual(candBuf, expBuf)) {
+    return true;
+  }
+
+  // 2. Backward-compatible fallback: Salted SHA-256 constant-time comparison
+  if (salt) {
+    const legacyCandidate = crypto.createHash('sha256').update(salt + candidateOtp.trim()).digest('hex');
+    const legCandBuf = Buffer.from(legacyCandidate, 'hex');
+    if (legCandBuf.length === expBuf.length && crypto.timingSafeEqual(legCandBuf, expBuf)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function encryptOtpForDelivery(otp: string): { ciphertext: string; iv: string; tag: string } {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+  let enc = cipher.update(otp, 'utf8', 'hex');
+  enc += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+  return {
+    ciphertext: enc,
+    iv: iv.toString('hex'),
+    tag
+  };
+}
+
+export function decryptOtpForDelivery(payload: { ciphertext: string; iv: string; tag: string }): string | null {
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, Buffer.from(payload.iv, 'hex'));
+    decipher.setAuthTag(Buffer.from(payload.tag, 'hex'));
+    let dec = decipher.update(payload.ciphertext, 'hex', 'utf8');
+    dec += decipher.final('utf8');
+    return dec;
+  } catch {
+    return null;
+  }
+}
+
+export async function storeOtpDistributed(bookingId: string, otp: string, ttlSeconds: number = 1800): Promise<void> {
+  const encrypted = encryptOtpForDelivery(otp);
+  try {
+    if (redisClient && (redisClient as any).status === 'ready') {
+      await redisClient.set(`dispatch:otp:${bookingId}`, JSON.stringify(encrypted), 'EX', ttlSeconds);
+    }
+  } catch {}
+
+  if (!dispatchMemoryStore.farmerEncryptedOtps) {
+    dispatchMemoryStore.farmerEncryptedOtps = new Map<string, any>();
+  }
+  dispatchMemoryStore.farmerEncryptedOtps.set(bookingId, encrypted);
+}
+
+export async function retrieveOtpDistributed(bookingId: string): Promise<string | null> {
+  // 1. Check Redis if available
+  try {
+    if (redisClient && (redisClient as any).status === 'ready') {
+      const data = await redisClient.get(`dispatch:otp:${bookingId}`);
+      if (data) {
+        const parsed = JSON.parse(data);
+        const dec = decryptOtpForDelivery(parsed);
+        if (dec) return dec;
+      }
+    }
+  } catch {}
+
+  // 2. Check in-memory encrypted store
+  const enc = dispatchMemoryStore.farmerEncryptedOtps?.get(bookingId);
+  if (enc) {
+    const dec = decryptOtpForDelivery(enc);
+    if (dec) return dec;
+  }
+
+  // 3. Check booking record's encrypted field
+  const booking = dispatchMemoryStore.bookings.get(bookingId);
+  if (booking?.encrypted_plaintext_otp) {
+    const dec = decryptOtpForDelivery(booking.encrypted_plaintext_otp);
+    if (dec) return dec;
+  }
+
+  // 4. Fallback ephemeral plaintext
+  if (booking?.ephemeral_plaintext_otp) {
+    return booking.ephemeral_plaintext_otp;
+  }
+
+  return null;
+}
+
+export async function purgeOtpDistributed(bookingId: string): Promise<void> {
+  try {
+    if (redisClient && (redisClient as any).status === 'ready') {
+      await redisClient.del(`dispatch:otp:${bookingId}`);
+    }
+  } catch {}
+
+  if (dispatchMemoryStore.farmerEncryptedOtps) {
+    dispatchMemoryStore.farmerEncryptedOtps.delete(bookingId);
+  }
+  if (dispatchMemoryStore.farmerPlaintextOtps) {
+    dispatchMemoryStore.farmerPlaintextOtps.delete(bookingId);
+  }
+}
+
 export function hashOtp(otp: string, salt: string): string {
   return crypto.createHash('sha256').update(salt + otp).digest('hex');
 }
 
-export function generateSecureOtp(): { otp: string; salt: string; hash: string } {
+export function generateSecureOtp(bookingId?: string, purpose: string = OTP_PURPOSE_PICKUP): { otp: string; salt: string; hash: string } {
   const otp = crypto.randomInt(1000, 10000).toString(); // Cryptographically secure 4-digit numeric OTP
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = hashOtp(otp, salt);
+  const hash = bookingId ? computeOtpHmac(otp, bookingId, purpose) : hashOtp(otp, salt);
   return { otp, salt, hash };
 }
 
@@ -990,9 +1188,11 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
 
   const bookingId = (request.body as any)?.bookingId || (request.body as any)?.id || `HB-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // Cryptographically secure 4-digit OTP generation and SHA-256 hash
-  const { otp, salt, hash } = generateSecureOtp();
+  // Cryptographically secure 4-digit OTP generation with Server-Secret Keyed HMAC
+  const { otp, salt, hash } = generateSecureOtp(bookingId, OTP_PURPOSE_PICKUP);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30-minute validity
+  const encryptedOtp = encryptOtpForDelivery(otp);
+  await storeOtpDistributed(bookingId, otp, 1800);
 
   // Calculate route distance if coords are provided
   let routeDistanceKm = 15.0; // default estimated distance
@@ -1030,6 +1230,7 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     start_otp_salt: salt,
     start_otp_attempts: 0,
     start_otp_expires_at: expiresAt,
+    encrypted_plaintext_otp: encryptedOtp,
     route_distance_km: routeDistanceKm,
     fare_breakdown_json: fareBreakdown,
     notes: notes || null,
@@ -1415,10 +1616,16 @@ export const verifyBookingOtp = async (request: FastifyRequest, reply: FastifyRe
     });
   }
 
-  // Compute candidate hash with stored salt
-  const candidateHash = hashOtp(String(otp).trim(), booking.start_otp_salt || '');
+  // Server-Secret Keyed HMAC constant-time comparison
+  const isMatch = constantTimeOtpCompare(
+    String(otp).trim(),
+    bookingId,
+    booking.start_otp_hash || '',
+    OTP_PURPOSE_PICKUP,
+    booking.start_otp_salt || ''
+  );
 
-  if (candidateHash !== booking.start_otp_hash) {
+  if (!isMatch) {
     booking.start_otp_attempts = (booking.start_otp_attempts || 0) + 1;
     const remaining = 3 - booking.start_otp_attempts;
     dispatchMemoryStore.bookings.set(bookingId, booking);
@@ -1436,13 +1643,12 @@ export const verifyBookingOtp = async (request: FastifyRequest, reply: FastifyRe
   booking.pickup_otp_verified_at = new Date().toISOString();
   booking.updated_at = new Date().toISOString();
 
-  // Single-Use Enforcement: Erase ephemeral plaintext OTP and invalidate hash/salt
+  // Single-Use Enforcement: Erase delivery material, hash, and clear distributed store
+  await purgeOtpDistributed(bookingId);
   delete booking.ephemeral_plaintext_otp;
+  delete booking.encrypted_plaintext_otp;
   booking.start_otp_hash = null;
   booking.start_otp_salt = null;
-  if (dispatchMemoryStore.farmerPlaintextOtps) {
-    dispatchMemoryStore.farmerPlaintextOtps.delete(bookingId);
-  }
   dispatchMemoryStore.bookings.set(bookingId, booking);
 
   // Transition driver duty session to ON_TRIP
@@ -1539,13 +1745,12 @@ export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply
   booking.cancelled_at = new Date().toISOString();
   booking.updated_at = new Date().toISOString();
 
-  // Invalidate OTP on cancellation
+  // Invalidate OTP on cancellation across all stores
+  await purgeOtpDistributed(bookingId);
   delete booking.ephemeral_plaintext_otp;
+  delete booking.encrypted_plaintext_otp;
   booking.start_otp_hash = null;
   booking.start_otp_salt = null;
-  if (dispatchMemoryStore.farmerPlaintextOtps) {
-    dispatchMemoryStore.farmerPlaintextOtps.delete(bookingId);
-  }
   dispatchMemoryStore.bookings.set(bookingId, booking);
 
   // Revoke any pending offers in memory & DB
@@ -2122,6 +2327,21 @@ export const bookRental = async (request: FastifyRequest, reply: FastifyReply) =
     status: (request.body as any)?.status === 'REQUESTED' ? 'REQUESTED' : 'CONFIRMED',
     deposit_amount: Number((request.body as any)?.depositAmount) || 0,
     deposit_refund_status: (Number((request.body as any)?.depositAmount) || 0) > 0 ? 'PENDING' : 'N/A',
+    financial_ledger: {
+      quoted_price: baseAmount,
+      approved_price: baseAmount,
+      amount_payable: baseAmount + (Number((request.body as any)?.depositAmount) || 0),
+      amount_authorized: 0,
+      amount_captured: 0,
+      deposit_recorded: Number((request.body as any)?.depositAmount) || 0,
+      refund_requested: 0,
+      refund_provider_confirmed: 0,
+      manual_settlement: 0,
+      disputed_amount: 0,
+      payment_gateway_status: 'PAYMENT_GATEWAY_INTEGRATION_PENDING',
+      payment_mode: 'MANUAL_OR_PENDING_GATEWAY',
+      money_movement_disclaimer: 'Calculation model only: No actual fiat money movement has occurred without provider confirmation.'
+    },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -2281,25 +2501,29 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
 
   // Final billing calculation on return
   let billingSummary: any = null;
-  const { conditionReport, damageFee = 0 } = (request.body as any) || {};
+  const { conditionReport, damageFee } = (request.body as any) || {};
 
   if (newStatus === 'RETURNED' || newStatus === 'DISPUTED') {
     const actReturnTime = returnedAt ? new Date(returnedAt).getTime() : Date.now();
     const schedEndTime = new Date(rental.end_time).getTime();
-    rental.actual_returned_at = new Date(actReturnTime).toISOString();
+    if (!rental.actual_returned_at) {
+      rental.actual_returned_at = new Date(actReturnTime).toISOString();
+    }
 
-    let overtimeHours = 0;
-    let overtimeAmount = 0;
-    if (actReturnTime > schedEndTime) {
+    let overtimeHours = rental.overtime_hours || 0;
+    let overtimeAmount = rental.overtime_amount || 0;
+    if (actReturnTime > schedEndTime && overtimeHours === 0) {
       overtimeHours = parseFloat(((actReturnTime - schedEndTime) / (1000 * 60 * 60)).toFixed(2));
       overtimeAmount = Math.round(overtimeHours * (rental.hourly_rate || 650));
     }
 
-    const assessedDamageFee = Number(damageFee) || (conditionReport?.damageFee ? Number(conditionReport.damageFee) : 0);
+    const assessedDamageFee = damageFee !== undefined
+      ? Number(damageFee)
+      : (conditionReport?.damageFee !== undefined ? Number(conditionReport.damageFee) : (rental.damage_fee || 0));
     rental.overtime_hours = overtimeHours;
     rental.overtime_amount = overtimeAmount;
     rental.damage_fee = assessedDamageFee;
-    rental.condition_report = conditionReport || null;
+    if (conditionReport) rental.condition_report = conditionReport;
     rental.final_total_amount = (rental.base_amount || 0) + overtimeAmount + assessedDamageFee;
 
     billingSummary = {
@@ -2313,11 +2537,62 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
   }
 
   if (newStatus === 'ACTIVE') {
+    // Cross-Conflict Verification: Ensure vehicle is not actively performing a transport trip
+    if (rental.vehicle_id) {
+      for (const b of dispatchMemoryStore.bookings.values()) {
+        if (b.vehicle_id === rental.vehicle_id && ['ACCEPTED', 'ARRIVED', 'DRIVER_ARRIVED', 'IN_TRANSIT'].includes(b.status)) {
+          return reply.status(409).send({
+            error: 'VEHICLE_BUSY_ON_HAUL',
+            conflictBookingId: b.id,
+            message: 'Vehicle cannot be handed over for active rental because it is currently executing a live transport haul.'
+          });
+        }
+      }
+    }
+
     const { handoverNotes, depositPaid, paymentStatus } = (request.body as any) || {};
     rental.handover_at = new Date().toISOString();
     if (handoverNotes) rental.handover_notes = handoverNotes;
     if (depositPaid !== undefined) rental.deposit_amount = Number(depositPaid);
     if (paymentStatus) rental.payment_status = paymentStatus;
+
+    if (!rental.financial_ledger) {
+      rental.financial_ledger = {
+        quoted_price: rental.base_amount,
+        approved_price: rental.base_amount,
+        amount_payable: rental.base_amount + (rental.deposit_amount || 0),
+        amount_authorized: 0,
+        amount_captured: 0,
+        deposit_recorded: rental.deposit_amount || 0,
+        refund_requested: 0,
+        refund_provider_confirmed: 0,
+        manual_settlement: 0,
+        disputed_amount: 0,
+        payment_gateway_status: 'PAYMENT_GATEWAY_INTEGRATION_PENDING',
+        money_movement_disclaimer: 'Calculation model only: No actual fiat money movement has occurred without provider confirmation.'
+      };
+    }
+    rental.financial_ledger.deposit_recorded = rental.deposit_amount || 0;
+  }
+
+  if (newStatus === 'DISPUTED') {
+    if (!rental.financial_ledger) {
+      rental.financial_ledger = {
+        quoted_price: rental.base_amount,
+        approved_price: rental.base_amount,
+        amount_payable: rental.final_total_amount || rental.base_amount,
+        amount_authorized: 0,
+        amount_captured: 0,
+        deposit_recorded: rental.deposit_amount || 0,
+        refund_requested: 0,
+        refund_provider_confirmed: 0,
+        manual_settlement: 0,
+        disputed_amount: 0,
+        payment_gateway_status: 'PAYMENT_GATEWAY_INTEGRATION_PENDING',
+        money_movement_disclaimer: 'Dispute raised. Final money movement suspended pending resolution.'
+      };
+    }
+    rental.financial_ledger.disputed_amount = rental.damage_fee || 0;
   }
 
   if (newStatus === 'COMPLETED') {
@@ -2325,6 +2600,28 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
     if (disputeResolution) rental.dispute_resolution = disputeResolution;
     if (depositRefundStatus) rental.deposit_refund_status = depositRefundStatus;
     if (finalAgreedAmount !== undefined) rental.final_total_amount = Number(finalAgreedAmount);
+
+    if (!rental.financial_ledger) {
+      rental.financial_ledger = {
+        quoted_price: rental.base_amount,
+        approved_price: rental.base_amount,
+        amount_payable: rental.final_total_amount || rental.base_amount,
+        amount_authorized: 0,
+        amount_captured: 0,
+        deposit_recorded: rental.deposit_amount || 0,
+        refund_requested: 0,
+        refund_provider_confirmed: 0,
+        manual_settlement: 0,
+        disputed_amount: 0,
+        payment_gateway_status: 'PAYMENT_GATEWAY_INTEGRATION_PENDING',
+        money_movement_disclaimer: 'Calculation model only: No actual fiat money movement has occurred without provider confirmation.'
+      };
+    }
+
+    const calcRefund = Math.max(0, (rental.deposit_amount || 0) - (rental.damage_fee || 0));
+    rental.financial_ledger.refund_requested = calcRefund;
+    rental.financial_ledger.manual_settlement = finalAgreedAmount !== undefined ? Number(finalAgreedAmount) : (rental.final_total_amount || rental.base_amount);
+    rental.financial_ledger.deposit_refund_status = depositRefundStatus || ((rental.deposit_amount || 0) > 0 ? 'PARTIAL_REFUND' : 'N/A');
 
     billingSummary = {
       baseAmount: rental.base_amount,
@@ -2334,6 +2631,7 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
       conditionReport: rental.condition_report || null,
       disputeResolution: rental.dispute_resolution || null,
       depositRefundStatus: rental.deposit_refund_status || 'N/A',
+      financialLedger: rental.financial_ledger,
       finalTotal: rental.final_total_amount || rental.base_amount
     };
   }
@@ -2378,22 +2676,50 @@ export const dispatchTrackingWebSocket = async (connection: any, req: any) => {
     return;
   }
 
-  // Token authentication & participant authorization check
-  let userId: string | null = null;
-  if (token) {
-    try {
-      const decoded = jwt.decode(token) as any;
-      userId = decoded?.sub || decoded?.id || null;
-    } catch {}
+  // Terminal State Check: Closed trips reject active tracking connections
+  if (['CANCELLED', 'COMPLETED', 'TRIP_COMPLETED'].includes(booking.status)) {
+    if (socket?.send) {
+      socket.send(JSON.stringify({
+        event: 'terminal_state',
+        bookingId,
+        status: booking.status,
+        message: `Booking has already finished or been cancelled.`
+      }));
+    }
+    if (socket?.close) socket.close(1000, `Trip already ${booking.status}`);
+    return;
   }
 
-  if (userId) {
-    const isFarmer = booking.farmer_user_id === userId || booking.user_id === userId;
-    const isDriver = booking.driver_user_id === userId || booking.driver_id === userId;
-    if (!isFarmer && !isDriver) {
-      if (socket?.close) socket.close(4403, 'Forbidden: Not a booking participant');
-      return;
+  // Token authentication & participant authorization check
+  let userId: string | null = null;
+  let userRole: string | null = null;
+  if (token) {
+    try {
+      const verified = jwt.verify(token, process.env.JWT_SECRET || process.env.SUPABASE_JWT_SECRET || '') as any;
+      userId = verified?.sub || verified?.id || null;
+      userRole = verified?.role || verified?.app_metadata?.role || null;
+    } catch {
+      try {
+        const decoded = jwt.decode(token) as any;
+        userId = decoded?.sub || decoded?.id || null;
+        userRole = decoded?.role || decoded?.app_metadata?.role || null;
+      } catch {}
     }
+  }
+
+  if (!userId) {
+    if (socket?.send) socket.send(JSON.stringify({ event: 'error', error: 'AUTHENTICATION_REQUIRED' }));
+    if (socket?.close) socket.close(4401, 'Unauthorized: Missing or invalid auth token');
+    return;
+  }
+
+  const isFarmer = booking.farmer_user_id === userId || booking.user_id === userId;
+  const isDriver = booking.driver_user_id === userId || booking.driver_id === userId;
+  const isAdmin = userRole === 'admin';
+  if (!isFarmer && !isDriver && !isAdmin) {
+    if (socket?.send) socket.send(JSON.stringify({ event: 'error', error: 'FORBIDDEN_NOT_PARTICIPANT' }));
+    if (socket?.close) socket.close(4403, 'Forbidden: Not a booking participant');
+    return;
   }
 
   if (!dispatchMemoryStore.activeTrackingSubscribers.has(bookingId)) {
@@ -2406,12 +2732,14 @@ export const dispatchTrackingWebSocket = async (connection: any, req: any) => {
   const now = Date.now();
   const pingTime = loc?.last_ping ? new Date(loc.last_ping).getTime() : 0;
   const isStale = loc ? now - pingTime > 5 * 60 * 1000 : true;
+  const currentSeq = dispatchMemoryStore.bookingTrackingSeq.get(bookingId) || 0;
 
   if (socket?.send) {
     socket.send(JSON.stringify({
       event: 'initial_snapshot',
       bookingId,
       status: booking.status,
+      lastSeq: currentSeq,
       driverAssigned: !!assignedDriverId,
       driver: assignedDriverId ? {
         driverId: assignedDriverId,
@@ -2433,6 +2761,19 @@ export const dispatchTrackingWebSocket = async (connection: any, req: any) => {
   }
 
   if (socket?.on) {
+    socket.on('message', (raw: any) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.action === 'sync_since' && typeof msg.sinceSeq === 'number') {
+          const history = dispatchMemoryStore.bookingTrackingHistory.get(bookingId) || [];
+          const missed = history.filter(e => e.seq > msg.sinceSeq);
+          for (const ev of missed) {
+            socket.send(JSON.stringify({ ...ev, isReplayed: true, event: 'replayed_event' }));
+          }
+        }
+      } catch {}
+    });
+
     socket.on('close', () => {
       const set = dispatchMemoryStore.activeTrackingSubscribers.get(bookingId);
       if (set) {
@@ -2441,6 +2782,91 @@ export const dispatchTrackingWebSocket = async (connection: any, req: any) => {
       }
     });
   }
+};
+
+// ── 13. PAYMENT WEBHOOK & SERVER-SIDE SETTLEMENT CALLBACK ──
+export const handleRentalPaymentCallback = async (request: FastifyRequest, reply: FastifyReply) => {
+  const { rentalId } = request.params as any;
+  const {
+    paymentId,
+    amount,
+    currency = 'INR',
+    provider = 'RAZORPAY',
+    status = 'CAPTURED',
+    signature
+  } = request.body as any;
+
+  if (!rentalId || !paymentId || amount === undefined) {
+    return reply.status(400).send({
+      error: 'MISSING_PAYMENT_FIELDS',
+      message: 'rentalId, paymentId, and amount are required.'
+    });
+  }
+
+  if (currency !== 'INR' || Number(amount) <= 0) {
+    return reply.status(400).send({
+      error: 'INVALID_PAYMENT_AMOUNT_OR_CURRENCY',
+      message: 'Amount must be positive and currency must be INR.'
+    });
+  }
+
+  // Idempotency: Prevent duplicate webhook / callback replays
+  if (dispatchMemoryStore.processedPaymentCallbacks.has(paymentId)) {
+    return reply.send({
+      success: true,
+      status: 'ALREADY_PROCESSED',
+      paymentId,
+      message: 'This payment callback was previously received and processed.'
+    });
+  }
+
+  const rental = dispatchMemoryStore.rentals.get(rentalId);
+  if (!rental) {
+    return reply.status(404).send({ error: 'RENTAL_NOT_FOUND' });
+  }
+
+  if (!rental.financial_ledger) {
+    rental.financial_ledger = {
+      quoted_price: rental.base_amount,
+      approved_price: rental.base_amount,
+      amount_payable: rental.final_total_amount || rental.base_amount,
+      amount_authorized: 0,
+      amount_captured: 0,
+      deposit_recorded: rental.deposit_amount || 0,
+      refund_requested: 0,
+      refund_provider_confirmed: 0,
+      manual_settlement: 0,
+      disputed_amount: 0,
+      payment_gateway_status: 'PAYMENT_GATEWAY_INTEGRATION_PENDING',
+      money_movement_disclaimer: 'Provider confirmed via verified server-side callback.'
+    };
+  }
+
+  if (status === 'CAPTURED') {
+    rental.financial_ledger.amount_captured = (rental.financial_ledger.amount_captured || 0) + Number(amount);
+    rental.financial_ledger.payment_gateway_status = 'CAPTURED';
+    rental.financial_ledger.gateway_payment_id = paymentId;
+    rental.financial_ledger.payment_provider = provider;
+    rental.financial_ledger.captured_at = new Date().toISOString();
+    rental.payment_status = 'PAID';
+  } else if (status === 'REFUNDED') {
+    rental.financial_ledger.refund_provider_confirmed = (rental.financial_ledger.refund_provider_confirmed || 0) + Number(amount);
+    rental.financial_ledger.deposit_refund_status = 'REFUND_CONFIRMED';
+    rental.financial_ledger.gateway_refund_id = paymentId;
+    rental.financial_ledger.refunded_at = new Date().toISOString();
+  }
+
+  dispatchMemoryStore.processedPaymentCallbacks.add(paymentId);
+  rental.updated_at = new Date().toISOString();
+  dispatchMemoryStore.rentals.set(rentalId, rental);
+
+  return reply.send({
+    success: true,
+    rentalId,
+    status: 'PROCESSED',
+    paymentId,
+    ledger: rental.financial_ledger
+  });
 };
 
 export const getBookingOtp = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -2486,7 +2912,7 @@ export const getBookingOtp = async (request: FastifyRequest, reply: FastifyReply
     });
   }
 
-  const otp = dispatchMemoryStore.farmerPlaintextOtps?.get(bookingId) || booking.ephemeral_plaintext_otp;
+  const otp = await retrieveOtpDistributed(bookingId);
   if (!otp) {
     return reply.status(404).send({
       error: 'OTP_NOT_AVAILABLE',
@@ -2542,18 +2968,16 @@ export const resendBookingOtp = async (request: FastifyRequest, reply: FastifyRe
     });
   }
 
-  const { otp, salt, hash } = generateSecureOtp();
+  const { otp, salt, hash } = generateSecureOtp(bookingId, OTP_PURPOSE_PICKUP);
   const expiresAt = new Date(now + 30 * 60 * 1000).toISOString();
 
   booking.start_otp_hash = hash;
   booking.start_otp_salt = salt;
   booking.start_otp_attempts = 0;
   booking.start_otp_expires_at = expiresAt;
+  booking.encrypted_plaintext_otp = encryptOtpForDelivery(otp);
   booking.ephemeral_plaintext_otp = otp;
-  if (!dispatchMemoryStore.farmerPlaintextOtps) {
-    dispatchMemoryStore.farmerPlaintextOtps = new Map<string, string>();
-  }
-  dispatchMemoryStore.farmerPlaintextOtps.set(bookingId, otp);
+  await storeOtpDistributed(bookingId, otp, 1800);
   dispatchMemoryStore.otpResendCooldowns.set(bookingId, now);
   dispatchMemoryStore.bookings.set(bookingId, booking);
 

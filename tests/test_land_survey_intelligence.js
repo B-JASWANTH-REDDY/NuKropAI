@@ -53,6 +53,7 @@ const indexPath = path.resolve(__dirname, '../app/src/main/assets/index.html');
 const emulatorPath = path.resolve(__dirname, '../nukrop_emulator.html');
 const dpiServicePath = path.resolve(__dirname, '../app/src/main/assets/js/agristack_dpi_service.js');
 const migrationPath = path.resolve(__dirname, '../supabase/migrations/20261105000001_land_survey_intelligence.sql');
+const migrationPhase3Path = path.resolve(__dirname, '../supabase/migrations/20261105000002_land_survey_phase3.sql');
 const routesPath = path.resolve(__dirname, '../backend/src/routes/land_survey.routes.ts');
 const controllerPath = path.resolve(__dirname, '../backend/src/controllers/land_survey.controller.ts');
 const backendIndexPath = path.resolve(__dirname, '../backend/src/routes/index.ts');
@@ -60,6 +61,7 @@ const backendIndexPath = path.resolve(__dirname, '../backend/src/routes/index.ts
 const indexHtml = fs.readFileSync(indexPath, 'utf8');
 const dpiServiceCode = fs.readFileSync(dpiServicePath, 'utf8');
 const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+const migrationPhase3Sql = fs.readFileSync(migrationPhase3Path, 'utf8');
 const controllerCode = fs.readFileSync(controllerPath, 'utf8');
 const backendIndexCode = fs.readFileSync(backendIndexPath, 'utf8');
 
@@ -329,6 +331,68 @@ async function main() {
   runTest('LSI-28', 'Client UI displays GEOMETRY_UNAVAILABLE badge when geometry is absent', () => {
     assert.ok(indexHtml.includes('GEOMETRY_UNAVAILABLE'), 'index.html must include GEOMETRY_UNAVAILABLE handling');
     assert.ok(indexHtml.includes('POLYGON AVAILABLE'), 'index.html must conditionally show POLYGON AVAILABLE vs GEOMETRY_UNAVAILABLE');
+  });
+
+  // LSI-29: Phase 3 migration updates Telangana source to Bhu Bharati (TS_BHUBHARATI) with official URLs
+  runTest('LSI-29', 'Phase 3 migration registers Bhu Bharati (TS_BHUBHARATI) with official URLs', () => {
+    assert.ok(migrationPhase3Sql.includes('TS_BHUBHARATI'), 'Migration must register TS_BHUBHARATI');
+    assert.ok(migrationPhase3Sql.includes('bhubharati.telangana.gov.in'), 'Migration must use official bhubharati.telangana.gov.in domain');
+    assert.ok(migrationPhase3Sql.includes('/knowLandStatus'), 'Migration must document /knowLandStatus citizen search capability');
+    assert.ok(migrationPhase3Sql.includes('/gis/'), 'Migration must document /gis/ cadastral map capability');
+  });
+
+  // LSI-30: Phase 3 migration sets TS_DHARANI to SUPERSEDED_BY_BHUBHARATI and PROHIBITED
+  runTest('LSI-30', 'Phase 3 migration updates TS_DHARANI to SUPERSEDED_BY_BHUBHARATI and PROHIBITED', () => {
+    assert.ok(migrationPhase3Sql.includes('SUPERSEDED_BY_BHUBHARATI'), 'Migration must mark TS_DHARANI as SUPERSEDED_BY_BHUBHARATI');
+    assert.ok(migrationPhase3Sql.includes("permission_status = 'PROHIBITED'"), 'Migration must mark TS_DHARANI permission_status as PROHIBITED');
+  });
+
+  // LSI-31: Phase 3 migration creates farmer_land_documents table with 5 verification status constraints
+  runTest('LSI-31', 'Phase 3 migration creates farmer_land_documents with 5 verification statuses', () => {
+    assert.ok(migrationPhase3Sql.includes('CREATE TABLE IF NOT EXISTS public.farmer_land_documents'), 'Must create farmer_land_documents table');
+    assert.ok(migrationPhase3Sql.includes('USER_PROVIDED_DOCUMENT'), 'Must support USER_PROVIDED_DOCUMENT');
+    assert.ok(migrationPhase3Sql.includes('SOURCE_DOCUMENT_UNVERIFIED'), 'Must support SOURCE_DOCUMENT_UNVERIFIED');
+    assert.ok(migrationPhase3Sql.includes('DIGITAL_SIGNATURE_VALIDATED'), 'Must support DIGITAL_SIGNATURE_VALIDATED');
+    assert.ok(migrationPhase3Sql.includes('OFFICIALLY_VERIFIED'), 'Must support OFFICIALLY_VERIFIED');
+    assert.ok(migrationPhase3Sql.includes('FARMER_CLAIMED'), 'Must support FARMER_CLAIMED');
+    assert.ok(migrationPhase3Sql.includes('ENABLE ROW LEVEL SECURITY'), 'Must enforce RLS on farmer_land_documents');
+  });
+
+  // LSI-32: Document upload requires explicit user consent under DPDP Act
+  runTest('LSI-32', 'Document upload endpoint rejects requests without user_consent_granted', () => {
+    assert.ok(controllerCode.includes('EXPLICIT_CONSENT_REQUIRED'), 'Controller must fail without user_consent_granted');
+  });
+
+  // LSI-33: Document upload enforces 10MB maximum file size limit
+  runTest('LSI-33', 'Document upload endpoint enforces 10MB file limit', () => {
+    assert.ok(controllerCode.includes('PAYLOAD_TOO_LARGE'), 'Controller must return PAYLOAD_TOO_LARGE for files > 10MB');
+    assert.ok(controllerCode.includes('10 * 1024 * 1024'), 'Controller must check against 10MB threshold');
+  });
+
+  // LSI-34: Document upload tags records with USER_PROVIDED_DOCUMENT and GEOMETRY_UNAVAILABLE
+  runTest('LSI-34', 'Document upload tags uploaded records with USER_PROVIDED_DOCUMENT and GEOMETRY_UNAVAILABLE', () => {
+    assert.ok(controllerCode.includes("verificationStatus = 'USER_PROVIDED_DOCUMENT'"), 'Uploads must be tagged USER_PROVIDED_DOCUMENT');
+    assert.ok(controllerCode.includes("geometryStatus = 'GEOMETRY_UNAVAILABLE'"), 'Uploads must default to GEOMETRY_UNAVAILABLE');
+  });
+
+  // LSI-35: Leaflet map removes unauthorized Bhuvan WMS layer
+  runTest('LSI-35', 'Leaflet map initialization disables unauthorized Bhuvan WMS layer', () => {
+    assert.ok(!indexHtml.includes('nationalCadastralWMS.addTo'), 'index.html must NOT add nationalCadastralWMS to map');
+    assert.ok(dpiServiceCode.includes('NRSC / ISRO Bhuvan WMS is pending bilateral data licensing agreement'), 'agristack_dpi_service.js must disable WMS layer');
+  });
+
+  // LSI-36: Client UI includes exact prompt-mandated handoff message
+  runTest('LSI-36', 'Client UI includes prompt-mandated official portal handoff message', () => {
+    const expectedMsg = "Your land record is not currently available in NuKropAI's authorized dataset. You can open the official government portal to check your details.";
+    assert.ok(indexHtml.includes(expectedMsg), 'index.html must display exact handoff notice');
+    assert.ok(controllerCode.includes(expectedMsg), 'Backend search response must return exact handoff message');
+  });
+
+  // LSI-37: Client UI contains openLandDocumentUploadModal with DPDP consent checkbox
+  runTest('LSI-37', 'Client UI provides document upload modal with DPDP consent checkbox', () => {
+    assert.ok(indexHtml.includes('openLandDocumentUploadModal'), 'index.html must define openLandDocumentUploadModal');
+    assert.ok(indexHtml.includes('doc-user-consent'), 'Document upload modal must include consent checkbox');
+    assert.ok(indexHtml.includes('submitLandDocumentUpload'), 'Document upload modal must include submission handler');
   });
 
   console.log(`\n================================================================================`);

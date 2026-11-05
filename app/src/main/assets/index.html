@@ -36289,13 +36289,33 @@ function toggleMapTileType(type) {
 
 /* ═════════════════ REAL GOVT LAND REGISTRY & AGRISTACK UFSI ENGINE ═════════════════ */
 const OFFICIAL_GOVT_LAND_PORTALS = {
-  'TS': { name: 'Telangana Dharani', portalUrl: 'https://dharani.telangana.gov.in/', badge: 'Dharani RoR' },
+  'TS': {
+    name: 'Telangana Bhu Bharati',
+    portalUrl: 'https://bhubharati.telangana.gov.in/homePage?lang=en',
+    statusUrl: 'https://bhubharati.telangana.gov.in/knowLandStatus',
+    gisUrl: 'https://bhubharati.telangana.gov.in/gis/',
+    badge: 'Bhu Bharati',
+    legacyPortalUrl: 'https://dharani.telangana.gov.in',
+    legacy: 'TS_DHARANI (Superseded)'
+  },
   'AP': { name: 'Andhra Pradesh Meebhoomi', portalUrl: 'https://meebhoomi.ap.gov.in/', badge: 'Meebhoomi 1B' },
   'MH': { name: 'Maharashtra MahaBhumi', portalUrl: 'https://bhulekh.mahabhumi.gov.in/', badge: '7/12 Extract' },
   'KA': { name: 'Karnataka Bhoomi RTC', portalUrl: 'https://landrecords.karnataka.gov.in/', badge: 'Bhoomi RTC' },
   'UP': { name: 'Uttar Pradesh Bhulekh', portalUrl: 'https://upbhulekh.gov.in/', badge: 'UP Bhulekh' },
   'CENTRAL': { name: 'National AgriStack Platform', portalUrl: 'https://agristack.gov.in/', badge: 'UFSI Gateway' }
 };
+
+function openOfficialGovtPortalHandoff(stateCode) {
+  const code = (stateCode || 'TS').toUpperCase();
+  const portal = OFFICIAL_GOVT_LAND_PORTALS[code] || OFFICIAL_GOVT_LAND_PORTALS.TS;
+  const targetUrl = portal.statusUrl || portal.portalUrl;
+  if (window.AndroidBridge && typeof window.AndroidBridge.openExternalUrl === 'function') {
+    window.AndroidBridge.openExternalUrl(targetUrl);
+  } else {
+    window.open(targetUrl, '_blank');
+  }
+}
+window.openOfficialGovtPortalHandoff = openOfficialGovtPortalHandoff;
 
 let AGRISTACK_FARMER_PROFILE = null;
 let activeParcelIndex = 0;
@@ -36362,23 +36382,13 @@ function initAgristackOpenStreetMap() {
     });
     window.agristackMapInstance = agristackMapInstance;
 
-    // Base OSM Layer
+    // Base OpenStreetMap Layer (General basemap - does not represent official government cadastral boundaries)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 20
+      maxZoom: 20,
+      attribution: '© OpenStreetMap contributors'
     }).addTo(agristackMapInstance);
 
-    // Production-grade WMS server streaming official all-India baseline village and parcel grids
-    const nationalCadastralWMS = L.tileLayer.wms('https://nrsc.gov.in', {
-      layers: 'multihazard:village_boundary,cadastral:cadastral_boundary',
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      maxZoom: 22,
-      crs: L.CRS.EPSG4326, // Coordinate alignment with India's WGS84 mapping standards
-      attribution: '© ISRO Bhuvan / National Cadastral'
-    });
-    nationalCadastralWMS.on('tileerror', function() {});
-    nationalCadastralWMS.addTo(agristackMapInstance);
+    // Third-party WMS layers (ISRO Bhuvan / NRSC) disabled pending bilateral written licensing agreement.
 
     // Spatial Geometry Conversion & Thematic Pathing (Only if parcels exist)
     if (typeof AgriStackDPI !== 'undefined' && typeof AgriStackDPI.renderCadastralParcelsOnMap === 'function') {
@@ -36708,7 +36718,7 @@ function openSearchLandSurveyModal(prefillVal) {
               ${TL('Select State (Land Registry):', 'రాష్ట్రం (ల్యాండ్ రికార్డ్ పోర్టల్):', 'Select State (Land Registry):')}
             </label>
             <select id="ror-state-select" class="clean-field" style="margin-bottom:0;width:100%;">
-              <option value="TS">Telangana (Dharani Portal)</option>
+              <option value="TS">Telangana (Bhu Bharati — bhubharati.telangana.gov.in)</option>
               <option value="AP">Andhra Pradesh (Meebhoomi 1B)</option>
               <option value="MH">Maharashtra (MahaBhumi 7/12)</option>
               <option value="KA">Karnataka (Bhoomi RTC)</option>
@@ -36774,13 +36784,19 @@ function openSearchLandSurveyModal(prefillVal) {
           <span>📌 ${TL('Save Land Claim (FARMER_CLAIMED)', 'భూమి క్లెయిమ్‌ని నమోదు చేయండి (FARMER_CLAIMED)', 'Save Land Claim (FARMER_CLAIMED)')}</span>
         </button>
 
+        <!-- Document Import CTA -->
+        <button onclick="openLandDocumentUploadModal()" style="width:100%;margin-top:8px;background:#F0FDF4;color:#15803D;border:1.5px dashed #86EFAC;border-radius:14px;padding:11px 0;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span>📄 ${TL('Upload Official Land Document (PDF / Image)', 'అధికారిక ల్యాండ్ డాక్యుమెంట్ అప్‌లోడ్ చేయండి (PDF / ఫోటో)', 'Upload Official Land Document (PDF / Image)')}</span>
+        </button>
+
         <!-- Direct Links to Official State Govt Portals -->
         <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #E2E8F0;">
           <div style="font-size:10px;font-weight:800;color:#64748B;margin-bottom:6px;text-align:center;">
             ${TL('Or Inspect Live on Official State Revenue Servers:', 'లేదా అధికారిక ప్రభుత్వ పోర్టల్ ద్వారా పరిశీలించండి:', 'Or Inspect Live on Official State Revenue Servers:')}
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">
-            <a href="https://dharani.telangana.gov.in" target="_blank" style="font-size:9.5px;color:#15803D;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:3px 7px;font-weight:800;text-decoration:none;">🏛️ Dharani (TS) ↗</a>
+            <a href="https://bhubharati.telangana.gov.in/knowLandStatus" target="_blank" style="font-size:9.5px;color:#15803D;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:3px 7px;font-weight:800;text-decoration:none;">🏛️ Bhu Bharati (TS) ↗</a>
+            <a href="https://bhubharati.telangana.gov.in/gis/" target="_blank" style="font-size:9.5px;color:#0369A1;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:3px 7px;font-weight:800;text-decoration:none;">🗺️ TS GIS Cadastral ↗</a>
             <a href="https://meebhoomi.ap.gov.in" target="_blank" style="font-size:9.5px;color:#15803D;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:3px 7px;font-weight:800;text-decoration:none;">🏛️ Meebhoomi (AP) ↗</a>
             <a href="https://upbhulekh.gov.in" target="_blank" style="font-size:9.5px;color:#15803D;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:3px 7px;font-weight:800;text-decoration:none;">🏛️ Bhulekh (UP) ↗</a>
             <a href="https://bhulekh.mahabhumi.gov.in" target="_blank" style="font-size:9.5px;color:#15803D;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:3px 7px;font-weight:800;text-decoration:none;">🏛️ MahaBhumi (MH) ↗</a>
@@ -36801,6 +36817,211 @@ function closeSearchLandSurveyModal() {
   const modal = document.getElementById('land-survey-search-modal');
   if (modal) modal.remove();
 }
+
+/* ═════════════════ LAND SURVEY INTELLIGENCE — PHASE 3 DOCUMENT IMPORT & HANDOFF ═════════════════ */
+function openLandDocumentUploadModal() {
+  closeSearchLandSurveyModal();
+  const isTe = currentLang === 'te';
+  const modalHtml = `
+    <div id="land-document-upload-modal" style="position:absolute;inset:0;border-radius:40px;overflow:hidden;background:rgba(15,23,42,0.65);z-index:9999;backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;">
+      <div style="background:#FFFFFF;width:100%;max-width:100%;border-radius:28px 28px 40px 40px;padding:20px 18px 24px;box-shadow:0 -10px 40px rgba(0,0,0,0.3);max-height:94%;overflow-y:auto;animation:modalSlideUp 0.22s cubic-bezier(0.16,1,0.3,1);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:22px;">📄</span>
+            <div>
+              <div style="font-size:15px;font-weight:900;color:#1B5E20;">${TL('Import Official Land Document', 'అధికారిక ల్యాండ్ డాక్యుమెంట్ దిగుమతి', 'Import Official Land Document')}</div>
+              <div style="font-size:10px;color:#64748B;">${TL('RoR 1B / Pahani / 7/12 Extract (PDF, PNG, JPEG up to 10MB)', 'పాస్‌బుక్ / పహాని / 7/12 రికార్డు (గరిష్టంగా 10MB)', 'RoR 1B / Pahani / 7/12 Extract')}</div>
+            </div>
+          </div>
+          <button onclick="closeLandDocumentUploadModal()" style="background:#F1F5F9;border:none;border-radius:50%;width:30px;height:30px;font-weight:900;cursor:pointer;">✕</button>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <!-- State Selection -->
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#0F172A;display:block;margin-bottom:3px;">
+              ${TL('Issuing State / Portal:', 'రాష్ట్రం / పోర్టల్:', 'Issuing State / Portal:')}
+            </label>
+            <select id="doc-upload-state" class="clean-field" style="margin-bottom:0;width:100%;">
+              <option value="TS">Telangana (Bhu Bharati / Dharani)</option>
+              <option value="AP">Andhra Pradesh (Meebhoomi 1B)</option>
+              <option value="MH">Maharashtra (MahaBhumi 7/12)</option>
+              <option value="KA">Karnataka (Bhoomi RTC)</option>
+              <option value="UP">Uttar Pradesh (UP Bhulekh)</option>
+            </select>
+          </div>
+
+          <!-- Document Type Selection -->
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#0F172A;display:block;margin-bottom:3px;">
+              ${TL('Document Type:', 'పత్రం రకం:', 'Document Type:')}
+            </label>
+            <select id="doc-upload-type" class="clean-field" style="margin-bottom:0;width:100%;">
+              <option value="PAHANI">Pahani / Khasra Girdawari</option>
+              <option value="ROR_1B">Record of Rights (1B / RoR)</option>
+              <option value="7_12_EXTRACT">7/12 Extract (MahaBhumi)</option>
+              <option value="PATTA_PASSBOOK">Pattadar Passbook Extract</option>
+              <option value="OTHER">Other Official Land Certificate</option>
+            </select>
+          </div>
+
+          <!-- File Input -->
+          <div>
+            <label style="font-size:11px;font-weight:800;color:#0F172A;display:block;margin-bottom:3px;">
+              ${TL('Select File (PDF or Image, max 10MB):', 'ఫైల్‌ను ఎంచుకోండి (PDF లేదా ఫోటో, గరిష్టంగా 10MB):', 'Select File:')}
+            </label>
+            <input type="file" id="doc-upload-file-input" accept=".pdf,.png,.jpg,.jpeg" style="width:100%;font-size:11.5px;padding:8px;border:1.5px dashed #CBD5E1;border-radius:12px;background:#F8FAFC;cursor:pointer;">
+          </div>
+
+          <!-- Declared Survey / Village Info (Optional helper) -->
+          <div style="display:flex;gap:6px;">
+            <div style="flex:1;">
+              <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:2px;">${TL('Survey No (if visible):', 'సర్వే నం:', 'Survey No:')}</label>
+              <input id="doc-declared-survey" class="clean-field" placeholder="e.g. 142/A" style="margin-bottom:0;font-size:12px;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:2px;">${TL('Village:', 'గ్రామం:', 'Village:')}</label>
+              <input id="doc-declared-village" class="clean-field" placeholder="Village" style="margin-bottom:0;font-size:12px;">
+            </div>
+          </div>
+
+          <!-- Privacy Consent Checkbox (Strict DPDP Act Compliance) -->
+          <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:10px;display:flex;gap:8px;align-items:flex-start;">
+            <input type="checkbox" id="doc-user-consent" style="margin-top:2px;cursor:pointer;" checked>
+            <label for="doc-user-consent" style="font-size:10.5px;color:#166534;font-weight:600;line-height:1.4;cursor:pointer;">
+              ${TL('I confirm this is my genuine official land record and grant NuKropAI permission to extract survey identifiers for my profile under DPDP guidelines. (Tagged as USER_PROVIDED_DOCUMENT; not official legal proof of title).', 'ఇది నా నిజమైన అధికారిక ల్యాండ్ రికార్డు అని ధృవీకరిస్తున్నాను మరియు వివరాలు సేకరించడానికి సమ్మతిస్తున్నాను.', 'I confirm this is my genuine land record.')}
+            </label>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <button onclick="submitLandDocumentUpload()" id="btn-submit-land-doc" style="width:100%;margin-top:14px;background:linear-gradient(135deg,#15803D 0%,#1B5E20 100%);color:#FFFFFF;border:none;border-radius:14px;padding:12px 0;font-size:13px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 14px rgba(27,94,32,0.35);">
+          <span>📤 ${TL('Upload & Parse Document', 'డాక్యుమెంట్ అప్‌లోడ్ చేసి నమోదు చేయండి', 'Upload & Parse Document')}</span>
+        </button>
+      </div>
+    </div>
+  `;
+  const existing = document.getElementById('land-document-upload-modal');
+  if (existing) existing.remove();
+  const mountEl = document.querySelector('.phone-chassis') || document.body;
+  mountEl.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function closeLandDocumentUploadModal() {
+  const modal = document.getElementById('land-document-upload-modal');
+  if (modal) modal.remove();
+}
+
+async function submitLandDocumentUpload() {
+  const fileInput = document.getElementById('doc-upload-file-input');
+  const consentBox = document.getElementById('doc-user-consent');
+  const state = document.getElementById('doc-upload-state')?.value || 'TS';
+  const docType = document.getElementById('doc-upload-type')?.value || 'PAHANI';
+  const surveyNo = (document.getElementById('doc-declared-survey')?.value || '').trim();
+  const village = (document.getElementById('doc-declared-village')?.value || '').trim();
+
+  if (!consentBox || !consentBox.checked) {
+    showLuxuryToast('Explicit user consent is required under DPDP guidelines.', 'error');
+    return;
+  }
+
+  const file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) {
+    showLuxuryToast('Please select an official PDF or Image file to upload.', 'error');
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showLuxuryToast('File exceeds 10MB limit. Please upload a smaller file.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit-land-doc');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Processing Document...';
+  }
+
+  try {
+    const reader = new FileReader();
+    reader.onload = async function() {
+      const base64Data = (reader.result.split(',')[1] || '');
+      const payload = {
+        file_name: file.name,
+        mime_type: file.type || 'application/pdf',
+        file_base64: base64Data,
+        document_type: docType,
+        issuing_state: state,
+        user_consent_granted: true,
+        declared_survey_number: surveyNo || undefined,
+        declared_village: village || undefined
+      };
+
+      let uploadSuccess = false;
+      let docResult = null;
+      try {
+        const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+        const res = await fetch('/api/v1/land-survey/documents/upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.document) {
+            uploadSuccess = true;
+            docResult = json.document;
+          }
+        }
+      } catch(e) {
+        console.warn('Backend upload network error:', e);
+      }
+
+      const finalSurvey = (docResult && docResult.extracted_fields && docResult.extracted_fields.survey_number) || surveyNo || 'Doc-' + Date.now().toString().slice(-4);
+      const claimEntry = {
+        id: (docResult && docResult.id) || ('DOC-CLAIM-' + Date.now()),
+        parcel_id: null,
+        survey_number: finalSurvey,
+        subdivision_number: (docResult && docResult.extracted_fields && docResult.extracted_fields.subdivision) || null,
+        area_acres: (docResult && docResult.extracted_fields && docResult.extracted_fields.extent_acres) || null,
+        owner_full_name: null,
+        state_code: state,
+        village: village || (docResult && docResult.extracted_fields && docResult.extracted_fields.village) || null,
+        verification_status: 'USER_PROVIDED_DOCUMENT',
+        geo_json: null,
+        geometry_status: 'GEOMETRY_UNAVAILABLE',
+        source: 'USER_PROVIDED_DOCUMENT',
+        document_id: docResult && docResult.id,
+        created_at: new Date().toISOString(),
+        portal_url: (OFFICIAL_GOVT_LAND_PORTALS[state] || OFFICIAL_GOVT_LAND_PORTALS.TS).portalUrl
+      };
+
+      try {
+        const claims = JSON.parse(localStorage.getItem('nukrop_land_claims') || '[]');
+        claims.unshift(claimEntry);
+        localStorage.setItem('nukrop_land_claims', JSON.stringify(claims.slice(0, 20)));
+      } catch(e) {}
+
+      closeLandDocumentUploadModal();
+      if (typeof renderAgristackDynamicView === 'function') renderAgristackDynamicView();
+      showLuxuryToast('Document imported as USER_PROVIDED_DOCUMENT (GEOMETRY_UNAVAILABLE).', 'success');
+    };
+    reader.readAsDataURL(file);
+  } catch(err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Upload & Parse Document';
+    }
+    showLuxuryToast('Failed to read file: ' + err.message, 'error');
+  }
+}
+window.openLandDocumentUploadModal = openLandDocumentUploadModal;
+window.closeLandDocumentUploadModal = closeLandDocumentUploadModal;
+window.submitLandDocumentUpload = submitLandDocumentUpload;
+
 
 function fetchAndVerifyRealLandRecord() {
   // LAND SURVEY INTELLIGENCE -- HONEST RECORD SEARCH
@@ -36987,6 +37208,33 @@ function getAgristackDynamicBodyHtml() {
     : { total_acres: 0, count: parcels.length, formatted: `${parcels.length} Parcels` };
 
   return `
+    <!-- Official Government Record Handoff & Upload Card -->
+    ${parcels.length === 0 ? `
+    <div style="background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:18px;padding:16px 18px;margin-bottom:14px;box-shadow:0 2px 8px rgba(0,0,0,0.03);">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <span style="font-size:24px;">🏛️</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:900;color:#0F172A;line-height:1.4;">
+            ${TL('Official Government Record Handoff', 'అధికారిక ప్రభుత్వ రికార్డు పరిశీలన', 'Official Government Record Handoff')}
+          </div>
+          <div style="font-size:11.5px;color:#475569;margin-top:4px;line-height:1.5;font-weight:500;">
+            "Your land record is not currently available in NuKropAI's authorized dataset. You can open the official government portal to check your details."
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button onclick="openOfficialGovtPortalHandoff('TS')" style="flex:1;background:#15803D;color:#FFFFFF;border:none;border-radius:12px;padding:10px 12px;font-size:11.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(21,128,61,0.25);">
+          <span>🏛️</span>
+          <span>${TL('Open Official Portal ↗', 'అధికారిక పోర్టల్ తెరవండి ↗', 'Open Official Portal ↗')}</span>
+        </button>
+        <button onclick="openLandDocumentUploadModal()" style="flex:1;background:#F0FDF4;color:#15803D;border:1.5px solid #86EFAC;border-radius:12px;padding:10px 12px;font-size:11.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <span>📄</span>
+          <span>${TL('Upload Record (PDF)', 'రికార్డు అప్‌లోడ్ చేయండి', 'Upload Record (PDF)')}</span>
+        </button>
+      </div>
+    </div>
+    ` : ''}
+
     <!-- Parcel Switcher Tabs & + Link Real Land Button with Smooth Scroll -->
     ${parcels.length > 0 ? `
     <div style="display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;">
@@ -37025,7 +37273,7 @@ function getAgristackDynamicBodyHtml() {
           🔗 ${portalInfo.badge} ↗
         </a>` : `
         <span style="font-size:9.5px;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:3px 8px;border-radius:8px;font-weight:800;white-space:nowrap;flex-shrink:0;">
-          ISRO BHUVAN WMS
+          OPENSTREETMAP BASEMAP
         </span>`}
       </div>
 
@@ -37051,8 +37299,8 @@ function getAgristackDynamicBodyHtml() {
         <span>📍 Survey #${p.survey_number || 'N/A'}${p.subdivision_number ? ' / ' + p.subdivision_number : ''}</span>
         <span style="color:${p.geo_json ? '#15803D' : '#D97706'};font-weight:800;background:${p.geo_json ? '#DCFCE7' : '#FEF3C7'};padding:2px 8px;border-radius:6px;">${p.geo_json ? 'POLYGON AVAILABLE' : 'GEOMETRY_UNAVAILABLE'}</span>
         ` : `
-        <span>📍 National Cadastral Grid (EPSG:4326)</span>
-        <span style="color:#15803D;font-weight:800;background:#DCFCE7;padding:2px 8px;border-radius:6px;">ISRO / NRSC</span>
+        <span>📍 OpenStreetMap Basemap (EPSG:3857)</span>
+        <span style="color:#0369A1;font-weight:800;background:#F0F9FF;padding:2px 8px;border-radius:6px;">OPENSTREETMAP</span>
         `}
       </div>
     </div>

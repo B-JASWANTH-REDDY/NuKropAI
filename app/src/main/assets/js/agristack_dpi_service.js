@@ -237,25 +237,11 @@
     }
   }
 
-  // 7. Nationwide Cadastral WMS Layer (NIC BhuNaksha / ISRO Bhuvan OGC EPSG:4326)
+  // 7. Nationwide Cadastral WMS Layer (Disabled pending bilateral NRSC/ISRO authorization MoU)
   function createNationalCadastralWMS(map) {
-    if (typeof L === 'undefined' || !L.tileLayer || !L.tileLayer.wms) {
-      return null;
-    }
-    const layer = L.tileLayer.wms('https://nrsc.gov.in', {
-      layers: 'multihazard:village_boundary,cadastral:cadastral_boundary',
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      maxZoom: 22,
-      crs: L.CRS.EPSG4326,
-      attribution: '© ISRO Bhuvan / National Cadastral'
-    });
-    layer.on('tileerror', function() {});
-    if (map) {
-      layer.addTo(map);
-    }
-    return layer;
+    // Disabled: NRSC / ISRO Bhuvan WMS is pending bilateral data licensing agreement.
+    // Preserves standard OpenStreetMap basemap without unauthorized third-party tile streaming.
+    return null;
   }
 
   // 8. Metric Conversion: Longitude-first [lon, lat] parsing to Latitude-first [lat, lon] for Leaflet

@@ -7,7 +7,11 @@ import {
   getParcelProvenance,
   getParcelGeometry,
   claimParcel,
-  getFarmerLinkedParcels
+  getFarmerLinkedParcels,
+  uploadFarmerLandDocument,
+  getFarmerLandDocuments,
+  deleteFarmerLandDocument,
+  claimFromDocument
 } from '../controllers/land_survey.controller';
 
 export default async function landSurveyRoutes(fastify: FastifyInstance) {
@@ -60,5 +64,31 @@ export default async function landSurveyRoutes(fastify: FastifyInstance) {
    * Authenticated: get all parcels linked by the authenticated farmer.
    */
   fastify.get('/my-parcels', { preHandler: [authenticate] }, getFarmerLinkedParcels);
+
+  /**
+   * POST /api/v1/land-survey/documents/upload
+   * Authenticated: upload farmer-provided land document (PDF, PNG, JPEG).
+   * Max 10MB, explicit consent required, rule-based extraction, privacy minimization.
+   * Marked as USER_PROVIDED_DOCUMENT, GEOMETRY_UNAVAILABLE.
+   */
+  fastify.post('/documents/upload', { preHandler: [authenticate] }, uploadFarmerLandDocument);
+
+  /**
+   * GET /api/v1/land-survey/documents
+   * Authenticated: list all documents uploaded by the authenticated farmer.
+   */
+  fastify.get('/documents', { preHandler: [authenticate] }, getFarmerLandDocuments);
+
+  /**
+   * DELETE /api/v1/land-survey/documents/:id
+   * Authenticated: delete / purge a farmer-uploaded document and its metadata.
+   */
+  fastify.delete('/documents/:id', { preHandler: [authenticate] }, deleteFarmerLandDocument);
+
+  /**
+   * POST /api/v1/land-survey/documents/:id/claim
+   * Authenticated: link an uploaded document as a farmer-claimed parcel.
+   */
+  fastify.post('/documents/:id/claim', { preHandler: [authenticate] }, claimFromDocument);
 }
 

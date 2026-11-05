@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 
@@ -19756,14 +19756,46 @@ function getFilteredMandiRates() {
   const itemMatchesPopular = (item, pKey) => {
     if (!pKey || pKey === 'all') return true;
     const itemKey = (item.cropKey || item.cropSlug || '').toLowerCase();
+    // Exact key match
     if (itemKey === pKey) return true;
-    if (pKey === 'cotton' && (itemKey === 'cotton' || item.cropSlug === 'cotton')) return true;
-    if (pKey === 'onion' && (itemKey === 'red-onion' || itemKey === 'onion')) return true;
-    if (pKey === 'potato' && (itemKey === 'russet-potato' || itemKey === 'potato')) return true;
-    if (pKey === 'chilli' && (itemKey === 'birds-eye-chili' || itemKey === 'chilli' || itemKey === 'chili')) return true;
-    if (pKey === 'wheat' && itemKey === 'wheat') return true;
-    if (pKey === 'tomato' && itemKey === 'tomato') return true;
-    if (pKey === 'paddy' && (itemKey === 'rice' || itemKey === 'paddy')) return true;
+    // Helper: get English crop name for substring matching (handles live API records)
+    const cropNameEn = (item.cropName && (typeof item.cropName === 'object' ? (item.cropName.en || '') : String(item.cropName))).toLowerCase();
+    // Cotton: match all varieties — cotton, cotton_medium, cotton_long_staple, kapas, kapus, narma
+    if (pKey === 'cotton') {
+      if (itemKey === 'cotton' || itemKey.startsWith('cotton') || itemKey === 'kapas' || itemKey.includes('kapas')) return true;
+      if (cropNameEn.includes('cotton') || cropNameEn.includes('kapas') || cropNameEn.includes('narma')) return true;
+    }
+    // Onion: match all onion variants
+    if (pKey === 'onion') {
+      if (itemKey === 'red-onion' || itemKey.startsWith('onion') || itemKey.includes('onion')) return true;
+      if (cropNameEn.includes('onion')) return true;
+    }
+    // Potato: match all potato variants
+    if (pKey === 'potato') {
+      if (itemKey === 'russet-potato' || itemKey.startsWith('potato') || itemKey.includes('potato')) return true;
+      if (cropNameEn.includes('potato')) return true;
+    }
+    // Chilli: match all chilli/chili/pepper variants
+    if (pKey === 'chilli') {
+      if (itemKey === 'birds-eye-chili' || itemKey.includes('chilli') || itemKey.includes('chili') || itemKey.includes('mirchi')) return true;
+      if (cropNameEn.includes('chilli') || cropNameEn.includes('chili') || cropNameEn.includes('pepper')) return true;
+    }
+    // Wheat: match all wheat variants
+    if (pKey === 'wheat') {
+      if (itemKey.startsWith('wheat') || itemKey.includes('wheat')) return true;
+      if (cropNameEn.includes('wheat')) return true;
+    }
+    // Tomato: match all tomato variants
+    if (pKey === 'tomato') {
+      if (itemKey.startsWith('tomato') || itemKey.includes('tomato')) return true;
+      if (cropNameEn.includes('tomato')) return true;
+    }
+    // Paddy/Rice: match all paddy and rice variants
+    if (pKey === 'paddy') {
+      if (itemKey === 'rice' || itemKey.startsWith('paddy') || itemKey.startsWith('rice') || itemKey.includes('paddy')) return true;
+      if (cropNameEn.includes('paddy') || cropNameEn.includes('rice')) return true;
+    }
+    // Generic fallback: keyword search
     return getCropSearchKeywords(item).includes(pKey);
   };
 
@@ -19848,15 +19880,16 @@ function selectPopularMandiCrop(key) {
     window.mandiSelectedPopular = key;
   }
 
+  // Show localized label in search box for user clarity,
+  // but keep mandiSearchCrop EMPTY so popQ (not cropQ) drives filtering.
+  // This prevents localized text (e.g. 'పత్తి') from breaking keyword matching.
   const inp = document.getElementById('mandi-crop-inp');
   if (inp) {
     inp.value = (key === 'all') ? '' : getLocalizedCropName(key);
-    mandiSearchCrop = inp.value;
-  } else {
-    mandiSearchCrop = (key === 'all') ? '' : getLocalizedCropName(key);
   }
+  mandiSearchCrop = '';
   if (typeof window !== 'undefined') {
-    window.mandiSearchCrop = mandiSearchCrop;
+    window.mandiSearchCrop = '';
   }
   executeMandiSearch();
 }
@@ -19970,11 +20003,21 @@ function executeMandiSearch() {
   const mktEl = document.getElementById('mandi-mkt-inp');
 
   if (cropEl) {
-    mandiSearchCrop = cropEl.value;
-    if (typeof window !== 'undefined') window.mandiSearchCrop = mandiSearchCrop;
-    if (!cropEl.value.trim() && mandiSelectedPopular !== 'all') {
-      mandiSelectedPopular = 'all';
-      if (typeof window !== 'undefined') window.mandiSelectedPopular = 'all';
+    if (mandiSelectedPopular && mandiSelectedPopular !== 'all') {
+      // Popular pill is active: input shows display label only; keep mandiSearchCrop empty
+      // so only popQ (not cropQ) is used by getFilteredMandiRates.
+      mandiSearchCrop = '';
+      if (typeof window !== 'undefined') window.mandiSearchCrop = '';
+      // Show localized pill label in input for UX
+      if (!cropEl.value.trim()) cropEl.value = getLocalizedCropName(mandiSelectedPopular);
+    } else {
+      // Manual text search mode
+      mandiSearchCrop = cropEl.value;
+      if (typeof window !== 'undefined') window.mandiSearchCrop = mandiSearchCrop;
+      if (!cropEl.value.trim() && mandiSelectedPopular !== 'all') {
+        mandiSelectedPopular = 'all';
+        if (typeof window !== 'undefined') window.mandiSelectedPopular = 'all';
+      }
     }
   }
   if (stateEl) {

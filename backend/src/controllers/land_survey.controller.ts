@@ -1,6 +1,17 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import * as crypto from 'crypto';
 import { pool } from '../config/db';
+import {
+  saveDocumentFile,
+  getDocumentFile,
+  deleteDocumentFile,
+  sanitizeStorageFileName
+} from '../services/storageService';
+import {
+  inspectAndExtractLandDocument,
+  verifyFileSignature,
+  StructuredLandExtraction
+} from '../services/pdfExtractionService';
 
 // In-memory fallback for uploaded documents when local development PostgreSQL is offline
 const memoryDocuments = new Map<string, any>();
@@ -536,67 +547,102 @@ export async function uploadFarmerLandDocument(
     });
   }
 
+  // Magic byte file signature validation (prevents MIME spoofing)
+  let inspection;
+  try {
+    inspection = await inspectAndExtractLandDocument(buffer, mime_type, {
+      declared_survey_number,
+      declared_subdivision,
+      declared_extent_acres,
+      declared_village,
+      declared_mandal,
+      declared_district
+    });
+  } catch (err: any) {
+    if (err.message?.includes('FILE_SIGNATURE_MISMATCH')) {
+      return reply.status(415).send({
+        success: false,
+        error: 'FILE_SIGNATURE_MISMATCH',
+        message: err.message
+      });
+    }
+    return reply.status(400).send({ success: false, error: 'DOCUMENT_PARSE_ERROR', message: err.message });
+  }
+
   // Compute deterministic SHA-256
   const contentSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-
-  // Rule-based metadata extraction without bulk PII harvesting
-  const textSample = buffer.toString('utf8', 0, Math.min(buffer.length, 32768));
-  const extracted = extractFieldsFromDocument(textSample, {
-    declared_survey_number,
-    declared_subdivision,
-    declared_extent_acres,
-    declared_village,
-    declared_mandal,
-    declared_district,
-    issuing_state
-  });
-
-  // Digital signature marker detection
-  const hasDigitalSignature = textSample.includes('/ByteRange') || textSample.includes('adbe.pkcs7') || textSample.includes('Digital Signature');
-
-  // Strict verification status distinction:
-  // Farmer-supplied uploads are tagged USER_PROVIDED_DOCUMENT.
-  // Never automatically tagged OFFICIALLY_VERIFIED without state registry integration.
-  const verificationStatus = 'USER_PROVIDED_DOCUMENT';
-  const geometryStatus = 'GEOMETRY_UNAVAILABLE'; // Raster & PDF documents do not contain georeferenced spatial vectors
-
   const docId = crypto.randomUUID();
+
+  // Save to private durable storage (Supabase Storage + durable disk storage)
+  let storageResult;
+  try {
+    storageResult = await saveDocumentFile(
+      authUid,
+      docId,
+      file_name,
+      buffer,
+      mime_type,
+      contentSha256
+    );
+  } catch (storageErr: any) {
+    request.log.error({ storageErr }, 'Storage save failure');
+    return reply.status(500).send({
+      success: false,
+      error: 'STORAGE_PERSISTENCE_FAILED',
+      message: 'Failed to persist document to durable private storage.'
+    });
+  }
+
+  const verificationStatus = 'USER_PROVIDED_DOCUMENT';
+  const geometryStatus = 'GEOMETRY_UNAVAILABLE';
+
   const documentRecord = {
     id: docId,
     farmer_auth_uid: authUid,
     file_name: sanitizeFileName(file_name),
     file_size_bytes: buffer.length,
     mime_type: mime_type.toLowerCase(),
+    file_format: inspection.file_format,
     content_sha256: contentSha256,
+    storage_bucket: storageResult.storage_bucket,
+    storage_path: storageResult.storage_path,
     document_type: String(document_type).toUpperCase(),
     issuing_state: String(issuing_state).toUpperCase(),
     user_consent_granted: true,
-    extracted_fields: extracted,
-    extraction_method: 'RULE_PARSER',
+    extracted_fields: inspection.extracted_fields,
+    extraction_method: inspection.extracted_fields.survey_number.extraction_method,
+    extraction_status: inspection.extraction_status,
     verification_status: verificationStatus,
-    digital_signature_present: hasDigitalSignature,
-    digital_signature_details: hasDigitalSignature ? { status: 'SIGNATURE_MARKER_DETECTED', verified_against_trust_chain: false } : null,
+    signature_status: inspection.signature_status,
+    digital_signature_present: inspection.signature_details.marker_present,
+    digital_signature_details: inspection.signature_details,
+    retention_status: 'ACTIVE',
+    farmer_confirmed: false,
     geometry_detected: false,
     geometry_status: geometryStatus,
     uploaded_at: new Date().toISOString(),
     deleted_at: null
   };
 
-  // Persist to PostgreSQL if available, or fall back to memory
+  // Persist metadata to PostgreSQL if available, or fall back to memory
   try {
     await pool.query(
       `INSERT INTO public.farmer_land_documents (
          id, farmer_auth_uid, file_name, file_size_bytes, mime_type,
-         content_sha256, document_type, issuing_state, user_consent_granted,
-         extracted_fields, extraction_method, verification_status,
-         digital_signature_present, digital_signature_details,
+         file_format, content_sha256, storage_bucket, storage_path,
+         document_type, issuing_state, user_consent_granted,
+         extracted_fields, extraction_method, extraction_status,
+         verification_status, signature_status, digital_signature_present,
+         digital_signature_details, retention_status, farmer_confirmed,
          geometry_detected, geometry_status, uploaded_at
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9,
          $10, $11, $12,
-         $13, $14,
-         $15, $16, NOW()
+         $13, $14, $15,
+         $16, $17, $18,
+         $19, $20, $21,
+         $22, $23, NOW()
        )`,
       [
         docId,
@@ -604,37 +650,53 @@ export async function uploadFarmerLandDocument(
         documentRecord.file_name,
         documentRecord.file_size_bytes,
         documentRecord.mime_type,
+        documentRecord.file_format,
         contentSha256,
+        documentRecord.storage_bucket,
+        documentRecord.storage_path,
         documentRecord.document_type,
         documentRecord.issuing_state,
         true,
-        JSON.stringify(extracted),
-        'RULE_PARSER',
+        JSON.stringify(inspection.extracted_fields),
+        documentRecord.extraction_method,
+        documentRecord.extraction_status,
         verificationStatus,
-        hasDigitalSignature,
-        documentRecord.digital_signature_details ? JSON.stringify(documentRecord.digital_signature_details) : null,
+        documentRecord.signature_status,
+        inspection.signature_details.marker_present,
+        JSON.stringify(inspection.signature_details),
+        'ACTIVE',
+        false,
         false,
         geometryStatus
       ]
     );
   } catch (err: any) {
-    request.log.warn({ err }, 'DB unavailable for document persistence; saving to in-memory store');
+    request.log.warn({ err }, 'DB unavailable for document persistence; keeping metadata in memory');
     memoryDocuments.set(docId, documentRecord);
   }
 
+  memoryDocuments.set(docId, documentRecord);
+
   return reply.send({
     success: true,
-    message: 'Official land document uploaded and parsed. Tagged as USER_PROVIDED_DOCUMENT.',
+    message: inspection.extraction_message,
     document: {
       id: docId,
       file_name: documentRecord.file_name,
       content_sha256: contentSha256,
+      storage_bucket: documentRecord.storage_bucket,
+      storage_path: documentRecord.storage_path,
+      file_format: documentRecord.file_format,
       document_type: documentRecord.document_type,
       issuing_state: documentRecord.issuing_state,
       verification_status: verificationStatus,
       verification_status_meaning: 'Document supplied by farmer. Does not establish official legal proof of title without registry confirmation.',
-      extracted_fields: extracted,
-      digital_signature_present: hasDigitalSignature,
+      extraction_status: inspection.extraction_status,
+      extraction_message: inspection.extraction_message,
+      extracted_fields: inspection.extracted_fields,
+      signature_status: inspection.signature_status,
+      signature_details: inspection.signature_details,
+      farmer_confirmed: false,
       geometry_status: geometryStatus,
       geometry_status_meaning: 'No georeferenced spatial boundary vectors detected in document. Basemap will display without synthetic polygons.'
     }
@@ -655,9 +717,11 @@ export async function getFarmerLandDocuments(
 
   try {
     const result = await pool.query(
-      `SELECT id, file_name, file_size_bytes, mime_type, content_sha256,
-              document_type, issuing_state, extracted_fields,
-              verification_status, digital_signature_present,
+      `SELECT id, file_name, file_size_bytes, mime_type, file_format, content_sha256,
+              storage_bucket, storage_path, document_type, issuing_state,
+              extracted_fields, extraction_status, verification_status,
+              signature_status, digital_signature_present, digital_signature_details,
+              retention_status, farmer_confirmed, farmer_confirmed_at,
               geometry_status, uploaded_at
        FROM public.farmer_land_documents
        WHERE farmer_auth_uid = $1 AND deleted_at IS NULL
@@ -684,6 +748,7 @@ export async function getFarmerLandDocuments(
 /**
  * DELETE /api/v1/land-survey/documents/:id
  * Privacy mechanism: Farmers have complete right to delete their uploaded documents.
+ * Crucial guarantee: Never reports successful deletion if physical file removal fails.
  */
 export async function deleteFarmerLandDocument(
   request: FastifyRequest,
@@ -700,40 +765,257 @@ export async function deleteFarmerLandDocument(
     return reply.status(400).send({ success: false, error: 'Invalid document ID format' });
   }
 
+  // 1. Locate document and verify tenant ownership
+  let doc: any = null;
   try {
     const res = await pool.query(
-      `UPDATE public.farmer_land_documents
-       SET deleted_at = NOW(),
-           extracted_fields = '{}'::jsonb
-       WHERE id = $1 AND farmer_auth_uid = $2 AND deleted_at IS NULL
-       RETURNING id`,
+      `SELECT * FROM public.farmer_land_documents WHERE id = $1 AND farmer_auth_uid = $2 AND deleted_at IS NULL`,
       [id, authUid]
     );
-
-    if (memoryDocuments.has(id)) {
-      const doc = memoryDocuments.get(id);
-      if (doc.farmer_auth_uid === authUid) {
-        doc.deleted_at = new Date().toISOString();
-      }
+    if (res.rows.length) {
+      doc = res.rows[0];
     }
+  } catch (err) {}
 
-    if (!res.rows.length && !memoryDocuments.has(id)) {
-      return reply.status(404).send({ success: false, error: 'Document not found or already deleted' });
+  if (!doc && memoryDocuments.has(id)) {
+    const mem = memoryDocuments.get(id);
+    if (mem.farmer_auth_uid === authUid && !mem.deleted_at) {
+      doc = mem;
     }
+  }
 
-    return reply.send({
-      success: true,
-      message: 'Land document permanently removed from your active profile.'
-    });
+  if (!doc) {
+    return reply.status(404).send({ success: false, error: 'Document not found or already deleted' });
+  }
+
+  // 2. Delete stored object file from private storage
+  if (doc.storage_path) {
+    try {
+      await deleteDocumentFile(authUid, doc.storage_path);
+    } catch (storageErr: any) {
+      request.log.error({ storageErr }, 'Storage delete failed');
+      return reply.status(500).send({
+        success: false,
+        error: 'STORAGE_DELETE_FAILED',
+        message: 'Failed to delete physical file from storage. Metadata retained to prevent orphan files.'
+      });
+    }
+  }
+
+  // 3. Update DB metadata to mark deleted and purge extracted PII
+  try {
+    await pool.query(
+      `UPDATE public.farmer_land_documents
+       SET deleted_at = NOW(),
+           retention_status = 'PURGED',
+           storage_path = NULL,
+           extracted_fields = '{}'::jsonb
+       WHERE id = $1 AND farmer_auth_uid = $2`,
+      [id, authUid]
+    );
   } catch (err: any) {
-    if (memoryDocuments.has(id)) {
-      const doc = memoryDocuments.get(id);
-      if (doc.farmer_auth_uid === authUid) {
-        doc.deleted_at = new Date().toISOString();
-        return reply.send({ success: true, message: 'Land document deleted from profile.' });
-      }
+    request.log.warn({ err }, 'DB error during document metadata purge');
+  }
+
+  if (memoryDocuments.has(id)) {
+    const mem = memoryDocuments.get(id);
+    mem.deleted_at = new Date().toISOString();
+    mem.retention_status = 'PURGED';
+    mem.storage_path = null;
+    mem.extracted_fields = {};
+  }
+
+  return reply.send({
+    success: true,
+    message: 'Land document file and associated metadata permanently deleted from private storage.'
+  });
+}
+
+/**
+ * PUT /api/v1/land-survey/documents/:id/confirm
+ * Farmer reviews and confirms or corrects extracted details before they are treated as structured data.
+ */
+export async function confirmFarmerLandDocument(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const { id } = (request.params as any) || {};
+  const authUid = (request as any).user?.id || (request as any).user?.sub;
+
+  if (!authUid) {
+    return reply.status(401).send({ success: false, error: 'Authentication required' });
+  }
+
+  if (!isValidUUID(id)) {
+    return reply.status(400).send({ success: false, error: 'Invalid document ID format' });
+  }
+
+  const {
+    confirmed_survey_number,
+    confirmed_subdivision,
+    confirmed_extent_acres,
+    confirmed_village,
+    confirmed_mandal,
+    confirmed_district
+  } = (request.body as any) || {};
+
+  let doc: any = null;
+  try {
+    const res = await pool.query(
+      `SELECT * FROM public.farmer_land_documents WHERE id = $1 AND farmer_auth_uid = $2 AND deleted_at IS NULL`,
+      [id, authUid]
+    );
+    if (res.rows.length) doc = res.rows[0];
+  } catch (err) {}
+
+  if (!doc && memoryDocuments.has(id)) {
+    const mem = memoryDocuments.get(id);
+    if (mem.farmer_auth_uid === authUid && !mem.deleted_at) doc = mem;
+  }
+
+  if (!doc) {
+    return reply.status(404).send({ success: false, error: 'Document not found or already deleted' });
+  }
+
+  const currentExtracted = (typeof doc.extracted_fields === 'string')
+    ? JSON.parse(doc.extracted_fields)
+    : (doc.extracted_fields || {});
+
+  if (confirmed_survey_number) {
+    currentExtracted.survey_number = {
+      value: String(confirmed_survey_number).trim(),
+      extraction_method: 'USER_CONFIRMED',
+      confidence: 1.0,
+      source_page_or_region: 'farmer_review',
+      farmer_confirmed: true
+    };
+  }
+  if (confirmed_subdivision !== undefined) {
+    currentExtracted.subdivision = {
+      value: confirmed_subdivision ? String(confirmed_subdivision).trim() : null,
+      extraction_method: 'USER_CONFIRMED',
+      confidence: 1.0,
+      source_page_or_region: 'farmer_review',
+      farmer_confirmed: true
+    };
+  }
+  if (confirmed_extent_acres !== undefined) {
+    currentExtracted.extent_acres = {
+      value: confirmed_extent_acres != null ? parseFloat(confirmed_extent_acres) : null,
+      extraction_method: 'USER_CONFIRMED',
+      confidence: 1.0,
+      source_page_or_region: 'farmer_review',
+      farmer_confirmed: true
+    };
+  }
+  if (confirmed_village) {
+    currentExtracted.village = {
+      value: String(confirmed_village).trim(),
+      extraction_method: 'USER_CONFIRMED',
+      confidence: 1.0,
+      source_page_or_region: 'farmer_review',
+      farmer_confirmed: true
+    };
+  }
+  if (confirmed_mandal) {
+    currentExtracted.mandal = {
+      value: String(confirmed_mandal).trim(),
+      extraction_method: 'USER_CONFIRMED',
+      confidence: 1.0,
+      source_page_or_region: 'farmer_review',
+      farmer_confirmed: true
+    };
+  }
+  if (confirmed_district) {
+    currentExtracted.district = {
+      value: String(confirmed_district).trim(),
+      extraction_method: 'USER_CONFIRMED',
+      confidence: 1.0,
+      source_page_or_region: 'farmer_review',
+      farmer_confirmed: true
+    };
+  }
+
+  try {
+    await pool.query(
+      `UPDATE public.farmer_land_documents
+       SET extracted_fields = $1,
+           farmer_confirmed = true,
+           farmer_confirmed_at = NOW(),
+           extraction_status = 'SUCCESS'
+       WHERE id = $2 AND farmer_auth_uid = $3`,
+      [JSON.stringify(currentExtracted), id, authUid]
+    );
+  } catch (err: any) {
+    request.log.warn({ err }, 'DB error confirming document fields');
+  }
+
+  if (memoryDocuments.has(id)) {
+    const mem = memoryDocuments.get(id);
+    mem.extracted_fields = currentExtracted;
+    mem.farmer_confirmed = true;
+    mem.farmer_confirmed_at = new Date().toISOString();
+    mem.extraction_status = 'SUCCESS';
+  }
+
+  return reply.send({
+    success: true,
+    message: 'Land document fields confirmed and verified by farmer.',
+    document_id: id,
+    farmer_confirmed: true,
+    extracted_fields: currentExtracted
+  });
+}
+
+/**
+ * GET /api/v1/land-survey/documents/:id/file
+ * Downloads or streams the private stored document file.
+ * Strictly verifies authenticated ownership.
+ */
+export async function downloadFarmerLandDocumentFile(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const { id } = (request.params as any) || {};
+  const authUid = (request as any).user?.id || (request as any).user?.sub;
+
+  if (!authUid) {
+    return reply.status(401).send({ success: false, error: 'Authentication required' });
+  }
+
+  if (!isValidUUID(id)) {
+    return reply.status(400).send({ success: false, error: 'Invalid document ID format' });
+  }
+
+  let doc: any = null;
+  try {
+    const res = await pool.query(
+      `SELECT * FROM public.farmer_land_documents WHERE id = $1 AND farmer_auth_uid = $2 AND deleted_at IS NULL`,
+      [id, authUid]
+    );
+    if (res.rows.length) doc = res.rows[0];
+  } catch (err) {}
+
+  if (!doc && memoryDocuments.has(id)) {
+    const mem = memoryDocuments.get(id);
+    if (mem.farmer_auth_uid === authUid && !mem.deleted_at) doc = mem;
+  }
+
+  if (!doc || !doc.storage_path) {
+    return reply.status(404).send({ success: false, error: 'Document file not found or already deleted' });
+  }
+
+  try {
+    const fileBuffer = await getDocumentFile(authUid, doc.storage_path);
+    if (!fileBuffer) {
+      return reply.status(404).send({ success: false, error: 'File binary not found in storage' });
     }
-    return reply.status(503).send({ success: false, error: 'Service temporarily unavailable' });
+
+    reply.header('Content-Type', doc.mime_type || 'application/pdf');
+    reply.header('Content-Disposition', `attachment; filename="${doc.file_name || 'document.pdf'}"`);
+    return reply.send(fileBuffer);
+  } catch (err: any) {
+    return reply.status(500).send({ success: false, error: 'STORAGE_FETCH_FAILED', message: err.message });
   }
 }
 

@@ -64,3 +64,5 @@ tests/**/*.pyc
 !app/src/main/res/**/*.png
 !screenshots/**/*.png
 simulations/logs/*.jsonl
+
+data/secure_storage/

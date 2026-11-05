@@ -11,7 +11,9 @@ import {
   uploadFarmerLandDocument,
   getFarmerLandDocuments,
   deleteFarmerLandDocument,
-  claimFromDocument
+  claimFromDocument,
+  confirmFarmerLandDocument,
+  downloadFarmerLandDocumentFile
 } from '../controllers/land_survey.controller';
 
 export default async function landSurveyRoutes(fastify: FastifyInstance) {
@@ -84,6 +86,18 @@ export default async function landSurveyRoutes(fastify: FastifyInstance) {
    * Authenticated: delete / purge a farmer-uploaded document and its metadata.
    */
   fastify.delete('/documents/:id', { preHandler: [authenticate] }, deleteFarmerLandDocument);
+
+  /**
+   * PUT /api/v1/land-survey/documents/:id/confirm
+   * Authenticated: farmer reviews and confirms/corrects extracted details.
+   */
+  fastify.put('/documents/:id/confirm', { preHandler: [authenticate] }, confirmFarmerLandDocument);
+
+  /**
+   * GET /api/v1/land-survey/documents/:id/file
+   * Authenticated: download / stream stored document binary (tenant-isolated).
+   */
+  fastify.get('/documents/:id/file', { preHandler: [authenticate] }, downloadFarmerLandDocumentFile);
 
   /**
    * POST /api/v1/land-survey/documents/:id/claim

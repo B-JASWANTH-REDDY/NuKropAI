@@ -36885,11 +36885,26 @@ function openLandDocumentUploadModal() {
             </div>
           </div>
 
-          <!-- Privacy Consent Checkbox (Strict DPDP Act Compliance) -->
+          <!-- Privacy & DPDP Act Full Transparency Panel -->
+          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:10px 12px;font-size:10px;color:#475569;line-height:1.45;">
+            <div style="font-weight:900;color:#0F172A;margin-bottom:4px;display:flex;align-items:center;gap:4px;">
+              <span>🔒</span>
+              <span>${TL('Privacy & DPDP Act Data Collection Notice', 'గోప్యత & DPDP చట్ట సమాచారం', 'Privacy & DPDP Notice')}</span>
+            </div>
+            <ul style="margin:0 0 6px 14px;padding:0;">
+              <li><strong>What is collected:</strong> Agricultural identifiers only (Survey #, Subdivision, Extent, Mandal, Village).</li>
+              <li><strong>Purpose:</strong> Parcel portfolio management, Mandi rates, and logistics dispatch.</li>
+              <li><strong>Storage & Security:</strong> Stored in private, tenant-isolated bucket (<em>farmer-land-documents</em>). Never shared with third-party AI models.</li>
+              <li><strong>Right of Erasure:</strong> You retain complete ownership and can delete your document and all extracted data at any time.</li>
+              <li style="color:#DC2626;font-weight:700;"><strong>Notice:</strong> Do NOT upload documents containing Aadhaar numbers, OTPs, or passwords. NuKropAI will never ask for government portal login credentials.</li>
+            </ul>
+          </div>
+
+          <!-- Explicit Farmer Consent Checkbox -->
           <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:12px;padding:10px;display:flex;gap:8px;align-items:flex-start;">
             <input type="checkbox" id="doc-user-consent" style="margin-top:2px;cursor:pointer;" checked>
             <label for="doc-user-consent" style="font-size:10.5px;color:#166534;font-weight:600;line-height:1.4;cursor:pointer;">
-              ${TL('I confirm this is my genuine official land record and grant NuKropAI permission to extract survey identifiers for my profile under DPDP guidelines. (Tagged as USER_PROVIDED_DOCUMENT; not official legal proof of title).', 'ఇది నా నిజమైన అధికారిక ల్యాండ్ రికార్డు అని ధృవీకరిస్తున్నాను మరియు వివరాలు సేకరించడానికి సమ్మతిస్తున్నాను.', 'I confirm this is my genuine land record.')}
+              ${TL('I confirm this is my genuine land record. I grant consent to parse agricultural survey attributes for my profile under DPDP guidelines. (Tagged as USER_PROVIDED_DOCUMENT; does not establish official legal proof of title).', 'ఇది నా నిజమైన ల్యాండ్ రికార్డు అని ధృవీకరిస్తున్నాను మరియు వివరాలు సేకరించడానికి సమ్మతిస్తున్నాను.', 'I confirm this is my genuine land record and grant consent.')}
             </label>
           </div>
         </div>
@@ -37021,6 +37036,43 @@ async function submitLandDocumentUpload() {
 window.openLandDocumentUploadModal = openLandDocumentUploadModal;
 window.closeLandDocumentUploadModal = closeLandDocumentUploadModal;
 window.submitLandDocumentUpload = submitLandDocumentUpload;
+
+async function deleteFarmerDocumentFromProfile(docId) {
+  if (!docId) return;
+  const isTe = currentLang === 'te';
+  const confirmed = confirm(isTe ? 'మీరు ఈ ల్యాండ్ డాక్యుమెంట్‌ను శాశ్వతంగా తొలగించాలనుకుంటున్నారా?' : 'Are you sure you want to permanently delete this land document and all its data from private storage?');
+  if (!confirmed) return;
+
+  try {
+    const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+    const res = await fetch('/api/v1/land-survey/documents/' + encodeURIComponent(docId), {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+      }
+    });
+
+    if (res.ok) {
+      showLuxuryToast('Land document permanently purged from private storage.', 'success');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showLuxuryToast(err.message || 'Removed from local profile.', 'info');
+    }
+  } catch(e) {
+    showLuxuryToast('Removed from profile.', 'info');
+  }
+
+  // Remove from local claims store
+  try {
+    const claims = JSON.parse(localStorage.getItem('nukrop_land_claims') || '[]');
+    const filtered = claims.filter(c => c.id !== docId && c.document_id !== docId);
+    localStorage.setItem('nukrop_land_claims', JSON.stringify(filtered));
+  } catch(e) {}
+
+  if (typeof renderAgristackDynamicView === 'function') renderAgristackDynamicView();
+}
+window.deleteFarmerDocumentFromProfile = deleteFarmerDocumentFromProfile;
 
 
 function fetchAndVerifyRealLandRecord() {
@@ -37306,6 +37358,25 @@ function getAgristackDynamicBodyHtml() {
     </div>
 
     ${p ? `
+    <!-- Document Provenance & Right of Erasure Bar (for uploaded documents) -->
+    ${(p.verification_status === 'USER_PROVIDED_DOCUMENT' || p.source === 'USER_PROVIDED_DOCUMENT') ? `
+    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:14px;padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:11px;font-weight:800;color:#92400E;display:flex;align-items:center;gap:4px;">
+          <span>📄</span>
+          <span>${TL('Farmer-Uploaded Document', 'రైతు అప్‌లోడ్ చేసిన రికార్డు', 'Farmer-Uploaded Document')}</span>
+        </div>
+        <div style="font-size:9.5px;color:#B45309;margin-top:1px;">
+          Private Storage · ${p.geometry_status || 'GEOMETRY_UNAVAILABLE'}
+        </div>
+      </div>
+      <button onclick="deleteFarmerDocumentFromProfile('${p.document_id || p.id}')" style="background:#FEE2E2;border:1px solid #FCA5A5;color:#DC2626;border-radius:8px;padding:4px 9px;font-size:10px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:3px;">
+        <span>🗑️</span>
+        <span>${TL('Delete & Purge', 'తొలగించండి', 'Delete')}</span>
+      </button>
+    </div>
+    ` : ''}
+
     <!-- 💾 Save Parcel to My Profile Action Button -->
     <button onclick="saveParcelToUserAccount('${p.parcel_id || p.id}')" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#16A34A 0%,#15803D 100%);color:#FFFFFF;border:none;border-radius:14px;padding:13px 16px;font-size:12.5px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 3px 10px rgba(22,163,74,0.25);transition:all 0.15s ease;">
       <span>💾</span>

@@ -168,7 +168,15 @@ class MainActivity : ComponentActivity() {
         fun openExternalUrl(url: String) {
             runOnUiThread {
                 try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    val trimmed = url.trim()
+                    val uri = Uri.parse(trimmed)
+                    val scheme = uri.scheme?.lowercase()
+                    // Strict URL security: reject unsafe schemes (javascript, file, data, content)
+                    if (scheme != "http" && scheme != "https") {
+                        android.util.Log.w("NuKropBridge", "Rejected unsafe external URL scheme: $scheme")
+                        return@runOnUiThread
+                    }
+                    val intent = Intent(Intent.ACTION_VIEW, uri)
                     startActivity(intent)
                 } catch (e: Exception) {
                     android.util.Log.e("NuKropBridge", "External URL error: ${e.message}")

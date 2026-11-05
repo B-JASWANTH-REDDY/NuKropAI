@@ -537,6 +537,8 @@ export async function inspectAndExtractLandDocument(
 
     let parsedDoc: ParsedPdfDocument | null = null;
     let pdfParseError: string | null = null;
+    const rawLatin1 = buffer.toString('latin1');
+    const hasEncryptDictionary = /\/Encrypt\s+(\d+\s+\d+\s+R|<<)/.test(rawLatin1);
 
     try {
       parsedDoc = await parsePdfWithLibrary(buffer);
@@ -544,7 +546,7 @@ export async function inspectAndExtractLandDocument(
     } catch (err: any) {
       pdfParseError = err.message || 'PDF parse error';
       // Specific detection for password / encrypted or corrupted PDFs
-      if (pdfParseError && (pdfParseError.toLowerCase().includes('password') || err.name === 'PasswordException')) {
+      if (hasEncryptDictionary || (pdfParseError && (pdfParseError.toLowerCase().includes('password') || pdfParseError.toLowerCase().includes('encrypt') || err.name === 'PasswordException'))) {
         extractedFields = extractStructuredLandFieldsFromPages([], '', declaredFields, 'MANUAL_FALLBACK');
         return {
           file_format: 'PDF',

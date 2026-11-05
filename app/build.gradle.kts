@@ -36,20 +36,29 @@ android {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH")
       val isReleaseTask = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
-      val isStrictSigning = System.getenv("STRICT_RELEASE_SIGNING") == "true" || (System.getenv("CI") == "true" && isReleaseTask)
       if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+        val storePass = System.getenv("STORE_PASSWORD")
+        val keyUserAlias = System.getenv("KEY_ALIAS")
+        val keyPass = System.getenv("KEY_PASSWORD")
+        if (storePass.isNullOrBlank() || keyUserAlias.isNullOrBlank() || keyPass.isNullOrBlank()) {
+          throw org.gradle.api.GradleException(
+            "FATAL: Production release signing is misconfigured. " +
+            "KEYSTORE_PATH is provided ($keystorePath), but STORE_PASSWORD, KEY_ALIAS, or KEY_PASSWORD are missing."
+          )
+        }
         storeFile = file(keystorePath)
-        storePassword = System.getenv("STORE_PASSWORD")
-        keyAlias = System.getenv("KEY_ALIAS")
-        keyPassword = System.getenv("KEY_PASSWORD")
-      } else if (isStrictSigning) {
+        storePassword = storePass
+        keyAlias = keyUserAlias
+        keyPassword = keyPass
+      } else if (isReleaseTask) {
         throw org.gradle.api.GradleException(
-          "FATAL: Production release signing is enforced (CI or STRICT_RELEASE_SIGNING=true), " +
-          "but KEYSTORE_PATH was not provided or file does not exist ($keystorePath). " +
-          "Refusing to silently sign production release APK with debug keys."
+          "FATAL: Production release signing requires a valid production keystore. " +
+          "KEYSTORE_PATH was not provided or file does not exist ($keystorePath). " +
+          "Silent debug-key fallback on production release builds is strictly prohibited. " +
+          "Configure KEYSTORE_PATH, STORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in environment."
         )
       } else {
-        println("⚠️ [Signing Warning] KEYSTORE_PATH not provided or missing. Falling back to debug.keystore for local offline testing only.")
+        // Fallback for non-release development tasks only (e.g. testDebugUnitTest, lint)
         storeFile = file("${rootDir}/debug.keystore")
         storePassword = "android"
         keyAlias = "androiddebugkey"
@@ -176,11 +185,16 @@ val projectRootDir = rootDir
 val apkOutputDir = layout.buildDirectory.dir("outputs/apk")
 
 tasks.register("syncApkToWeb") {
-    description = "Syncs authentic release APK to web public download path (Debug builds cannot overwrite production downloads)"
+    description = "Syncs authentic release APK to web public download path only if production signed"
     notCompatibleWithConfigurationCache("Dynamic file copy to web directory")
     doLast {
         val releaseApk = apkOutputDir.get().file("release/app-release.apk").asFile
         if (releaseApk.exists()) {
+            val isProductionConfigured = !System.getenv("KEYSTORE_PATH").isNullOrBlank()
+            if (!isProductionConfigured) {
+                println("⚠️ [Gradle syncApkToWeb] Release APK was compiled without KEYSTORE_PATH. Refusing to copy debug-signed APK to production download paths.")
+                return@doLast
+            }
             val rootApk = File(projectRootDir, "NuKropAI.apk")
             val webPublicDir = File(projectRootDir, "web/public")
             webPublicDir.mkdirs()
@@ -188,17 +202,7 @@ tasks.register("syncApkToWeb") {
             releaseApk.copyTo(File(webPublicDir, "NuKropAI.apk"), overwrite = true)
             releaseApk.copyTo(File(webPublicDir, "NuKropAI_v2.0.apk"), overwrite = true)
             releaseApk.copyTo(File(webPublicDir, "NuKropAI_latest.apk"), overwrite = true)
-            println("✅ [Gradle] Successfully verified and synced Release APK (${releaseApk.length() / (1024 * 1024)} MB) to public download paths.")
-        } else {
-            val debugApk = apkOutputDir.get().file("debug/app-debug.apk").asFile
-            if (debugApk.exists()) {
-                val webPublicDir = File(projectRootDir, "web/public")
-                webPublicDir.mkdirs()
-                debugApk.copyTo(File(webPublicDir, "NuKropAI_debug.apk"), overwrite = true)
-                println("ℹ️ [Gradle] Development debug APK built. Synced to NuKropAI_debug.apk. Production downloads preserved.")
-            } else {
-                println("⚠️ [Gradle] No compiled APK found in outputs to sync.")
-            }
+            println("✅ [Gradle] Successfully verified production-signed Release APK (${releaseApk.length() / (1024 * 1024)} MB) synced to public download paths.")
         }
     }
 }

@@ -33,34 +33,54 @@ if (!fs.existsSync(pubDir)) {
 
 const distDir = path.resolve(__dirname, 'dist');
 
+function isDebugSigned(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    return buf.includes(Buffer.from('Android Debug')) || buf.includes(Buffer.from('androiddebugkey'));
+  } catch (e) {
+    return true;
+  }
+}
+
 if (releaseSource) {
   const sizeMb = (releaseSource.size / (1024 * 1024)).toFixed(1);
-  console.log(`🚀 [sync-apk] Verified production release artifact: ${releaseSource.path} (${sizeMb} MB)`);
+  const debugSigned = isDebugSigned(releaseSource.path);
 
-  const targets = [
-    path.join(pubDir, 'NuKropAI.apk'),
-    path.join(pubDir, 'NuKropAI_v2.0.apk'),
-    path.join(pubDir, 'NuKropAI_latest.apk'),
-  ];
-
-  if (fs.existsSync(distDir)) {
-    targets.push(
-      path.join(distDir, 'NuKropAI.apk'),
-      path.join(distDir, 'NuKropAI_v2.0.apk'),
-      path.join(distDir, 'NuKropAI_latest.apk')
-    );
-  }
-
-  for (const target of targets) {
-    if (path.resolve(releaseSource.path) !== path.resolve(target)) {
-      fs.copyFileSync(releaseSource.path, target);
-      console.log(`  ✓ Synced -> ${path.relative(__dirname, target)}`);
+  if (debugSigned) {
+    console.warn(`⚠️ [sync-apk] Artifact ${releaseSource.path} is DEBUG_SIGNED (CN=Android Debug).`);
+    console.warn(`⚠️ [sync-apk] Strict production gate: Refusing to copy debug-signed APK to production download targets (NuKropAI.apk).`);
+    const debugTarget = path.join(pubDir, 'NuKropAI_debug.apk');
+    fs.copyFileSync(releaseSource.path, debugTarget);
+    if (fs.existsSync(distDir)) {
+      fs.copyFileSync(releaseSource.path, path.join(distDir, 'NuKropAI_debug.apk'));
     }
+    console.log(`ℹ️ [sync-apk] Artifact safely isolated to NuKropAI_debug.apk.`);
+  } else {
+    console.log(`🚀 [sync-apk] Verified production release artifact: ${releaseSource.path} (${sizeMb} MB) [PRODUCTION_SIGNED]`);
+    const targets = [
+      path.join(pubDir, 'NuKropAI.apk'),
+      path.join(pubDir, 'NuKropAI_v2.0.apk'),
+      path.join(pubDir, 'NuKropAI_latest.apk'),
+    ];
+
+    if (fs.existsSync(distDir)) {
+      targets.push(
+        path.join(distDir, 'NuKropAI.apk'),
+        path.join(distDir, 'NuKropAI_v2.0.apk'),
+        path.join(distDir, 'NuKropAI_latest.apk')
+      );
+    }
+
+    for (const target of targets) {
+      if (path.resolve(releaseSource.path) !== path.resolve(target)) {
+        fs.copyFileSync(releaseSource.path, target);
+        console.log(`  ✓ Synced -> ${path.relative(__dirname, target)}`);
+      }
+    }
+    console.log('✅ [sync-apk] Production APK download endpoints verified and synchronized.');
   }
-  console.log('✅ [sync-apk] Production APK download endpoints verified and synchronized.');
 } else {
   console.log('ℹ️ [sync-apk] No production release APK found.');
-  // If debug APK is available, sync strictly to debug-designated endpoint only
   if (fs.existsSync(debugCandidate)) {
     const debugTarget = path.join(pubDir, 'NuKropAI_debug.apk');
     fs.copyFileSync(debugCandidate, debugTarget);

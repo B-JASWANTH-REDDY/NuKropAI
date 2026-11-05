@@ -24558,6 +24558,31 @@ function confirmMachineryBooking() {
 
   const bookingRef = 'CHC-ORD-' + Math.floor(100000 + Math.random() * 900000);
   const total = calculateBookingTotal();
+
+  // Send real rental reservation to Fastify backend with schedule conflict validation
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+  const startIso = new Date(dateVal + 'T08:00:00Z').toISOString();
+  const endIso = new Date(new Date(dateVal + 'T08:00:00Z').getTime() + 8 * 3600 * 1000).toISOString();
+  fetch('/api/v1/dispatch/rentals/book', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+    },
+    body: JSON.stringify({
+      equipmentId: item.id || item.equipmentId,
+      equipmentName: nameStr,
+      startTime: startIso,
+      endTime: endIso,
+      operatorIncluded: true,
+      ownerId: item.ownerId || 'OWNER-SYSTEM-01'
+    })
+  }).then(async r => {
+    if (r.status === 409) {
+      const err = await r.json();
+      alert('⚠️ ' + (err.message || 'Equipment is already booked for this schedule. Please select another date.'));
+    }
+  }).catch(() => {});
   const dateVal = document.getElementById('bk-date-input')?.value || new Date().toISOString().split('T')[0];
   const slotVal = document.getElementById('bk-slot-select')?.value || 'morning';
   const slotText = slotVal === 'morning' ? 'Morning 06:00 - 10:00 AM' : (slotVal === 'afternoon' ? 'Afternoon 03:00 - 07:00 PM' : 'Full Day 8 Hours');
@@ -30699,6 +30724,35 @@ function initDriverRealtimeDispatchListener() {
         }
       }
 
+      // Check Fastify driver inbox for dispatched offers
+      const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+      if (token) {
+        try {
+          const inRes = await fetch('/api/v1/dispatch/driver/inbox', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if (inRes.ok) {
+            const inData = await inRes.json();
+            if (inData && inData.offers && inData.offers.length > 0) {
+              const topOffer = inData.offers[0];
+              evaluateIncomingBooking({
+                booking_id: topOffer.bookingId,
+                id: topOffer.bookingId,
+                farmer_id: 'Farmer',
+                pickup_village: topOffer.pickupVillage,
+                destination_mandi: topOffer.destinationMandi,
+                crop_name: topOffer.cropName,
+                load_quintals: topOffer.loadQuintals,
+                total_fare: topOffer.agreedFare,
+                vehicle_type: topOffer.vehicleType,
+                distKm: topOffer.distanceKm,
+                status: 'SEARCHING'
+              });
+            }
+          }
+        } catch(e) {}
+      }
+
       const { data } = await window.sbClient
         .from('haul_bookings')
         .select('*')
@@ -30777,6 +30831,15 @@ function driverDeclineHaulRequest(tripId) {
   if (tripId) {
     window.declinedTripIds = window.declinedTripIds || new Set();
     window.declinedTripIds.add(tripId);
+    const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+    fetch('/api/v1/dispatch/reject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+      },
+      body: JSON.stringify({ bookingId: tripId })
+    }).catch(() => {});
   }
   window.pendingIncomingHaul = null;
   localStorage.removeItem('nukrop_active_trip');
@@ -30797,6 +30860,31 @@ async function driverAcceptHaulRequest() {
   if (!activeTrip) return;
 
   const bookingId = activeTrip.booking_id || activeTrip.id;
+
+  // Server-authoritative atomic acceptance check via Fastify API
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+  try {
+    const resp = await fetch('/api/v1/dispatch/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+      },
+      body: JSON.stringify({ bookingId: bookingId })
+    });
+    if (resp.status === 409) {
+      const err = await resp.json();
+      const modal = document.getElementById('driver-incoming-haul-modal');
+      if (modal) modal.remove();
+      window.pendingIncomingHaul = null;
+      window.takenTripIds = window.takenTripIds || new Set();
+      window.takenTripIds.add(bookingId);
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast(err.message || '⚠️ Haul was just accepted by another driver.', 'warning');
+      }
+      return;
+    }
+  } catch(e) {}
 
   // Atomic pre-check: verify haul is still available and not already taken by another driver!
   if (typeof sbClient !== 'undefined' && sbClient && bookingId) {
@@ -33796,6 +33884,10 @@ const APP_VIEWS = {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--r-yellow)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
           ${TL('Mark Haul Completed & Collect', 'రవాణా పూర్తి & వసూలు చేయండి', 'ट्रिप पूरी करें और प्राप्त करें')} ₹${tripFare}
         </button>
+        <button onclick="driverCancelActiveTrip('${tripId}')" class="r-btn" style="width:100%;height:38px;background:#FEF2F2;color:#DC2626;border:1.5px solid #FECACA;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          ${TL('Cancel Trip with Reason', 'కారణంతో ట్రిప్ రద్దు చేయండి', 'कारण सहित ट्रिप रद्द करें')}
+        </button>
       </div>
       ` : `
       <!-- ── REALTIME DRIVER STANDBY SHEET ── -->
@@ -35867,36 +35959,56 @@ async function driverVerifyStartTripOtp(providedOtp) {
     return false;
   }
 
-  let expectedOtp = String(activeTrip.start_otp || activeTrip.otp || '').trim();
   const bookingId = activeTrip.id || activeTrip.booking_id;
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
 
-  // Check against Supabase DB record if local trip didn't have start_otp
-  if ((!expectedOtp || expectedOtp === '4491') && typeof sbClient !== 'undefined' && sbClient && bookingId) {
-    try {
-      const { data } = await sbClient
-        .from('haul_bookings')
-        .select('start_otp')
-        .or(`id.eq.${bookingId},booking_id.eq.${bookingId}`)
-        .maybeSingle();
-      if (data && data.start_otp) {
-        expectedOtp = String(data.start_otp).trim();
-        activeTrip.start_otp = expectedOtp;
-        activeTrip.otp = expectedOtp;
+  // Server-side cryptographic hash verification
+  fetch('/api/v1/dispatch/verify-otp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+    },
+    body: JSON.stringify({ bookingId: bookingId, otp: inputOtp })
+  }).then(async res => {
+    const data = await res.json();
+    if (res.ok && data.success) {
+      activeTrip.status = 'IN_TRANSIT';
+      activeTrip.step = 2;
+      localStorage.setItem('nukrop_active_trip', JSON.stringify(activeTrip));
+      window.activeTrip = activeTrip;
+      closeDriverOtpModal();
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast('✓ OTP verified! Farm gate cleared · IN TRANSIT', 'success');
       }
-    } catch(e) {}
-  }
-  if (!expectedOtp) expectedOtp = String(activeTrip.start_otp || activeTrip.otp || '');
-
-  if (inputOtp !== expectedOtp) {
-    if (errEl) {
-      errEl.textContent = '❌ Incorrect PIN. Please ask farmer for the correct 4-digit code.';
-      errEl.style.display = 'block';
+      if (typeof openScreen === 'function' && window.currentAppScreen === 'driver_dashboard') {
+        openScreen('driver_dashboard');
+      }
+    } else {
+      if (errEl) {
+        errEl.textContent = '❌ ' + (data.message || 'Incorrect PIN entered.');
+        errEl.style.display = 'block';
+      }
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast(data.message || 'Invalid OTP', 'error');
+      }
     }
-    if (typeof showLuxuryToast === 'function') {
-      showLuxuryToast('❌ Incorrect OTP PIN. Please ask farmer for correct 4-digit code.', 'error');
+  }).catch(() => {
+    // Graceful offline fallback
+    if (inputOtp === String(activeTrip.start_otp || activeTrip.otp || '')) {
+      activeTrip.status = 'IN_TRANSIT';
+      activeTrip.step = 2;
+      localStorage.setItem('nukrop_active_trip', JSON.stringify(activeTrip));
+      window.activeTrip = activeTrip;
+      closeDriverOtpModal();
+      if (typeof showLuxuryToast === 'function') {
+        showLuxuryToast('✓ OTP verified! Farm gate cleared · IN TRANSIT', 'success');
+      }
+      if (typeof openScreen === 'function' && window.currentAppScreen === 'driver_dashboard') {
+        openScreen('driver_dashboard');
+      }
     }
-    return false;
-  }
+  });
 
   // OTP match verified! Transition trip status to IN_TRANSIT
   activeTrip.status = 'IN_TRANSIT';
@@ -35970,6 +36082,25 @@ function driverUpdateTripStep(stepIdx) {
   }
 }
 window.driverUpdateTripStep = driverUpdateTripStep;
+
+function driverCancelActiveTrip(tripId) {
+  const reason = prompt(TL('Enter cancellation reason (e.g. Vehicle breakdown, farmer unresponsive):', 'రద్దు చేయడానికి కారణం నమోదు చేయండి:', 'रद्द करने का कारण दर्ज करें:'));
+  if (!reason) return;
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+  fetch('/api/v1/dispatch/cancel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+    body: JSON.stringify({ bookingId: tripId, reason: reason })
+  }).then(() => {
+    localStorage.removeItem('nukrop_active_trip');
+    window.activeTrip = null;
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast('Trip cancelled. You are now available for new orders.', 'info');
+    }
+    openScreen('driver_dashboard');
+  }).catch(() => {});
+}
+window.driverCancelActiveTrip = driverCancelActiveTrip;
 
 function driverCompleteHaulTrip(tripId, fare) {
   let activeTrip = null;
@@ -41491,6 +41622,46 @@ function listenForRealDriverAcceptance(bookingId) {
   if (window.ghSearchPollTimer) clearInterval(window.ghSearchPollTimer);
   window.ghSearchPollTimer = setInterval(async () => {
     try {
+      // 1. Poll Fastify tracking endpoint
+      const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+      if (bId && token) {
+        try {
+          const trackRes = await fetch('/api/v1/dispatch/track/' + encodeURIComponent(bId), {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if (trackRes.ok) {
+            const trackData = await trackRes.json();
+            if (trackData.status === 'ACCEPTED' || trackData.status === 'DISPATCHED') {
+              clearInterval(window.ghSearchPollTimer);
+              window.ghSearchPollTimer = null;
+              handleDriverAccepted({
+                id: bId,
+                booking_id: bId,
+                status: trackData.status,
+                driver_name: trackData.driver?.driverName,
+                driver_phone: trackData.driver?.driverPhone,
+                vehicle_plate: trackData.driver?.vehicleNumber,
+                vehicle_type: trackData.driver?.vehicleType,
+                driver_lat: trackData.driver?.currentLat,
+                driver_lng: trackData.driver?.currentLng
+              });
+              return;
+            } else if (trackData.status === 'CANCELLED') {
+              clearInterval(window.ghSearchPollTimer);
+              window.ghSearchPollTimer = null;
+              localStorage.removeItem('nukrop_active_trip');
+              window.activeTrip = null;
+              if (typeof showLuxuryToast === 'function') {
+                showLuxuryToast('Trip was cancelled.', 'info');
+              }
+              openScreen('gramhaul');
+              return;
+            }
+          }
+        } catch(e) {}
+      }
+
+      // 2. Poll Supabase
       const q = window.sbClient.from('haul_bookings').select('*').eq('status', 'ACCEPTED');
       if (bId) q.or(`id.eq.${bId},booking_id.eq.${bId}`);
       const { data } = await q.order('updated_at', { ascending: false }).limit(1).maybeSingle();

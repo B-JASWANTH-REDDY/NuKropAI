@@ -19,7 +19,9 @@ import {
   getChatMessages,
   sendChatMessage,
   getRentalInventory,
+  addRentalEquipment,
   bookRental,
+  extendRental,
   getMyRentals,
   updateRentalStatus
 } from '../controllers/dispatch.controller';
@@ -112,9 +114,17 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
     preHandler: [authenticate]
   }, getRentalInventory);
 
+  fastify.post('/rentals/inventory', {
+    preHandler: [authenticate]
+  }, addRentalEquipment);
+
   fastify.post('/rentals/book', {
     preHandler: [authenticate, requireRole(['farmer', 'admin'])]
   }, bookRental);
+
+  fastify.post('/rentals/:rentalId/extend', {
+    preHandler: [authenticate]
+  }, extendRental);
 
   fastify.get('/rentals/my-bookings', {
     preHandler: [authenticate]

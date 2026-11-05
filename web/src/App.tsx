@@ -182,16 +182,17 @@ function AppContent() {
             </button>
 
             <a 
-              href="/NuKropAI.apk" 
-              download="NuKropAI.apk"
+              href="/NuKropAI_preview_debug.apk" 
+              download="NuKropAI_preview_debug.apk"
               onClick={() => {
-                analytics.track('download_apk_click', { source: 'navbar_pill', version: '2.0' });
-                showToast({ type: 'info', message: 'Starting NuKropAI APK download (~52 MB)...' });
+                analytics.track('download_apk_click', { source: 'navbar_pill', version: 'preview-debug' });
+                showToast({ type: 'info', message: 'Downloading NuKropAI Preview APK (Debug-Signed · Not for Production)...' });
               }}
               className="nukrop-btn nav-download-btn"
+              style={{ background: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgba(234, 179, 8, 0.5)', color: '#FEF08A' }}
             >
               <Download style={{ width: '14px', height: '14px' }} />
-              <span>Get APK (v2.0)</span>
+              <span>Preview APK (Debug)</span>
             </a>
           </div>
 
@@ -238,18 +239,18 @@ function AppContent() {
         </button>
 
         <a 
-          href="/NuKropAI.apk" 
-          download="NuKropAI.apk"
+          href="/NuKropAI_preview_debug.apk" 
+          download="NuKropAI_preview_debug.apk"
           className="nukrop-btn" 
           onClick={() => {
             setMobileMenuOpen(false);
-            analytics.track('download_apk_click', { source: 'mobile_drawer', version: '2.0' });
-            showToast({ type: 'info', message: 'Downloading NuKropAI APK...' });
+            analytics.track('download_apk_click', { source: 'mobile_drawer', version: 'preview-debug' });
+            showToast({ type: 'info', message: 'Downloading Preview APK (Debug-Signed · Not for Production)...' });
           }}
-          style={{ width: '100%', padding: '12px 20px', fontSize: '14px', marginTop: '6px', borderRadius: '12px' }}
+          style={{ width: '100%', padding: '12px 20px', fontSize: '14px', marginTop: '6px', borderRadius: '12px', background: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgba(234, 179, 8, 0.5)', color: '#FEF08A' }}
         >
           <Download style={{ width: '16px', height: '16px' }} />
-          <span>Download NuKropAI APK (v2.0 Latest)</span>
+          <span>Preview APK (Debug-Signed)</span>
         </a>
       </div>
 
@@ -310,30 +311,34 @@ function AppContent() {
           {/* Single Authoritative Download CTA */}
           <div className="hero-buttons" style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginBottom: '28px', flexWrap: 'wrap' }}>
             <a
-              href="/NuKropAI.apk"
-              download="NuKropAI.apk"
+              href="/NuKropAI_preview_debug.apk"
+              download="NuKropAI_preview_debug.apk"
               onClick={() => {
-                analytics.track('download_apk_click', { source: 'hero_primary', version: '2.0' });
-                showToast({ type: 'info', message: 'Downloading NuKropAI APK (~52 MB)...' });
+                analytics.track('download_apk_click', { source: 'hero_primary', version: 'preview-debug' });
+                showToast({ type: 'info', message: 'Downloading Preview APK (Debug-Signed · Not for Production)...' });
               }}
               className="nukrop-btn"
               style={{
                 padding: '16px 36px',
                 fontSize: '16px',
                 borderRadius: '16px',
-                boxShadow: '0 8px 32px rgba(200, 232, 55, 0.35)',
+                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.3) 0%, rgba(202, 138, 4, 0.5) 100%)',
+                border: '1px solid rgba(234, 179, 8, 0.6)',
+                color: '#FEF08A',
+                boxShadow: '0 8px 32px rgba(234, 179, 8, 0.25)',
               }}
             >
               <Download style={{ width: '20px', height: '20px' }} />
-              <span>Download NuKropAI App</span>
+              <span>Download Preview APK (Debug)</span>
               <span className="tabular-nums" style={{
-                background: 'rgba(0,0,0,0.18)',
+                background: 'rgba(0,0,0,0.25)',
                 borderRadius: '6px',
                 padding: '3px 8px',
                 fontSize: '12px',
                 fontWeight: '700',
-                marginLeft: '6px'
-              }}>v2.0 (Latest) · 52 MB</span>
+                marginLeft: '6px',
+                color: '#FEF08A'
+              }}>Staging Only</span>
             </a>
 
             <a
@@ -797,16 +802,16 @@ function AppContent() {
                 <li><a href="#faq" className="touch-target" style={{ color: 'var(--nukrop-text-dim)', textDecoration: 'none', fontSize: '13.5px', display: 'inline-flex', alignItems: 'center' }}>FAQ &amp; Manual</a></li>
                 <li>
                   <a 
-                    href="/NuKropAI.apk" 
-                    download="NuKropAI.apk" 
+                    href="/NuKropAI_preview_debug.apk" 
+                    download="NuKropAI_preview_debug.apk" 
                     onClick={() => {
-                      analytics.track('download_apk_click', { source: 'footer_link', version: '2.0' });
-                      showToast({ type: 'info', message: 'Downloading NuKropAI APK...' });
+                      analytics.track('download_apk_click', { source: 'footer_link', version: 'preview-debug' });
+                      showToast({ type: 'info', message: 'Downloading Preview APK (Debug-Signed · Not for Production)...' });
                     }}
                     className="touch-target"
-                    style={{ color: 'var(--nukrop-accent)', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center' }}
+                    style={{ color: '#EAB308', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center' }}
                   >
-                    Download APK (v2.0 Latest)
+                    Download Preview APK (Debug)
                   </a>
                 </li>
               </ul>

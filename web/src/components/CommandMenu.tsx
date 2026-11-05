@@ -77,15 +77,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   const commands: CommandItem[] = [
     {
       id: 'download-apk',
-      title: 'Download NuKropAI Android APK (v2.0 Latest)',
+      title: 'Download Preview APK (Debug-Signed · Not for Production)',
       category: 'Navigation',
-      icon: <Download style={{ width: '16px', height: '16px', color: 'var(--nukrop-accent)' }} />,
+      icon: <Download style={{ width: '16px', height: '16px', color: '#EAB308' }} />,
       shortcut: 'APK',
       action: () => {
         onClose();
         const a = document.createElement('a');
-        a.href = '/NuKropAI.apk';
-        a.download = 'NuKropAI.apk';
+        a.href = '/NuKropAI_preview_debug.apk';
+        a.download = 'NuKropAI_preview_debug.apk';
         a.click();
       }
     },

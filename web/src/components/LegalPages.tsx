@@ -43,13 +43,13 @@ export const LegalPage: React.FC<LegalPageProps> = ({ page, onNavigateHome, onOp
           </div>
 
           <a
-            href="/NuKropAI.apk"
-            download="NuKropAI.apk"
+            href="/NuKropAI_preview_debug.apk"
+            download="NuKropAI_preview_debug.apk"
             className="nukrop-btn"
-            style={{ padding: '8px 16px', fontSize: '12px', borderRadius: '100px' }}
+            style={{ padding: '8px 16px', fontSize: '12px', borderRadius: '100px', background: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgba(234, 179, 8, 0.5)', color: '#FEF08A' }}
           >
             <Download style={{ width: '14px', height: '14px' }} />
-            <span>Get App</span>
+            <span>Preview APK (Debug)</span>
           </a>
         </div>
       </header>

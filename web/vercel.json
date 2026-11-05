@@ -10,6 +10,22 @@
       "destination": "/sitemap.xml"
     },
     {
+      "source": "/NuKropAI.apk",
+      "destination": "/production-apk-status.json"
+    },
+    {
+      "source": "/NuKropAI_latest.apk",
+      "destination": "/production-apk-status.json"
+    },
+    {
+      "source": "/NuKropAI_v2.0.apk",
+      "destination": "/production-apk-status.json"
+    },
+    {
+      "source": "/NuKropAI_v3_Production.apk",
+      "destination": "/production-apk-status.json"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

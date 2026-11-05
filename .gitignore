@@ -38,10 +38,9 @@ scratch/
 __pycache__/
 *.pyc
 *.apk
-!NuKropAI.apk
 !NuKropAI-debug.apk
-!web/public/*.apk
-!web/public/**/*.apk
+!web/public/NuKropAI_preview_debug.apk
+!web/public/NuKropAI_preview_debug.txt
 *.bak
 *.bak_*
 *.log
@@ -59,6 +58,7 @@ tests/**/__pycache__/
 tests/**/*.pyc
 *.txt
 !web/public/robots.txt
+!web/public/NuKropAI_preview_debug.txt
 *.png
 !web/public/*.png
 !app/src/main/res/**/*.png

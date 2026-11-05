@@ -36335,7 +36335,13 @@ function initAgristackOpenStreetMap() {
   if (!mapContainer || typeof L === 'undefined' || !L.map) return;
 
   const dpiStore = (typeof AgriStackDPI !== 'undefined') ? AgriStackDPI.getStore() : { data: null, activeParcelIndex: 0 };
-  const parcels = (dpiStore.data && dpiStore.data.parcels) || [];
+  let parcels = (dpiStore.data && dpiStore.data.parcels) || [];
+  if (parcels.length === 0) {
+    try {
+      const claims = JSON.parse(localStorage.getItem('nukrop_land_claims') || '[]');
+      if (Array.isArray(claims) && claims.length > 0) parcels = claims;
+    } catch(e) {}
+  }
   const currentParcel = parcels[activeParcelIndex] || parcels[0] || null;
   const centerLat = currentParcel ? (currentParcel.center_lat || 20.5937) : 20.5937;
   const centerLon = currentParcel ? (currentParcel.center_lon || 78.9629) : 78.9629;
@@ -37042,8 +37048,8 @@ function getAgristackDynamicBodyHtml() {
 
       <div style="padding:8px 14px;background:#F8FAF8;display:flex;justify-content:space-between;align-items:center;font-size:9.5px;color:#64748B;font-weight:700;border-top:1px solid #E2ECE2;">
         ${p ? `
-        <span>📍 Survey #${p.survey_number || 'N/A'} · Khasra #${p.khasra_no || p.khasraId || 'N/A'}</span>
-        <span style="color:#15803D;font-weight:800;background:#DCFCE7;padding:2px 8px;border-radius:6px;">${p.ownership_type || p.ownershipType || 'INDIVIDUAL_100'}</span>
+        <span>📍 Survey #${p.survey_number || 'N/A'}${p.subdivision_number ? ' / ' + p.subdivision_number : ''}</span>
+        <span style="color:${p.geo_json ? '#15803D' : '#D97706'};font-weight:800;background:${p.geo_json ? '#DCFCE7' : '#FEF3C7'};padding:2px 8px;border-radius:6px;">${p.geo_json ? 'POLYGON AVAILABLE' : 'GEOMETRY_UNAVAILABLE'}</span>
         ` : `
         <span>📍 National Cadastral Grid (EPSG:4326)</span>
         <span style="color:#15803D;font-weight:800;background:#DCFCE7;padding:2px 8px;border-radius:6px;">ISRO / NRSC</span>

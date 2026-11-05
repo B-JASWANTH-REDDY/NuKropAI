@@ -14,6 +14,7 @@ export const AIOrchestrationQueue = new Queue('AIOrchestration', { connection: r
 
 // Import jobs
 import { handleMandiIngestion } from './jobs/mandiIngestion';
+import { ingestLandRecords } from './jobs/landSurveyIngestion';
 
 // Orchestrator Worker
 export function startOrchestrator() {
@@ -26,6 +27,8 @@ export function startOrchestrator() {
     switch(job.name) {
       case 'sync_mandi_prices':
         return await handleMandiIngestion(job.data);
+      case 'sync_land_survey_records':
+        return await ingestLandRecords(job.data.sourceCode, job.data.records, job.data.method);
       case 'sync_weather_forecast':
         // Implement weather ingestion
         return;

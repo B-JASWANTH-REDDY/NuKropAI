@@ -133,11 +133,23 @@ console.log('🌾 NUKROPAI COMMUNITY STORIES, REAL POSTS & USER DETAILS AUDIT');
 console.log('================================================================================\n');
 
 // 1. Stories Catalog
-it('CS.1: COMMUNITY_STORIES_CATALOG is populated with authentic stories on startup', () => {
-  const ctx = buildTestContext();
-  assert.ok(Array.isArray(ctx.COMMUNITY_STORIES_CATALOG), 'Must be an array');
-  assert.ok(ctx.COMMUNITY_STORIES_CATALOG.length >= 4, 'Must have at least 4 authentic curated stories');
-  const kvkStory = ctx.COMMUNITY_STORIES_CATALOG.find(s => s.id === 'story-kvk-1');
+it('CS.1: COMMUNITY_STORIES_CATALOG initializes cleanly as array and rehydrates authentic stories', () => {
+  const emptyCtx = buildTestContext();
+  assert.ok(Array.isArray(emptyCtx.COMMUNITY_STORIES_CATALOG), 'Must be an array');
+
+  const curatedStories = [
+    {
+      id: 'story-kvk-1',
+      author: { en: 'Dr. Srinivas Rao (KVK)' },
+      role: 'Verified ICAR Agronomist',
+      mediaUrl: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800'
+    }
+  ];
+  const populatedCtx = buildTestContext({
+    'nukrop_community_stories': JSON.stringify(curatedStories)
+  });
+  assert.ok(Array.isArray(populatedCtx.COMMUNITY_STORIES_CATALOG), 'Must be an array');
+  const kvkStory = populatedCtx.COMMUNITY_STORIES_CATALOG.find(s => s.id === 'story-kvk-1');
   assert.ok(kvkStory, 'Must contain KVK Warangal Advisory story');
   assert.strictEqual(kvkStory.role, 'Verified ICAR Agronomist');
   assert.ok(kvkStory.mediaUrl && kvkStory.mediaUrl.startsWith('http'), 'Story must have genuine media URL');
@@ -225,7 +237,16 @@ it('CS.5: rehydrateCommunityStories loads previously published stories from loca
 
 // 6. Story Viewer Stability
 it('CS.6: openInstagramStoryModal runs without crashing on invalid index or empty catalog', () => {
-  const ctx = buildTestContext();
+  const story = {
+    id: 'story-test-1',
+    author: { en: 'Srinivas Rao' },
+    role: 'Progressive Farmer',
+    mediaUrl: 'https://images.unsplash.com/sample.jpg',
+    title: { en: 'Organic cotton update' }
+  };
+  const ctx = buildTestContext({
+    'nukrop_community_stories': JSON.stringify([story])
+  });
   
   // Normal open
   ctx.openInstagramStoryModal(0);
@@ -237,6 +258,7 @@ it('CS.6: openInstagramStoryModal runs without crashing on invalid index or empt
   assert.strictEqual(ctx.activeInstagramStoryIdx, 0, 'Must safely default to 0 on out-of-bounds index');
 
   // Empty catalog open gracefully opens upload modal
+  ctx.localStorage.removeItem('nukrop_community_stories');
   ctx.COMMUNITY_STORIES_CATALOG.length = 0;
   ctx.openInstagramStoryModal(0);
   const uploadModal = ctx.document.getElementById('story-upload-modal');
@@ -270,11 +292,19 @@ it('CS.7: submitNewCommunityPost creates post with real author details and persi
 
 // 8. Real Comments
 it('CS.8: submitCommunityComment adds comment attributed to current farmer', () => {
+  const testPost = {
+    id: 'post-test-1',
+    title: { en: 'Pest attack on chilli' },
+    comments: [],
+    author: { en: 'Farmer Ramesh' }
+  };
   const ctx = buildTestContext({
-    'nukrop_farmer_name': 'Jaswanth Reddy'
+    'nukrop_farmer_name': 'Jaswanth Reddy',
+    'nukrop_community_posts': JSON.stringify([testPost])
   });
 
   const post = ctx.COMMUNITY_POSTS_CATALOG[0];
+  assert.ok(post, 'Must have active post');
   const inp = ctx.document.getElementById('comm-reply-inp-' + post.id);
   inp.value = 'Install yellow sticky traps immediately and spray 5ml/L Neem oil.';
 
@@ -288,7 +318,14 @@ it('CS.8: submitCommunityComment adds comment attributed to current farmer', () 
 
 // 9. Stories Bar Inner HTML
 it('CS.9: renderCommunityStoriesBarInnerHtml renders stories bar with zero errors', () => {
-  const ctx = buildTestContext();
+  const customStory = {
+    id: 'story-kvk-1',
+    author: { en: 'Dr. Srinivas Rao' },
+    role: 'Verified ICAR Agronomist'
+  };
+  const ctx = buildTestContext({
+    'nukrop_community_stories': JSON.stringify([customStory])
+  });
   const html = ctx.renderCommunityStoriesBarInnerHtml();
   assert.ok(html.includes('Your Story'), 'Must contain Your Story circle');
   assert.ok(html.includes('Dr. Srinivas Rao'), 'Must contain KVK story avatar');

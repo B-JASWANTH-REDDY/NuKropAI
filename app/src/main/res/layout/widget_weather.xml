@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_weather_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_weather_bg"
+    android:padding="14dp">
+
+    <!-- Header Row: App & Location + Provenance Badge -->
+    <LinearLayout
+        android:id="@+id/widget_weather_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_weather_brand"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🌱 NuKrop Farm Weather"
+                android:textColor="#4ADE80"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_weather_location"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Warangal Rural, Telangana"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_weather_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_badge_bg"
+            android:paddingStart="8dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="3dp"
+            android:text="⚡ LIVE"
+            android:textColor="#22C55E"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Main Temp & Spray Condition Row -->
+    <LinearLayout
+        android:id="@+id/widget_weather_center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_weather_header"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_weather_temp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="27°C"
+            android:textColor="#F8FAFC"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_weather_condition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="☀️ Spray Window: SAFE"
+                android:textColor="#86EFAC"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_weather_hilo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="H: 31°C · L: 21°C"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Agronomic Factors: Humidity, Rain, Wind -->
+    <LinearLayout
+        android:id="@+id/widget_weather_factors"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_weather_center"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_weather_humidity"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="💧 71%"
+            android:textColor="#CBD5E1"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_weather_rain"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🌧️ 0 mm"
+            android:textColor="#CBD5E1"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_weather_wind"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="💨 9 km/h"
+            android:textColor="#CBD5E1"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Footer: Provenance & Sync Status -->
+    <TextView
+        android:id="@+id/widget_weather_updated"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="Open-Meteo API · Updated just now · Tap to open"
+        android:textColor="#64748B"
+        android:textSize="9.5sp" />
+
+</RelativeLayout>

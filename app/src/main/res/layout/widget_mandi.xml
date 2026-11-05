@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_mandi_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_mandi_bg"
+    android:padding="14dp">
+
+    <!-- Header Row: Brand & APMC Market + Provenance Badge -->
+    <LinearLayout
+        android:id="@+id/widget_mandi_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_mandi_brand"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📊 NuKrop Mandi Rates"
+                android:textColor="#34D399"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_mandi_market"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Warangal APMC, Telangana"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_mandi_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_badge_bg"
+            android:paddingStart="8dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="3dp"
+            android:text="🏛️ AGMARKNET"
+            android:textColor="#22C55E"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Crop Name & Modal Price Row -->
+    <LinearLayout
+        android:id="@+id/widget_mandi_center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_mandi_header"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_mandi_crop"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Cotton (Kapas)"
+                android:textColor="#F8FAFC"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_mandi_variety"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Variety: Medium Staple"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_mandi_price"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="₹7,480"
+                android:textColor="#4ADE80"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_mandi_unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="/ quintal"
+                android:textColor="#A7F3D0"
+                android:textSize="10sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Price Range & Daily Arrivals -->
+    <LinearLayout
+        android:id="@+id/widget_mandi_details"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_mandi_center"
+        android:layout_marginTop="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_mandi_range"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="📊 Range: ₹7,100 - ₹7,650"
+            android:textColor="#CBD5E1"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_mandi_arrivals"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🚜 2,400 Qtl"
+            android:textColor="#CBD5E1"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Footer: Reported Date & Interaction Hint -->
+    <TextView
+        android:id="@+id/widget_mandi_updated"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="Agmarknet DMI · Trade Date: 04/11/2026 · Tap to explore"
+        android:textColor="#64748B"
+        android:textSize="9.5sp" />
+
+</RelativeLayout>

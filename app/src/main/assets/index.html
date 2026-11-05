@@ -21537,6 +21537,9 @@ function renderMandiCardsHtml() {
     </div>
   ` : '';
 
+  if (typeof syncMandiToAndroidWidget === 'function' && list.length > 0) {
+    syncMandiToAndroidWidget(list[0]);
+  }
   return cropHeaderBanner + list.map(item => `
     <div class="m3-card" style="padding:14px;margin-bottom:12px;border:1px solid #E2ECE2;box-shadow:0 3px 12px -2px rgba(15,23,42,0.06);">
       <!-- Header: Icon, Crop Name & APMC -->
@@ -21980,6 +21983,7 @@ let liveWeather = {
   lastUpdated: null,
   timezone: 'Asia/Kolkata'
 };
+window.liveWeather = liveWeather;
 
 
 
@@ -22088,6 +22092,78 @@ function getWeatherIllustrationHtml(w) {
     `;
   }
 }
+
+// ── NEUTRAL AVATAR & INITIALS SYSTEM (NO FAKE FACES) ──
+function getNeutralInitials(name) {
+  if (!name || typeof name !== 'string') return '👤';
+  const clean = name.trim();
+  if (!clean) return '👤';
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return clean.slice(0, 2).toUpperCase();
+}
+window.getNeutralInitials = getNeutralInitials;
+
+// ── NATIVE ANDROID WIDGET BRIDGE (WEATHER & MANDI) ──
+function syncWeatherToAndroidWidget(data) {
+  try {
+    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateWeatherWidget === 'function') {
+      const w = data || liveWeather;
+      const locStr = w.locationName ? (w.locationName[currentLang] || w.locationName.en || 'Warangal Rural, Telangana') : 'Warangal Rural, Telangana';
+      const spray = (w.spraySafety || 'SAFE') === 'SAFE' ? '☀️ Spray Window: SAFE' : '⚠️ Spray Warning: Unfavorable';
+      const hiloStr = (w.high && w.low) ? `H: ${w.high} · L: ${w.low}` : (w.tempHigh && w.tempLow ? `H: ${w.tempHigh} · L: ${w.tempLow}` : 'H: 31°C · L: 21°C');
+      window.AndroidBridge.updateWeatherWidget(JSON.stringify({
+        location: locStr,
+        temp: w.temp || '27°C',
+        condition: spray,
+        hilo: hiloStr,
+        humidity: w.humidity ? `💧 ${w.humidity}%` : '💧 71%',
+        rainfall: (w.rainfall || w.precipitation) ? `🌧️ ${w.rainfall || w.precipitation}` : '🌧️ 0 mm',
+        wind: (w.wind || w.windSpeed) ? `💨 ${w.wind || w.windSpeed}` : '💨 9 km/h',
+        status: w.status || 'LIVE',
+        updated: `Open-Meteo API · ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} · Tap to open`,
+        lat: (window.farmerCurrentGps && window.farmerCurrentGps[0]) || 17.9689,
+        lon: (window.farmerCurrentGps && window.farmerCurrentGps[1]) || 79.5941
+      }));
+    }
+  } catch (e) {
+    console.warn('Weather widget sync error:', e);
+  }
+}
+window.syncWeatherToAndroidWidget = syncWeatherToAndroidWidget;
+
+function syncMandiToAndroidWidget(topItem) {
+  try {
+    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.updateMandiWidget === 'function') {
+      if (!topItem) return;
+      const mName = (topItem.mandi && (topItem.mandi[currentLang] || topItem.mandi.en)) || topItem.market || 'Warangal APMC';
+      const sName = (topItem.state && (topItem.state[currentLang] || topItem.state.en)) || topItem.state || 'Telangana';
+      const cName = (topItem.cropName && (topItem.cropName[currentLang] || topItem.cropName.en)) || topItem.commodity || 'Cotton (Kapas)';
+      const vName = (topItem.variety && (topItem.variety[currentLang] || topItem.variety.en)) || topItem.variety || 'Medium Staple';
+      const pVal = topItem.modalPrice || topItem.modal_price || 7480;
+      const minVal = topItem.minPrice || topItem.min_price || Math.round(pVal * 0.95);
+      const maxVal = topItem.maxPrice || topItem.max_price || Math.round(pVal * 1.05);
+      const arrVal = topItem.arrivals || 2400;
+
+      window.AndroidBridge.updateMandiWidget(JSON.stringify({
+        market: `${mName}, ${sName}`,
+        crop: cName,
+        variety: `Variety: ${vName}`,
+        price: `₹${Number(pVal).toLocaleString('en-IN')}`,
+        unit: topItem.unit || '/ quintal',
+        range: `📊 Range: ₹${Number(minVal).toLocaleString('en-IN')} - ₹${Number(maxVal).toLocaleString('en-IN')}`,
+        arrivals: `🚜 ${Number(arrVal).toLocaleString('en-IN')} Qtl`,
+        badge: topItem.badge || '🏛️ AGMARKNET',
+        updated: `Agmarknet DMI · ${topItem.tradeDate || '04/11/2026'} · Tap to explore`
+      }));
+    }
+  } catch (e) {
+    console.warn('Mandi widget sync error:', e);
+  }
+}
+window.syncMandiToAndroidWidget = syncMandiToAndroidWidget;
 
 function refreshWeatherData() {
   const icon = document.getElementById('w-refresh-icon');
@@ -22323,7 +22399,7 @@ function renderCommunityStoriesBarInnerHtml() {
     <div onclick="${hasUserStory ? 'openInstagramStoryModal(0)' : 'openStoryUploadModal()'}" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:66px;text-align:center;">
       <div style="position:relative;width:52px;height:52px;border-radius:50%;padding:${hasUserStory ? '2px' : '0'};background:${hasUserStory ? 'linear-gradient(45deg, #16A34A, #22C55E, #86EFAC)' : '#F1F5F9'};border:${hasUserStory ? 'none' : '1.5px dashed #16A34A'};display:flex;align-items:center;justify-content:center;box-shadow:${hasUserStory ? '0 3px 10px rgba(22,163,74,0.3)' : 'none'};">
         <div style="width:100%;height:100%;border-radius:50%;background:#DCFCE7;display:flex;align-items:center;justify-content:center;font-size:22px;border:${hasUserStory ? '2px solid #FFFFFF' : 'none'};overflow:hidden;">
-          ${userAvatar ? `<img src="${userAvatar}" style="width:100%;height:100%;object-fit:cover;">` : `<span>👨‍🌾</span>`}
+          ${userAvatar ? `<img src="${userAvatar}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(localStorage.getItem('nukrop_farmer_name') || 'You') : '👤'}</div>`}
         </div>
         <span onclick="event.stopPropagation();openStoryUploadModal();" title="Add Story" style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;background:#16A34A;color:#FFFFFF;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;border:2px solid #FFFFFF;box-shadow:0 2px 4px rgba(0,0,0,0.2);">+</span>
       </div>
@@ -22337,7 +22413,7 @@ function renderCommunityStoriesBarInnerHtml() {
       <div onclick="openInstagramStoryModal(${idx})" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:66px;text-align:center;">
         <div class="story-avatar-ring unviewed">
           <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid #FFFFFF;background:#DCFCE7;">
-            ${s.avatarUrl ? `<img src="${s.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="font-size:24px;text-align:center;line-height:48px;">${s.avatar || '👨‍🌾'}</div>`}
+            ${s.avatarUrl ? `<img src="${s.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(authorName) : '👤'}</div>`}
           </div>
         </div>
         <span style="font-size:10px;font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px;">
@@ -23645,7 +23721,7 @@ function generateCommunityFeedHtml(posts) {
           <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
             <div class="story-avatar-ring unviewed" style="padding:2px;">
               <div style="width:40px;height:40px;border-radius:50%;overflow:hidden;border:1.5px solid #FFFFFF;background:#DCFCE7;">
-                ${p.avatarUrl ? `<img src="${p.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="font-size:22px;text-align:center;line-height:40px;">${p.avatar || '👨‍🌾'}</div>`}
+                ${p.avatarUrl ? `<img src="${p.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(authorName) : '👤'}</div>`}
               </div>
             </div>
             <div style="min-width:0;flex:1;">
@@ -24138,6 +24214,9 @@ function executeSignOutToLogin(preferredRole = null) {
     localStorage.removeItem('nukrop_onboarding_plantix_completed');
     localStorage.removeItem('nukrop_onboarding_completed');
     if (typeof NuKropSWR !== 'undefined' && typeof NuKropSWR.invalidateUserCache === 'function') NuKropSWR.invalidateUserCache();
+    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.clearWidgetData === 'function') {
+      window.AndroidBridge.clearWidgetData();
+    }
   } catch(e) {}
 
   if (typeof currentSupabaseSession !== 'undefined') currentSupabaseSession = null;
@@ -25724,6 +25803,9 @@ window.onNativeLocationReceived = async function(lat, lon) {
       if (tempEl) tempEl.textContent = liveWeather.temp;
     }
 
+    if (typeof syncWeatherToAndroidWidget === 'function') {
+      syncWeatherToAndroidWidget(liveWeather);
+    }
     showPushNotificationToast({
       title: '📍 ' + TL('Exact GPS Location Acquired', 'ఖచ్చితమైన GPS లొకేషన్ నమోదైంది', 'सटीक जीपीएस स्थान प्राप्त'),
       msg: (liveWeather.locationName[currentLang] || liveWeather.locationName.en) + ' · ' + liveWeather.temp,
@@ -26253,6 +26335,9 @@ async function fetchRealLocationAndWeather() {
               try {
                 localStorage.setItem('nukrop_cached_weather', JSON.stringify(liveWeather));
               } catch(e) {}
+              if (typeof syncWeatherToAndroidWidget === 'function') {
+                syncWeatherToAndroidWidget(liveWeather);
+              }
             }
           } catch(errW) {
             console.warn('Weather fetch fallback:', errW);

@@ -30,6 +30,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.widget.WeatherWidgetProvider
+import com.example.widget.MandiWidgetProvider
+import com.example.widget.WidgetUpdateWorker
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 
@@ -285,6 +289,76 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun isDriverTrackingActive(): Boolean {
             return DriverLocationService.isRunning
+        }
+
+        @JavascriptInterface
+        fun updateWeatherWidget(weatherJson: String) {
+            runOnUiThread {
+                try {
+                    val obj = JSONObject(weatherJson)
+                    val prefs = getSharedPreferences(WeatherWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().apply {
+                        putBoolean("is_logged_out", false)
+                        putString("location", obj.optString("location", "Warangal Rural, Telangana"))
+                        putString("temp", obj.optString("temp", "27°C"))
+                        putString("condition", obj.optString("condition", "☀️ Spray Window: SAFE"))
+                        putString("hilo", obj.optString("hilo", "H: 31°C · L: 21°C"))
+                        putString("humidity", obj.optString("humidity", "💧 71%"))
+                        putString("rainfall", obj.optString("rainfall", "🌧️ 0 mm"))
+                        putString("wind", obj.optString("wind", "💨 9 km/h"))
+                        putString("status", obj.optString("status", "LIVE"))
+                        putString("updated", obj.optString("updated", "Open-Meteo API · Updated just now · Tap to open"))
+                        if (obj.has("lat")) putFloat("lat", obj.optDouble("lat", 17.9689).toFloat())
+                        if (obj.has("lon")) putFloat("lon", obj.optDouble("lon", 79.5941).toFloat())
+                        apply()
+                    }
+                    WeatherWidgetProvider.updateAllWidgets(this@MainActivity)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropWidget", "Failed to update weather widget: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun updateMandiWidget(mandiJson: String) {
+            runOnUiThread {
+                try {
+                    val obj = JSONObject(mandiJson)
+                    val prefs = getSharedPreferences(MandiWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().apply {
+                        putBoolean("is_logged_out", false)
+                        putString("market", obj.optString("market", "Warangal APMC, Telangana"))
+                        putString("crop", obj.optString("crop", "Cotton (Kapas)"))
+                        putString("variety", obj.optString("variety", "Variety: Medium Staple"))
+                        putString("price", obj.optString("price", "₹7,480"))
+                        putString("unit", obj.optString("unit", "/ quintal"))
+                        putString("range", obj.optString("range", "📊 Range: ₹7,100 - ₹7,650"))
+                        putString("arrivals", obj.optString("arrivals", "🚜 2,400 Qtl"))
+                        putString("badge", obj.optString("badge", "🏛️ AGMARKNET"))
+                        putString("updated", obj.optString("updated", "Agmarknet DMI · Trade Date: 04/11/2026 · Tap to explore"))
+                        apply()
+                    }
+                    MandiWidgetProvider.updateAllWidgets(this@MainActivity)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropWidget", "Failed to update mandi widget: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun clearWidgetData() {
+            runOnUiThread {
+                try {
+                    val weatherPrefs = getSharedPreferences(WeatherWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    weatherPrefs.edit().putBoolean("is_logged_out", true).apply()
+                    val mandiPrefs = getSharedPreferences(MandiWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    mandiPrefs.edit().putBoolean("is_logged_out", true).apply()
+                    WeatherWidgetProvider.updateAllWidgets(this@MainActivity)
+                    MandiWidgetProvider.updateAllWidgets(this@MainActivity)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropWidget", "Failed to clear widget data: ${e.message}")
+                }
+            }
         }
 
         @JavascriptInterface
@@ -768,21 +842,38 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        // Schedule Android Background Widget Updates
+        WidgetUpdateWorker.schedulePeriodicUpdates(applicationContext)
+
         // Check for deep link on cold launch
-        handleAuthDeepLink(intent)
+        handleAppDeepLinks(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleAuthDeepLink(intent)
+        handleAppDeepLinks(intent)
     }
 
-    private fun handleAuthDeepLink(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme == "nukrop" && uri.host == "auth-callback") {
-            val fullUrl = uri.toString()
-            webView.evaluateJavascript("if (typeof handleAuthCallback === 'function') handleAuthCallback('$fullUrl');", null)
+    private fun handleAppDeepLinks(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null) {
+            if (uri.scheme == "nukrop" && uri.host == "auth-callback") {
+                val fullUrl = uri.toString()
+                webView.evaluateJavascript("if (typeof handleAuthCallback === 'function') handleAuthCallback('$fullUrl');", null)
+                return
+            }
+            if (uri.scheme == "nukrop" && uri.host == "screen") {
+                val targetScreen = uri.path?.removePrefix("/") ?: "home"
+                val mappedScreen = if (targetScreen == "weather") "home" else targetScreen
+                webView.evaluateJavascript("if (typeof openScreen === 'function') openScreen('$mappedScreen');", null)
+                return
+            }
+        }
+        val extraTarget = intent?.getStringExtra("EXTRA_TARGET_SCREEN")
+        if (!extraTarget.isNullOrBlank()) {
+            val mappedScreen = if (extraTarget == "weather") "home" else extraTarget
+            webView.evaluateJavascript("if (typeof openScreen === 'function') openScreen('$mappedScreen');", null)
         }
     }
 

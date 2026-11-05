@@ -75,7 +75,45 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nukrop" android:host="auth-callback" />
             </intent-filter>
+
+            <!-- Deep link for Android Widget Screen Navigation -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nukrop" android:host="screen" />
+            </intent-filter>
         </activity>
+
+        <!-- Native Weather AppWidget Provider -->
+        <receiver
+            android:name=".widget.WeatherWidgetProvider"
+            android:exported="true"
+            android:label="NuKrop Weather">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.widget.ACTION_WEATHER_UPDATED" />
+                <action android:name="com.example.widget.ACTION_LOGOUT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weather_widget_info" />
+        </receiver>
+
+        <!-- Native Mandi Bhav AppWidget Provider -->
+        <receiver
+            android:name=".widget.MandiWidgetProvider"
+            android:exported="true"
+            android:label="NuKrop Mandi Bhav">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.widget.ACTION_MANDI_UPDATED" />
+                <action android:name="com.example.widget.ACTION_LOGOUT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/mandi_widget_info" />
+        </receiver>
 
         <!-- Foreground Service for Driver GPS Tracking -->
         <service

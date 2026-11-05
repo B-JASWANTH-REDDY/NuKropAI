@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { describe, it, expect, createMockStorage } = require('./test_harness');
+const { describe, it, expect, createMockStorage, globalContext } = require('./test_harness');
 
 const indexPath = path.resolve(__dirname, '../app/src/main/assets/index.html');
 const emulatorPath = path.resolve(__dirname, '../nukrop_emulator.html');
@@ -237,6 +237,94 @@ describe('Mandi Strict Location Lock — Dynamic Isolation & Anti-Leakage', () =
     ctx.selectMandiState('all');
     expect(ind.innerHTML.includes('All India Mandis')).toBe(true);
   });
+
+  it('M.D.9: Popular Crop Pill Cotton in Telangana returns all 4 Telangana Cotton records and 0 other crops', () => {
+    const ctx = buildMandiContext();
+    ctx.selectMandiState('Telangana');
+    ctx.selectPopularMandiCrop('cotton');
+
+    const rates = ctx.getFilteredMandiRates();
+    expect(rates.length).toBe(4);
+    rates.forEach(item => {
+      expect(item.state.en.toLowerCase()).toBe('telangana');
+      const isCotton = (item.cropKey && item.cropKey.toLowerCase().includes('cotton')) ||
+                       (item.cropName && item.cropName.en && item.cropName.en.toLowerCase().includes('cotton'));
+      expect(isCotton).toBe(true);
+    });
+
+    // Check popular crops HTML rendering gives active style
+    const container = ctx.document.getElementById('mandi-popular-crops-container');
+    expect(container.innerHTML.includes('Cotton')).toBe(true);
+    expect(container.innerHTML.includes('#1B5E20')).toBe(true);
+  });
+
+  it('M.D.10: Popular Crop Pill Cotton with All-India state returns all 9 Cotton records nationwide', () => {
+    const ctx = buildMandiContext();
+    ctx.selectMandiState('all');
+    ctx.selectPopularMandiCrop('cotton');
+
+    const rates = ctx.getFilteredMandiRates();
+    expect(rates.length).toBe(9);
+    rates.forEach(item => {
+      const isCotton = (item.cropKey && item.cropKey.toLowerCase().includes('cotton')) ||
+                       (item.cropName && item.cropName.en && item.cropName.en.toLowerCase().includes('cotton'));
+      expect(isCotton).toBe(true);
+    });
+  });
+
+  it('M.D.11: Clicking active Cotton pill toggles back to "all" and restores all state records', () => {
+    const ctx = buildMandiContext();
+    ctx.selectMandiState('Telangana');
+    
+    // First click -> selects cotton
+    ctx.selectPopularMandiCrop('cotton');
+    expect(ctx.mandiSelectedPopular).toBe('cotton');
+    expect(ctx.getFilteredMandiRates().length).toBe(4);
+
+    // Second click on same pill -> toggles back to 'all'
+    ctx.selectPopularMandiCrop('cotton');
+    expect(ctx.mandiSelectedPopular).toBe('all');
+    const allTsRates = ctx.getFilteredMandiRates();
+    expect(allTsRates.length > 4).toBe(true);
+  });
+
+  it('M.D.12: Multilingual Crop Search: "పత్తి" (Telugu) and "कपास" (Hindi) match all Cotton records', () => {
+    const ctx = buildMandiContext();
+    ctx.selectMandiState('Telangana');
+
+    // Telugu search
+    ctx.mandiSearchCrop = 'పత్తి';
+    ctx.window.mandiSearchCrop = 'పత్తి';
+    const teluguRates = ctx.getFilteredMandiRates();
+    expect(teluguRates.length).toBe(4);
+
+    // Hindi search
+    ctx.mandiSearchCrop = 'कपास';
+    ctx.window.mandiSearchCrop = 'कपास';
+    const hindiRates = ctx.getFilteredMandiRates();
+    expect(hindiRates.length).toBe(4);
+
+    // English search
+    ctx.mandiSearchCrop = 'cotton';
+    ctx.window.mandiSearchCrop = 'cotton';
+    const englishRates = ctx.getFilteredMandiRates();
+    expect(englishRates.length).toBe(4);
+  });
+
+  it('M.D.13: clearMandiCropSearch and resetMandiCropFilter restore crop filter and update UI', () => {
+    const ctx = buildMandiContext();
+    ctx.selectMandiState('Telangana');
+    ctx.selectPopularMandiCrop('cotton');
+    expect(ctx.getFilteredMandiRates().length).toBe(4);
+
+    // Reset crop filter
+    ctx.resetMandiCropFilter();
+    expect(ctx.mandiSelectedPopular).toBe('all');
+    expect(ctx.window.mandiSelectedPopular).toBe('all');
+    expect(ctx.mandiSearchCrop).toBe('');
+    expect(ctx.window.mandiSearchCrop).toBe('');
+    expect(ctx.getFilteredMandiRates().length > 4).toBe(true);
+  });
 });
 
 // ============================================================================
@@ -410,3 +498,7 @@ describe('Mandi Real Price Trends, Real Price Alerts & Notification Integrity', 
     });
   });
 });
+
+if (require.main === module) {
+  globalContext.run();
+}

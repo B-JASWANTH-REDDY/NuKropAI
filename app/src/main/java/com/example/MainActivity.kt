@@ -248,6 +248,46 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun startDriverTrackingService(driverId: String, driverName: String, vehiclePlate: String, vehicleType: String): Boolean {
+            return try {
+                if (driverId.isBlank() || vehiclePlate.isBlank()) return false
+                val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                    action = DriverLocationService.ACTION_START_TRACKING
+                    putExtra(DriverLocationService.EXTRA_DRIVER_ID, driverId)
+                    putExtra(DriverLocationService.EXTRA_DRIVER_NAME, driverName)
+                    putExtra(DriverLocationService.EXTRA_VEHICLE_PLATE, vehiclePlate)
+                    putExtra(DriverLocationService.EXTRA_VEHICLE_TYPE, vehicleType)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    this@MainActivity.startForegroundService(intent)
+                } else {
+                    this@MainActivity.startService(intent)
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun stopDriverTrackingService(): Boolean {
+            return try {
+                val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                    action = DriverLocationService.ACTION_STOP_TRACKING
+                }
+                this@MainActivity.startService(intent)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun isDriverTrackingActive(): Boolean {
+            return DriverLocationService.isRunning
+        }
+
+        @JavascriptInterface
         fun getDeviceAccountsJson(): String {
             return try {
                 if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.GET_ACCOUNTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {

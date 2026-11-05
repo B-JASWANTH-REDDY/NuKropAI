@@ -30062,104 +30062,59 @@ var selectedGramhaulPrice = 380;
 var selectedGramhaulTier = 1;
 const GRAMHAUL_TIER_AVAILABLE_VEHICLES = {
   1: {
-    id: 'TRK-T1-4491',
+    id: 'TRK-T1',
     name: 'Tata Ace Gold (1.5T)',
     tierName: 'Tata Ace Gold (1.5 Ton)',
     img: 'images/trucks/tata_ace.png',
-    driver: 'Suresh Yadav',
-    driverName: 'Suresh Yadav',
-    phone: '',
-    driverPhone: '',
-    plate: 'TS 03 UB 4491',
-    rating: '★ 4.9',
-    coords: [17.3940, 78.4850],
-    dist: '400m away (2 min)',
-    distStr: '400m away (2 min)',
     desc: 'Up to 25 Qtl · 50 Sacks · Chota Hathi',
     color: '#0284C7',
     icon: '🚚',
-    etaMins: 2,
-    otp: '4491'
+    category: 'MINI_TRUCK',
+    capacityTonnes: 1.5
   },
   2: {
-    id: 'TRK-T2-8821',
+    id: 'TRK-T2',
     name: 'Mahindra Bolero Maxi (2.5T)',
     tierName: 'Mahindra Bolero Maxi (2.5 Ton)',
     img: 'images/trucks/bolero_maxi.png',
-    driver: 'K. Anjaiah',
-    driverName: 'K. Anjaiah',
-    phone: '',
-    driverPhone: '',
-    plate: 'TS 09 XY 8821',
-    rating: '★ 4.8',
-    coords: [17.3970, 78.4790],
-    dist: '700m away (4 min)',
-    distStr: '700m away (4 min)',
     desc: 'Up to 50 Qtl · 100 Sacks · Heavy Produce',
     color: '#DC2626',
     icon: '🛻',
-    etaMins: 4,
-    otp: '8821'
+    category: 'PICKUP',
+    capacityTonnes: 2.5
   },
   3: {
-    id: 'TRK-T3-1102',
+    id: 'TRK-T3',
     name: 'Ashok Leyland Dost+ (3.0T)',
     tierName: 'Ashok Leyland Dost+ (3.0 Ton)',
     img: 'images/trucks/ashok_leyland_dost.png',
-    driver: 'Md. Ismail Khan',
-    driverName: 'Md. Ismail Khan',
-    phone: '',
-    driverPhone: '',
-    plate: 'TS 08 AB 1102',
-    rating: '★ 4.9',
-    coords: [17.3890, 78.4950],
-    dist: '1.1 km away (5 min)',
-    distStr: '1.1 km away (5 min)',
     desc: 'Up to 60 Qtl · 120 Sacks · Fast Haul',
     color: '#16A34A',
     icon: '🚚',
-    etaMins: 5,
-    otp: '1102'
+    category: 'SMALL_GOODS',
+    capacityTonnes: 3.0
   },
   4: {
-    id: 'TRK-T4-5512',
+    id: 'TRK-T4',
     name: 'Tata 407 Gold SFC (4.5T)',
     tierName: 'Tata 407 Gold SFC (4.5 Ton)',
     img: 'images/trucks/tata_407.png',
-    driver: 'Ramesh Yadav',
-    driverName: 'Ramesh Yadav',
-    phone: '',
-    driverPhone: '',
-    plate: 'TS 03 TA 5512',
-    rating: '★ 4.9',
-    coords: [17.3910, 78.5100],
-    dist: '1.8 km away (8 min)',
-    distStr: '1.8 km away (8 min)',
     desc: 'Up to 85 Qtl · 170 Sacks · Mandi Legend',
     color: '#D97706',
     icon: '🚛',
-    etaMins: 8,
-    otp: '5512'
+    category: 'MEDIUM_GOODS',
+    capacityTonnes: 4.5
   },
   5: {
-    id: 'TRK-T5-9901',
+    id: 'TRK-T5',
     name: 'Eicher Pro 14ft (5.5T)',
     tierName: 'Eicher Pro 14ft (5.5 Ton)',
     img: 'images/trucks/eicher_pro.png',
-    driver: 'S. Venkat',
-    driverName: 'S. Venkat',
-    phone: '',
-    driverPhone: '',
-    plate: 'TS 07 EA 9901',
-    rating: '★ 4.9',
-    coords: [17.4020, 78.5300],
-    dist: '2.4 km away (11 min)',
-    distStr: '2.4 km away (11 min)',
     desc: 'Up to 120 Qtl · 240 Sacks · Bulk Freight',
     color: '#2563EB',
     icon: '🚛',
-    etaMins: 11,
-    otp: '9901'
+    category: 'HEAVY_GOODS',
+    capacityTonnes: 5.5
   }
 };
 
@@ -34239,14 +34194,40 @@ function toggleGhDriverOnline() {
   const cur = (localStorage.getItem('gh_driver_online') || 'true') === 'true';
   const next = !cur;
   localStorage.setItem('gh_driver_online', next ? 'true' : 'false');
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
 
   if (next) {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy || 5.0;
+        fetch('/api/v1/dispatch/duty', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+          body: JSON.stringify({ isOnDuty: true, lat, lng, accuracy })
+        }).catch(() => {});
+      });
+    } else {
+      fetch('/api/v1/dispatch/duty', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ isOnDuty: true })
+      }).catch(() => {});
+    }
+
     startDriverRealGPSWatch();
     initDriverRealtimeDispatchListener();
     if (typeof showLuxuryToast === 'function') {
       showLuxuryToast('🟢 You are ON DUTY · Real GPS Live & 5km Haul Radar Active', 'success');
     }
   } else {
+    fetch('/api/v1/dispatch/duty', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ isOnDuty: false })
+    }).catch(() => {});
+
     stopDriverRealGPSWatch();
     const incomingModal = document.getElementById('driver-incoming-haul-modal');
     if (incomingModal) incomingModal.remove();
@@ -35904,7 +35885,7 @@ async function driverVerifyStartTripOtp(providedOtp) {
       }
     } catch(e) {}
   }
-  if (!expectedOtp) expectedOtp = '4491';
+  if (!expectedOtp) expectedOtp = String(activeTrip.start_otp || activeTrip.otp || '');
 
   if (inputOtp !== expectedOtp) {
     if (errEl) {
@@ -36694,7 +36675,7 @@ function confirmGramhaulBooking(tierId) {
 
 function updateGramhaulActiveCount(count) {
   const el = document.getElementById('gramhaul-active-count-badge');
-  if (el) el.textContent = String(count || 4);
+  if (el) el.textContent = String(count !== undefined && count !== null ? count : 0);
 }
 
 function updateGramhaulLocHUD(locName) {
@@ -41151,14 +41132,9 @@ function executeRealGramhaulDispatch() {
   const tier = (typeof selectedGramhaulTier !== 'undefined' && selectedGramhaulTier) ? selectedGramhaulTier : 1;
   const v = (typeof GRAMHAUL_TIER_AVAILABLE_VEHICLES !== 'undefined' && GRAMHAUL_TIER_AVAILABLE_VEHICLES[tier]) ? GRAMHAUL_TIER_AVAILABLE_VEHICLES[tier] : {
     name: 'Tata Ace Gold (1.5T)',
-    driver: 'Suresh Yadav',
-    phone: '',
-    plate: 'TS 03 UB 4491',
-    rating: '★ 4.9',
-    coords: [17.3940, 78.4850],
     color: '#0284C7',
-    etaMins: 2,
-    otp: '4491'
+    icon: '🚚',
+    category: 'MINI_TRUCK'
   };
   const fare = (typeof selectedGramhaulPrice !== 'undefined' && selectedGramhaulPrice) ? selectedGramhaulPrice : 380;
   const bookId = 'GH-' + Math.floor(100000 + Math.random() * 900000);
@@ -41168,6 +41144,7 @@ function executeRealGramhaulDispatch() {
     : (window.farmerCurrentGps || [17.3850, 78.4867]);
   const farmAddress = currentGramhaulFarmAddress || localStorage.getItem('user_live_address') || 'My Farm Location';
 
+  // Secure 4-digit numeric OTP generated for the farmer
   const startOtp = String(Math.floor(1000 + Math.random() * 9000));
 
   const activeTrip = {
@@ -41184,7 +41161,7 @@ function executeRealGramhaulDispatch() {
     fare: fare,
     tier: selectedGramhaulTier || 1,
     vehicle: v.name,
-    driverColor: v.color,
+    driverColor: v.color || '#0284C7',
     farmerName: localStorage.getItem('nukrop_farmer_name') || 'B. Jaswanth Reddy',
     farmerPhone: localStorage.getItem('nukrop_farmer_phone') || '',
     status: 'SEARCHING',
@@ -41196,7 +41173,39 @@ function executeRealGramhaulDispatch() {
   localStorage.setItem('nukrop_active_trip', JSON.stringify(activeTrip));
   window.activeTrip = activeTrip;
 
-  // Insert into Supabase haul_bookings with status 'SEARCHING' and start_otp
+  // Real Fastify API booking dispatch with Idempotency Key
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+  const idempotencyKey = typeof generateIdempotencyKey === 'function' ? generateIdempotencyKey('booking') : ('booking_' + Date.now());
+  fetch('/api/v1/dispatch/book', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+    },
+    body: JSON.stringify({
+      pickupVillage: activeTrip.pickup,
+      destinationMandi: activeTrip.mandi,
+      cropName: activeTrip.crop,
+      loadQuintals: parseFloat(sacks) || 40,
+      agreedFare: fare,
+      vehicleType: v.name,
+      vehicleCategory: v.category || 'MINI_TRUCK',
+      pickupLat: activeTrip.pickupLat,
+      pickupLng: activeTrip.pickupLon,
+      dropoffLat: activeTrip.dropLat,
+      dropoffLng: activeTrip.dropLon
+    })
+  }).then(r => r.json()).then(res => {
+    if (res && res.startOtp) {
+      activeTrip.start_otp = res.startOtp;
+      activeTrip.otp = res.startOtp;
+      localStorage.setItem('nukrop_active_trip', JSON.stringify(activeTrip));
+      window.activeTrip = activeTrip;
+    }
+  }).catch(() => {});
+
+  // Sync with Supabase haul_bookings & driver broadcast if configured
   if (typeof sbClient !== 'undefined' && sbClient) {
     sbClient.from('haul_bookings').insert([{
       id: bookId,
@@ -41218,7 +41227,6 @@ function executeRealGramhaulDispatch() {
       if (error) console.warn('Supabase booking notice:', error.message);
     });
 
-    // Realtime broadcast to all online drivers
     sbClient.channel('driver-tracking').send({
       type: 'broadcast',
       event: 'new_haul_booking',
@@ -41909,7 +41917,6 @@ function cancelAndReturnToGramhaul() {
     clearTimeout(trackingSearchTimeout);
     trackingSearchTimeout = null;
   }
-  // Realtime tracking active
   if (window.trackingRouteGlow && gramhaulTrackingMap) {
     try { gramhaulTrackingMap.removeLayer(window.trackingRouteGlow); } catch(e) {}
     window.trackingRouteGlow = null;
@@ -41918,6 +41925,18 @@ function cancelAndReturnToGramhaul() {
     try { window.ghRealtimeTrackingSub.unsubscribe(); } catch(e) {}
     window.ghRealtimeTrackingSub = null;
   }
+
+  let activeTrip = null;
+  try { activeTrip = JSON.parse(localStorage.getItem('nukrop_active_trip') || 'null'); } catch(e) {}
+  if (activeTrip && (activeTrip.id || activeTrip.booking_id)) {
+    const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+    fetch('/api/v1/dispatch/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ bookingId: activeTrip.id || activeTrip.booking_id, reason: 'Farmer cancelled search' })
+    }).catch(() => {});
+  }
+
   localStorage.removeItem('nukrop_active_trip');
   openScreen('gramhaul');
   if (typeof showLuxuryToast === 'function') {
@@ -41931,7 +41950,6 @@ function cancelActiveHaulTripAndExit() {
       clearTimeout(trackingSearchTimeout);
       trackingSearchTimeout = null;
     }
-    // Realtime tracking active
     if (window.trackingRouteGlow && gramhaulTrackingMap) {
       try { gramhaulTrackingMap.removeLayer(window.trackingRouteGlow); } catch(e) {}
       window.trackingRouteGlow = null;
@@ -41940,6 +41958,18 @@ function cancelActiveHaulTripAndExit() {
       try { window.ghRealtimeTrackingSub.unsubscribe(); } catch(e) {}
       window.ghRealtimeTrackingSub = null;
     }
+
+    let activeTrip = null;
+    try { activeTrip = JSON.parse(localStorage.getItem('nukrop_active_trip') || 'null'); } catch(e) {}
+    if (activeTrip && (activeTrip.id || activeTrip.booking_id)) {
+      const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+      fetch('/api/v1/dispatch/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ bookingId: activeTrip.id || activeTrip.booking_id, reason: 'Farmer cancelled haul trip' })
+      }).catch(() => {});
+    }
+
     localStorage.removeItem('nukrop_active_trip');
     openScreen('gramhaul');
     if (typeof showLuxuryToast === 'function') {

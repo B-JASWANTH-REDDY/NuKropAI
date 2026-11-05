@@ -47,10 +47,10 @@ class DriverLocationService : Service() {
     private var locationCallback: LocationCallback? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    private var currentDriverId: String = "DRV-LIVE"
-    private var currentDriverName: String = "Verified Driver"
-    private var currentVehiclePlate: String = "AP-39-TK-1008"
-    private var currentVehicleType: String = "Tata Ace (1.5T)"
+    private var currentDriverId: String = ""
+    private var currentDriverName: String = ""
+    private var currentVehiclePlate: String = ""
+    private var currentVehicleType: String = ""
 
     companion object {
         const val CHANNEL_ID = "nukrop_driver_location_channel"
@@ -88,10 +88,16 @@ class DriverLocationService : Service() {
         }
 
         if (action == ACTION_START_TRACKING) {
-            intent?.getStringExtra(EXTRA_DRIVER_ID)?.let { if (it.isNotBlank()) currentDriverId = it }
-            intent?.getStringExtra(EXTRA_DRIVER_NAME)?.let { if (it.isNotBlank()) currentDriverName = it }
-            intent?.getStringExtra(EXTRA_VEHICLE_PLATE)?.let { if (it.isNotBlank()) currentVehiclePlate = it }
-            intent?.getStringExtra(EXTRA_VEHICLE_TYPE)?.let { if (it.isNotBlank()) currentVehicleType = it }
+            val driverId = intent?.getStringExtra(EXTRA_DRIVER_ID)
+            val vehiclePlate = intent?.getStringExtra(EXTRA_VEHICLE_PLATE)
+            if (driverId.isNullOrBlank() || vehiclePlate.isNullOrBlank()) {
+                stopTracking()
+                return START_NOT_STICKY
+            }
+            currentDriverId = driverId
+            currentVehiclePlate = vehiclePlate
+            currentDriverName = intent?.getStringExtra(EXTRA_DRIVER_NAME) ?: "Verified Driver"
+            currentVehicleType = intent?.getStringExtra(EXTRA_VEHICLE_TYPE) ?: "Tata Ace (1.5T)"
 
             startForegroundTracking()
         }

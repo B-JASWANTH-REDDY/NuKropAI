@@ -1,49 +1,126 @@
 import { FastifyInstance } from 'fastify';
 import {
   setDutyStatus,
+  getDriverMe,
+  getDriverInbox,
+  getRegisteredVehicles,
+  registerVehicle,
+  updateVehicle,
   recordLocationPing,
   getNearbyDrivers,
   createBookingRequest,
   acceptBooking,
+  rejectOffer,
+  timeoutOffer,
+  verifyBookingOtp,
+  cancelBooking,
   updateTripStatus,
-  trackBooking
+  trackBooking,
+  getChatMessages,
+  sendChatMessage,
+  getRentalInventory,
+  bookRental,
+  getMyRentals,
+  updateRentalStatus
 } from '../controllers/dispatch.controller';
 import { authenticate, requireRole } from '../middleware/auth';
 
 export default async function dispatchRoutes(fastify: FastifyInstance) {
-  // 1. Driver Duty Toggle (ON DUTY / OFF DUTY)
+  // ── 1. DRIVER DUTY & IDENTITY ──
   fastify.post('/duty', {
     preHandler: [authenticate, requireRole(['driver', 'admin'])]
   }, setDutyStatus);
 
-  // 2. Real-Time Driver GPS Location Update
+  fastify.get('/driver/me', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, getDriverMe);
+
+  fastify.get('/driver/inbox', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, getDriverInbox);
+
+  // ── 2. VEHICLE MANAGEMENT ──
+  fastify.get('/vehicles', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, getRegisteredVehicles);
+
+  fastify.post('/vehicles', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, registerVehicle);
+
+  fastify.put('/vehicles/:vehicleId', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, updateVehicle);
+
+  // ── 3. REAL-TIME GPS TELEMETRY ──
   fastify.post('/location', {
     preHandler: [authenticate, requireRole(['driver', 'admin'])]
   }, recordLocationPing);
 
-  // 3. Farmer Nearby Driver Discovery (10 km PostGIS Search)
+  // ── 4. FARMER NEARBY DRIVER DISCOVERY ──
   fastify.get('/nearby', {
     preHandler: [authenticate]
   }, getNearbyDrivers);
 
-  // 4. Create Haul Booking Request
+  // ── 5. HAUL BOOKINGS & CONCURRENCY-SAFE DISPATCH ──
   fastify.post('/book', {
     preHandler: [authenticate, requireRole(['farmer', 'admin'])]
   }, createBookingRequest);
 
-  // 5. Atomic Booking Acceptance by Driver
   fastify.post('/accept', {
     preHandler: [authenticate, requireRole(['driver', 'admin'])]
   }, acceptBooking);
 
-  // 6. Trip Lifecycle Progression (Arrived, In Transit, Completed, Cancelled)
+  fastify.post('/reject', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, rejectOffer);
+
+  fastify.post('/offers/timeout', {
+    preHandler: [authenticate]
+  }, timeoutOffer);
+
+  // ── 6. CRYPTOGRAPHIC OTP VERIFICATION ──
+  fastify.post('/verify-otp', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, verifyBookingOtp);
+
+  // ── 7. SYNCHRONIZED CANCELLATION ──
+  fastify.post('/cancel', {
+    preHandler: [authenticate]
+  }, cancelBooking);
+
+  // ── 8. TRIP LIFECYCLE PROGRESSION & TRACKING ──
   fastify.post('/trip-status', {
     preHandler: [authenticate]
   }, updateTripStatus);
 
-  // 7. Live Driver Tracking Stream (Authorized Participants Only)
   fastify.get('/track/:bookingId', {
     preHandler: [authenticate]
   }, trackBooking);
-}
 
+  // ── 9. IN-TRIP SCOPED MESSAGING ──
+  fastify.get('/chat/:bookingId', {
+    preHandler: [authenticate]
+  }, getChatMessages);
+
+  fastify.post('/chat/:bookingId', {
+    preHandler: [authenticate]
+  }, sendChatMessage);
+
+  // ── 10. EQUIPMENT & MACHINERY RENTALS ──
+  fastify.get('/rentals/inventory', {
+    preHandler: [authenticate]
+  }, getRentalInventory);
+
+  fastify.post('/rentals/book', {
+    preHandler: [authenticate, requireRole(['farmer', 'admin'])]
+  }, bookRental);
+
+  fastify.get('/rentals/my-bookings', {
+    preHandler: [authenticate]
+  }, getMyRentals);
+
+  fastify.post('/rentals/:rentalId/status', {
+    preHandler: [authenticate]
+  }, updateRentalStatus);
+}

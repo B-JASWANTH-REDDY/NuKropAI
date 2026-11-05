@@ -19685,6 +19685,138 @@ const AGMARKNET_MANDI_CATALOG = [
   }
 ];
 
+function getCropSearchKeywords(item) {
+  let terms = [
+    item.cropName && (typeof item.cropName === 'object' ? item.cropName.en : item.cropName),
+    item.cropName && typeof item.cropName === 'object' && item.cropName.te,
+    item.cropName && typeof item.cropName === 'object' && item.cropName.hi,
+    item.cropKey,
+    item.cropSlug,
+    item.variety ? (typeof item.variety === 'object' ? (item.variety.en + ' ' + (item.variety.te || '') + ' ' + (item.variety.hi || '')) : String(item.variety)) : '',
+    item.commodity || ''
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  const rawKey = (item.cropKey || item.cropSlug || '').toLowerCase();
+  let baseCrop = rawKey;
+  if (rawKey.startsWith('cotton') && !rawKey.includes('seed')) baseCrop = 'cotton';
+  else if (rawKey.startsWith('potato') || rawKey === 'russet-potato') baseCrop = 'russet-potato';
+  else if (rawKey === 'chilli' || rawKey === 'chili' || rawKey === 'green_chilli' || rawKey === 'dry_chillies' || rawKey === 'chili_red' || rawKey === 'birds-eye-chili') baseCrop = 'birds-eye-chili';
+  else if (rawKey.startsWith('onion') && !rawKey.includes('green')) baseCrop = 'red-onion';
+  else if (rawKey.startsWith('wheat')) baseCrop = 'wheat';
+  else if (rawKey.startsWith('tomato')) baseCrop = 'tomato';
+  else if (rawKey.startsWith('paddy') || rawKey === 'rice') baseCrop = 'rice';
+  else if (rawKey.startsWith('maize') || rawKey === 'corn') baseCrop = 'corn';
+  else if (rawKey.startsWith('groundnut') || rawKey.startsWith('ground_nut')) baseCrop = 'peanut';
+  else if (rawKey.startsWith('brinjal') || rawKey === 'eggplant') baseCrop = 'eggplant';
+  else if (rawKey.startsWith('bhindi') || rawKey === 'okra' || rawKey.startsWith('ladies_finger')) baseCrop = 'okra';
+  else if (rawKey.startsWith('turmeric')) baseCrop = 'turmeric';
+  else if (rawKey.startsWith('ginger')) baseCrop = 'ginger';
+  else if (rawKey.startsWith('garlic')) baseCrop = 'garlic';
+  else if (rawKey.startsWith('banana')) baseCrop = 'banana';
+  else if (rawKey.startsWith('soybean') || rawKey.startsWith('soyabean') || rawKey === 'soy-bean') baseCrop = 'soy-bean';
+  else if (rawKey.startsWith('sugarcane') || rawKey === 'sugar-cane') baseCrop = 'sugarcane';
+
+  if (typeof CROP_TRANSLATIONS !== 'undefined' && CROP_TRANSLATIONS[baseCrop]) {
+    const t = CROP_TRANSLATIONS[baseCrop];
+    terms += ' ' + Object.values(t).join(' ').toLowerCase();
+  }
+
+  const phoneticAliases = {
+    'cotton': 'kapas patti kapus narma kapaah పత్తి కపాస్ నరమా कपास कापूस',
+    'birds-eye-chili': 'mirchi mirapa mirch chilli chili pachi endu మిర్చి మిరప పచ్చి ఎండు मिर्च हरी लाल',
+    'red-onion': 'pyaz kanda ullipaya ulli onion erulli vulli ఉల్లిపాయ ఉల్లి प्याज कांदा',
+    'russet-potato': 'aloo alu batata bangaladumpa potato urulaikizhangu బంగాళాదుంప ఆలూ आलू बटाटा',
+    'rice': 'dhan chawal vari bhat chaval biyyam dhanyam paddy rice వరి ధాన్యం బియ్యం धान चावल',
+    'wheat': 'gehun godhuma godhumalu kanak wheat godhi gau గోధుమ గోధుమలు गेहूं कनक',
+    'corn': 'makka mokkajonna bhutta maize corn మొక్కజొన్న మక్కా मक्का भुट्टा',
+    'peanut': 'verusanaga shengdana groundnut peanut moongphali వేరుశనగ వేరుశెనగ मूंगफली शेंगदाणा',
+    'eggplant': 'vankaya baingan brinjal eggplant వంకాయ వంగ बैंगन वांगी',
+    'okra': 'bendakaya bhindi bhendi okra ladies finger బెండకాయ బెండ भिंडी भेंडी',
+    'tomato': 'tamata tamatar tomato ramamulaga టమోటా తమట टमाटर',
+    'turmeric': 'pasupu haldi turmeric పసుపు పసుపుపొడి हल्दी हळद',
+    'garlic': 'vellulli lehsun garlic వెల్లుల్లి తెల్లగడ్డ लहसुन लसूण',
+    'ginger': 'allam adrak ginger అల్లం అల్లము अदरक आले',
+    'banana': 'arati kela banana అరటి అరటిపండు केला કેળાં'
+  };
+  if (phoneticAliases[baseCrop]) {
+    terms += ' ' + phoneticAliases[baseCrop];
+  }
+  return terms;
+};
+
+function itemMatchesPopular(item, pKey) {
+  if (!pKey || pKey === 'all') return true;
+  const itemKey = (item.cropKey || item.cropSlug || '').toLowerCase();
+  const cropNameEn = (item.cropName && (typeof item.cropName === 'object' ? (item.cropName.en || '') : String(item.cropName || ''))).toLowerCase();
+  const varietyEn = (item.variety && (typeof item.variety === 'object' ? (item.variety.en || '') : String(item.variety || ''))).toLowerCase();
+  const fullText = (itemKey + ' ' + cropNameEn + ' ' + varietyEn).toLowerCase();
+
+  // 1. COTTON: Raw cotton fibre (Cotton, Kapas, Narma, Long Staple, Medium Staple).
+  // EXCLUDES: Cotton Seed (Binola / cattle feed oilseed) - distinct commodity.
+  if (pKey === 'cotton') {
+    if (fullText.includes('seed') || fullText.includes('binola') || itemKey.includes('seed')) return false;
+    if (itemKey === 'cotton' || itemKey.startsWith('cotton') || itemKey.includes('kapas') || itemKey.includes('narma')) return true;
+    if (cropNameEn.includes('cotton') || cropNameEn.includes('kapas') || cropNameEn.includes('narma')) return true;
+    return false;
+  }
+
+  // 2. POTATO: Solanum tuberosum (Potato, Kufri, Jyoti, Aloo, Batata, Russet).
+  // EXCLUDES: Sweet Potato (Shakarkand / Ratalu / Yam) - distinct botanical family.
+  if (pKey === 'potato') {
+    if (fullText.includes('sweet') || fullText.includes('shakar') || fullText.includes('ratalu') || fullText.includes('yam')) return false;
+    if (itemKey === 'potato' || itemKey === 'russet-potato' || itemKey.startsWith('potato')) return true;
+    if (cropNameEn.includes('potato') || cropNameEn === 'aloo' || cropNameEn === 'alu') return true;
+    return false;
+  }
+
+  // 3. CHILLI: Pungent hot chillies (Green Chilli, Dry Chillies, Red Chilli, Teja, Mirchi).
+  // EXCLUDES: Plain Capsicum / Bell Pepper / Shimla Mirch (distinct sweet commodity).
+  if (pKey === 'chilli') {
+    if (itemKey === 'capsicum' || (cropNameEn === 'capsicum' && !fullText.includes('green chilli') && !fullText.includes('dry chilli'))) return false;
+    if (itemKey === 'green_chilli' || itemKey === 'dry_chillies' || itemKey === 'chili_red' || itemKey === 'chilli' || itemKey === 'birds-eye-chili') return true;
+    if (cropNameEn.includes('chilli') || cropNameEn.includes('chili') || cropNameEn.includes('mirchi') || cropNameEn.includes('mirch')) return true;
+    return false;
+  }
+
+  // 4. WHEAT: Triticum aestivum (Wheat, Sharbati, Lokwan, Dara, Gehun, Kanak).
+  // EXCLUDES: Buckwheat (Kuttu), Sweet Corn, Wheat Flour / Atta.
+  if (pKey === 'wheat') {
+    if (fullText.includes('buckwheat') || fullText.includes('kuttu') || fullText.includes('corn') || fullText.includes('flour') || fullText.includes('atta')) return false;
+    if (itemKey === 'wheat' || itemKey.startsWith('wheat')) return true;
+    if (cropNameEn.includes('wheat') || cropNameEn.includes('gehun') || cropNameEn.includes('kanak') || cropNameEn.includes('godhuma')) return true;
+    return false;
+  }
+
+  // 5. TOMATO: Solanum lycopersicum (Tomato, Hybrid, Local, Desi).
+  // EXCLUDES: Tamarind / Tamarind Fruit (Chinta / Imli), Tree Tomato.
+  if (pKey === 'tomato') {
+    if (fullText.includes('tamarind') || fullText.includes('chinta') || fullText.includes('imli')) return false;
+    if (itemKey === 'tomato' || itemKey.startsWith('tomato')) return true;
+    if (cropNameEn.includes('tomato') || cropNameEn.includes('tamatar') || cropNameEn.includes('tamata')) return true;
+    return false;
+  }
+
+  // 6. ONION: Dry bulb onion (Onion, Red Onion, White Onion, Garva, Nashik, Pyaz, Kanda).
+  // EXCLUDES: Onion Green / Spring Onion (bunch leafy green commodity), Garlic.
+  if (pKey === 'onion') {
+    if (itemKey === 'onion_green' || cropNameEn.includes('onion green') || cropNameEn.includes('green onion') || fullText.includes('spring onion') || fullText.includes('garlic') || fullText.includes('lehsun')) return false;
+    if (itemKey === 'onion' || itemKey === 'red-onion' || itemKey.startsWith('onion')) return true;
+    if (cropNameEn.includes('onion') || cropNameEn.includes('pyaz') || cropNameEn.includes('kanda') || cropNameEn.includes('ullipaya')) return true;
+    return false;
+  }
+
+  // 7. PADDY / RICE: Paddy grain and rice grain (Paddy, Basmati, Common, Rice, Dhan, Chawal).
+  // EXCLUDES: Rice Bran, Rice Husk.
+  if (pKey === 'paddy' || pKey === 'rice') {
+    if (fullText.includes('bran') || fullText.includes('husk')) return false;
+    if (itemKey === 'rice' || itemKey.startsWith('paddy') || itemKey.startsWith('rice')) return true;
+    if (cropNameEn.includes('paddy') || cropNameEn.includes('rice') || cropNameEn.includes('dhan') || cropNameEn.includes('chawal')) return true;
+    return false;
+  }
+
+  return getCropSearchKeywords(item).includes(pKey);
+}
+
 function getFilteredMandiRates() {
   const [overrideCrop, overrideState, overrideMandi, overridePop] = arguments;
   const rawCrop = (overrideCrop !== undefined ? overrideCrop : ((typeof window !== 'undefined' && window.mandiSearchCrop !== undefined ? window.mandiSearchCrop : mandiSearchCrop) || '')).trim();
@@ -19706,110 +19838,38 @@ function getFilteredMandiRates() {
       if (!matchState.includes(stateQ)) return false;
     }
     if (mandiQ) {
-      const matchMandi = ((item.mandi && (item.mandi.en + ' ' + (item.mandi.te || '') + ' ' + (item.mandi.hi || ''))) || String(item.mandi || '') + ' ' + (item.district || '')).toLowerCase();
+      const mandiName = (item.mandi && (item.mandi.en + ' ' + (item.mandi.te || '') + ' ' + (item.mandi.hi || ''))) || String(item.mandi || '');
+      const districtName = item.district || '';
+      const matchMandi = (mandiName + ' ' + districtName).toLowerCase();
       if (!matchMandi.includes(mandiQ)) return false;
     }
     return true;
-  };
-
-  const getCropSearchKeywords = (item) => {
-    let terms = [
-      item.cropName && item.cropName.en,
-      item.cropName && item.cropName.te,
-      item.cropName && item.cropName.hi,
-      typeof item.cropName === 'string' ? item.cropName : '',
-      item.cropKey,
-      item.cropSlug,
-      item.variety ? (item.variety.en + ' ' + (item.variety.te || '') + ' ' + (item.variety.hi || '')) : ''
-    ].filter(Boolean).join(' ').toLowerCase();
-
-    const key = (item.cropKey || item.cropSlug || '').toLowerCase();
-    const aliasMap = {
-      'cotton': 'cotton',
-      'chilli': 'birds-eye-chili', 'chili': 'birds-eye-chili',
-      'paddy': 'rice', 'maize': 'corn', 'groundnut': 'peanut',
-      'brinjal': 'eggplant', 'apple': 'generic-apple',
-      'banana': 'plantain', 'cabbage': 'green-cabbage',
-      'coriander': 'cilantro', 'potato': 'russet-potato',
-      'onion': 'red-onion', 'okra': 'okra', 'bhindi': 'okra',
-      'capsicum': 'green-bell-pepper', 'millet': 'sorghum-millet'
-    };
-    const transKey = aliasMap[key] || key;
-    if (typeof CROP_TRANSLATIONS !== 'undefined' && CROP_TRANSLATIONS[transKey]) {
-      const t = CROP_TRANSLATIONS[transKey];
-      terms += ' ' + Object.values(t).join(' ').toLowerCase();
-    }
-    const phoneticAliases = {
-      'cotton': 'kapas patti kapus narma',
-      'birds-eye-chili': 'mirchi mirapa mirch chilli chili',
-      'red-onion': 'pyaz kanda ullipaya onion',
-      'russet-potato': 'aloo alu batata bangaladumpa potato',
-      'rice': 'dhan chawal vari paddy rice',
-      'wheat': 'gehun godhumalu kanak wheat'
-    };
-    if (phoneticAliases[transKey]) {
-      terms += ' ' + phoneticAliases[transKey];
-    }
-    return terms;
-  };
-
-  const itemMatchesPopular = (item, pKey) => {
-    if (!pKey || pKey === 'all') return true;
-    const itemKey = (item.cropKey || item.cropSlug || '').toLowerCase();
-    // Exact key match
-    if (itemKey === pKey) return true;
-    // Helper: get English crop name for substring matching (handles live API records)
-    const cropNameEn = (item.cropName && (typeof item.cropName === 'object' ? (item.cropName.en || '') : String(item.cropName))).toLowerCase();
-    // Cotton: match all varieties — cotton, cotton_medium, cotton_long_staple, kapas, kapus, narma
-    if (pKey === 'cotton') {
-      if (itemKey === 'cotton' || itemKey.startsWith('cotton') || itemKey === 'kapas' || itemKey.includes('kapas')) return true;
-      if (cropNameEn.includes('cotton') || cropNameEn.includes('kapas') || cropNameEn.includes('narma')) return true;
-    }
-    // Onion: match all onion variants
-    if (pKey === 'onion') {
-      if (itemKey === 'red-onion' || itemKey.startsWith('onion') || itemKey.includes('onion')) return true;
-      if (cropNameEn.includes('onion')) return true;
-    }
-    // Potato: match all potato variants
-    if (pKey === 'potato') {
-      if (itemKey === 'russet-potato' || itemKey.startsWith('potato') || itemKey.includes('potato')) return true;
-      if (cropNameEn.includes('potato')) return true;
-    }
-    // Chilli: match all chilli/chili/pepper variants
-    if (pKey === 'chilli') {
-      if (itemKey === 'birds-eye-chili' || itemKey.includes('chilli') || itemKey.includes('chili') || itemKey.includes('mirchi')) return true;
-      if (cropNameEn.includes('chilli') || cropNameEn.includes('chili') || cropNameEn.includes('pepper')) return true;
-    }
-    // Wheat: match all wheat variants
-    if (pKey === 'wheat') {
-      if (itemKey.startsWith('wheat') || itemKey.includes('wheat')) return true;
-      if (cropNameEn.includes('wheat')) return true;
-    }
-    // Tomato: match all tomato variants
-    if (pKey === 'tomato') {
-      if (itemKey.startsWith('tomato') || itemKey.includes('tomato')) return true;
-      if (cropNameEn.includes('tomato')) return true;
-    }
-    // Paddy/Rice: match all paddy and rice variants
-    if (pKey === 'paddy') {
-      if (itemKey === 'rice' || itemKey.startsWith('paddy') || itemKey.startsWith('rice') || itemKey.includes('paddy')) return true;
-      if (cropNameEn.includes('paddy') || cropNameEn.includes('rice')) return true;
-    }
-    // Generic fallback: keyword search
-    return getCropSearchKeywords(item).includes(pKey);
   };
 
   // Primary match: Strict Location Lock + Crop / Popular Chip filter
   const exactMatches = AGMARKNET_MANDI_CATALOG.filter(item => {
     if (!filterByLocation(item)) return false;
 
+    // Popular pill filter
     if (popQ !== 'all' && !itemMatchesPopular(item, popQ)) {
       return false;
     }
+
+    // Manual search query filter
     if (cropQ) {
       if (popQ !== 'all' && itemMatchesPopular(item, popQ)) {
         // If popular crop pill is selected, cropQ is the localized label, match is verified
       } else {
+        // Enforce strict commodity boundaries on manual search queries
+        if (cropQ === 'cotton' && !itemMatchesPopular(item, 'cotton')) return false;
+        if (cropQ === 'potato' && !itemMatchesPopular(item, 'potato')) return false;
+        if (cropQ === 'chilli' && !itemMatchesPopular(item, 'chilli')) return false;
+        if (cropQ === 'wheat' && !itemMatchesPopular(item, 'wheat')) return false;
+        if (cropQ === 'tomato' && !itemMatchesPopular(item, 'tomato')) return false;
+        if (cropQ === 'onion' && !itemMatchesPopular(item, 'onion')) return false;
+        if (cropQ === 'rice' && !itemMatchesPopular(item, 'rice')) return false;
+        if (cropQ === 'paddy' && !itemMatchesPopular(item, 'paddy')) return false;
+
         const keywords = getCropSearchKeywords(item);
         if (!keywords.includes(cropQ)) return false;
       }
@@ -19832,6 +19892,12 @@ function getFilteredMandiRates() {
     const targetCrop = (popQ !== 'all' ? popQ : cropQ).toLowerCase();
     const cropFallbacks = AGMARKNET_MANDI_CATALOG.filter(item => {
       if (popQ !== 'all') return itemMatchesPopular(item, popQ);
+      if (cropQ === 'cotton') return itemMatchesPopular(item, 'cotton');
+      if (cropQ === 'potato') return itemMatchesPopular(item, 'potato');
+      if (cropQ === 'chilli') return itemMatchesPopular(item, 'chilli');
+      if (cropQ === 'wheat') return itemMatchesPopular(item, 'wheat');
+      if (cropQ === 'tomato') return itemMatchesPopular(item, 'tomato');
+      if (cropQ === 'onion') return itemMatchesPopular(item, 'onion');
       return getCropSearchKeywords(item).includes(targetCrop);
     });
     if (cropFallbacks.length > 0) return cropFallbacks;
@@ -19880,12 +19946,23 @@ function selectPopularMandiCrop(key) {
     window.mandiSelectedPopular = key;
   }
 
-  // Show localized label in search box for user clarity,
-  // but keep mandiSearchCrop EMPTY so popQ (not cropQ) drives filtering.
-  // This prevents localized text (e.g. 'పత్తి') from breaking keyword matching.
+  const popularLabels = {
+    'cotton': TL('Cotton', 'పత్తి', 'कपास'),
+    'tomato': TL('Tomato', 'టమోటా', 'टमाटर'),
+    'wheat': TL('Wheat', 'గోధుమ', 'गेहूं'),
+    'onion': TL('Onion', 'ఉల్లిపాయ', 'प्याज'),
+    'potato': TL('Potato', 'బంగాళాదుంప', 'आलू'),
+    'chilli': TL('Chilli', 'మిర్చి', 'मिर्च'),
+    'paddy': TL('Paddy', 'వరి', 'धान')
+  };
+
   const inp = document.getElementById('mandi-crop-inp');
+  const clearBtn = document.getElementById('mandi-crop-clear-btn');
   if (inp) {
-    inp.value = (key === 'all') ? '' : getLocalizedCropName(key);
+    inp.value = (key === 'all') ? '' : (popularLabels[key] || getLocalizedCropName(key));
+  }
+  if (clearBtn) {
+    clearBtn.style.display = (key === 'all') ? 'none' : 'flex';
   }
   mandiSearchCrop = '';
   if (typeof window !== 'undefined') {
@@ -19902,7 +19979,9 @@ function clearMandiCropSearch() {
     window.mandiSelectedPopular = 'all';
   }
   const inp = document.getElementById('mandi-crop-inp');
+  const clearBtn = document.getElementById('mandi-crop-clear-btn');
   if (inp) inp.value = '';
+  if (clearBtn) clearBtn.style.display = 'none';
   executeMandiSearch();
 }
 
@@ -19924,9 +20003,11 @@ function resetMandiFilters() {
   const c = document.getElementById('mandi-crop-inp');
   const s = document.getElementById('mandi-state-inp');
   const m = document.getElementById('mandi-mkt-inp');
+  const clearBtn = document.getElementById('mandi-crop-clear-btn');
   if (c) c.value = '';
   if (s) s.value = '';
   if (m) m.value = '';
+  if (clearBtn) clearBtn.style.display = 'none';
   executeMandiSearch();
 }
 
@@ -20001,31 +20082,60 @@ function executeMandiSearch() {
   const cropEl = document.getElementById('mandi-crop-inp');
   const stateEl = document.getElementById('mandi-state-inp');
   const mktEl = document.getElementById('mandi-mkt-inp');
+  const clearBtn = document.getElementById('mandi-crop-clear-btn');
 
   if (cropEl) {
-    if (mandiSelectedPopular && mandiSelectedPopular !== 'all') {
-      // Popular pill is active: input shows display label only; keep mandiSearchCrop empty
-      // so only popQ (not cropQ) is used by getFilteredMandiRates.
+    const rawVal = (cropEl.value || '').trim();
+    if (!rawVal) {
+      // User cleared the search input manually (Backspace/Delete)
       mandiSearchCrop = '';
-      if (typeof window !== 'undefined') window.mandiSearchCrop = '';
-      // Show localized pill label in input for UX
-      if (!cropEl.value.trim()) cropEl.value = getLocalizedCropName(mandiSelectedPopular);
+      mandiSelectedPopular = 'all';
+      if (typeof window !== 'undefined') {
+        window.mandiSearchCrop = '';
+        window.mandiSelectedPopular = 'all';
+      }
+      if (clearBtn) clearBtn.style.display = 'none';
     } else {
-      // Manual text search mode
-      mandiSearchCrop = cropEl.value;
-      if (typeof window !== 'undefined') window.mandiSearchCrop = mandiSearchCrop;
-      if (!cropEl.value.trim() && mandiSelectedPopular !== 'all') {
+      if (clearBtn) clearBtn.style.display = 'flex';
+
+      const popularMap = {
+        'cotton': 'cotton', 'పత్తి': 'cotton', 'కపాస్': 'cotton', 'कपास': 'cotton', 'kapas': 'cotton', 'narma': 'cotton', 'kapus': 'cotton', 'patti': 'cotton',
+        'tomato': 'tomato', 'red tomato': 'tomato', 'టమోటా': 'tomato', 'తమట': 'tomato', 'टमाटर': 'tomato', 'tamatar': 'tomato', 'tamata': 'tomato',
+        'wheat': 'wheat', 'గోధుమ': 'wheat', 'గోధుమలు': 'wheat', 'गेहूं': 'wheat', 'gehun': 'wheat', 'kanak': 'wheat', 'godhuma': 'wheat',
+        'onion': 'onion', 'red onion': 'onion', 'ఉల్లిపాయ': 'onion', 'ఉల్లి': 'onion', 'प्याज': 'onion', 'pyaz': 'onion', 'kanda': 'onion', 'ullipaya': 'onion',
+        'potato': 'potato', 'russet potato': 'potato', 'బంగాళాదుంప': 'potato', 'ఆలూ': 'potato', 'आलू': 'potato', 'aloo': 'potato', 'alu': 'potato', 'batata': 'potato', 'bangaladumpa': 'potato',
+        'chilli': 'chilli', 'chili': 'chilli', 'మిర్చి': 'chilli', 'మిరప': 'chilli', 'మిరపకాయ': 'chilli', 'मिर्च': 'chilli', 'मिर्ची': 'chilli', 'mirchi': 'chilli', 'mirapa': 'chilli',
+        'paddy': 'paddy', 'rice': 'paddy', 'వరి': 'paddy', 'ధాన్యం': 'paddy', 'బియ్యం': 'paddy', 'धान': 'paddy', 'चावल': 'paddy', 'dhan': 'paddy', 'chawal': 'paddy', 'vari': 'paddy'
+      };
+      const normVal = rawVal.toLowerCase();
+      const matchedPill = popularMap[normVal];
+
+      if (matchedPill) {
+        // User typed a popular crop name -> activate that pill
+        mandiSelectedPopular = matchedPill;
+        mandiSearchCrop = '';
+        if (typeof window !== 'undefined') {
+          window.mandiSelectedPopular = matchedPill;
+          window.mandiSearchCrop = '';
+        }
+      } else {
+        // User typed a manual custom crop query (e.g. "Maize", "Cotton Seed", "Sweet Potato", "Garlic")
         mandiSelectedPopular = 'all';
-        if (typeof window !== 'undefined') window.mandiSelectedPopular = 'all';
+        mandiSearchCrop = rawVal;
+        if (typeof window !== 'undefined') {
+          window.mandiSelectedPopular = 'all';
+          window.mandiSearchCrop = rawVal;
+        }
       }
     }
   }
+
   if (stateEl) {
-    mandiSearchState = stateEl.value;
+    mandiSearchState = (stateEl.value || '').trim();
     if (typeof window !== 'undefined') window.mandiSearchState = mandiSearchState;
   }
   if (mktEl) {
-    mandiSearchMandi = mktEl.value;
+    mandiSearchMandi = (mktEl.value || '').trim();
     if (typeof window !== 'undefined') window.mandiSearchMandi = mandiSearchMandi;
   }
 
@@ -20077,6 +20187,9 @@ function executeMandiSearch() {
 
 if (typeof window !== 'undefined') {
   window.getFilteredMandiRates = getFilteredMandiRates;
+  window.getCropSearchKeywords = getCropSearchKeywords;
+  window.itemMatchesPopular = itemMatchesPopular;
+  window.itemMatchesPopular = itemMatchesPopular;
   window.selectMandiState = selectMandiState;
   window.selectMandiMarket = selectMandiMarket;
   window.selectPopularMandiCrop = selectPopularMandiCrop;
@@ -32313,8 +32426,8 @@ const APP_VIEWS = {
         <!-- High-End Fully Curved Search Capsule with Magnifying Glass SVG & Curved Action Button -->
         <div style="display:flex;align-items:center;background:#F8FAF8;border:1.5px solid #CBD5E1;border-radius:9999px;padding:4px 6px 4px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.03);margin-bottom:10px;gap:8px;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="mandi-crop-inp" placeholder="${cropPlaceholder}" value="${mandiSearchCrop}" style="flex:1;border:none;background:transparent;outline:none;font-size:13px;font-weight:700;color:#0F172A;padding:6px 0;" oninput="executeMandiSearch()" onkeypress="if(event.key==='Enter')executeMandiSearch()">
-          <button type="button" onclick="clearMandiCropSearch()" id="mandi-crop-clear-btn" style="background:none;border:none;color:#94A3B8;cursor:pointer;padding:4px 6px;font-size:13px;font-weight:800;display:${mandiSearchCrop?'flex':'none'};align-items:center;justify-content:center;" title="Clear search">✕</button>
+          <input id="mandi-crop-inp" placeholder="${cropPlaceholder}" value="${(mandiSelectedPopular && mandiSelectedPopular !== 'all') ? getLocalizedCropName(mandiSelectedPopular) : (mandiSearchCrop || '')}" style="flex:1;border:none;background:transparent;outline:none;font-size:13px;font-weight:700;color:#0F172A;padding:6px 0;" oninput="executeMandiSearch()" onkeypress="if(event.key==='Enter')executeMandiSearch()">
+          <button type="button" onclick="clearMandiCropSearch()" id="mandi-crop-clear-btn" style="background:none;border:none;color:#94A3B8;cursor:pointer;padding:4px 6px;font-size:13px;font-weight:800;display:${(mandiSearchCrop || (mandiSelectedPopular && mandiSelectedPopular !== 'all')) ? 'flex' : 'none'};align-items:center;justify-content:center;" title="Clear search">✕</button>
           <button type="button" onclick="executeMandiSearch()" style="background:linear-gradient(135deg,#16A34A,#15803D);color:#FFFFFF;border:none;border-radius:9999px;padding:8px 18px;font-weight:900;font-size:12.5px;cursor:pointer;box-shadow:0 3px 10px rgba(22,163,74,0.3);flex-shrink:0;">
             ${searchBtn}
           </button>

@@ -87,7 +87,17 @@ if (isCandidateDebug) {
   purgeProductionArtifacts();
 
   // 2. Prepare isolated preview artifact with explicit NOT FOR PRODUCTION warning
-  const sourceToUse = releaseSource ? releaseSource.path : (fs.existsSync(debugCandidate) ? debugCandidate : null);
+  let sourceToUse = null;
+  if (fs.existsSync(debugCandidate)) {
+    const debugStat = fs.statSync(debugCandidate);
+    if (!releaseSource || debugStat.mtimeMs >= releaseSource.mtimeMs) {
+      sourceToUse = debugCandidate;
+    } else {
+      sourceToUse = releaseSource.path;
+    }
+  } else if (releaseSource) {
+    sourceToUse = releaseSource.path;
+  }
 
   const disclaimerText = `================================================================================
 NuKropAI Agrarian OS — Internal Staging Preview Build

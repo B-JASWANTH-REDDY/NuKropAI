@@ -80,6 +80,20 @@ export function broadcastBookingTrackingEvent(bookingId: string, event: string, 
       }
     } catch {}
   }
+
+  if (payload.status === 'CANCELLED' || payload.status === 'COMPLETED') {
+    setTimeout(() => {
+      for (const client of sockets) {
+        try {
+          const sock = client?.socket || client;
+          if (sock && sock.readyState === 1 && typeof sock.close === 'function') {
+            sock.close(1000, `Tracking terminated: Trip ${payload.status}`);
+          }
+        } catch {}
+      }
+      dispatchMemoryStore.activeTrackingSubscribers.delete(bookingId);
+    }, 50);
+  }
 }
 
 function getHeaders(authToken?: string) {
@@ -1076,6 +1090,10 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     dispatchMemoryStore.farmerPlaintextOtps = new Map<string, string>();
   }
   dispatchMemoryStore.farmerPlaintextOtps.set(bookingId, otp);
+  if (!dispatchMemoryStore.otpResendCooldowns) {
+    dispatchMemoryStore.otpResendCooldowns = new Map<string, number>();
+  }
+  dispatchMemoryStore.otpResendCooldowns.set(bookingId, Date.now());
   bookingRecord.ephemeral_plaintext_otp = otp;
 
   // Record audit creation event
@@ -1140,7 +1158,8 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
 
 export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply) => {
   const driverId = request.user?.id;
-  const { bookingId, vehicleId } = request.body as any;
+  const bookingId = (request.body as any)?.bookingId || (request.params as any)?.bookingId;
+  const vehicleId = (request.body as any)?.vehicleId;
   const idempotencyKey = ((request.headers?.['idempotency-key'] as string) || (request.body as any)?.idempotencyKey || '').trim();
 
   if (idempotencyKey) {
@@ -1351,7 +1370,8 @@ export const timeoutOffer = async (request: FastifyRequest, reply: FastifyReply)
 
 export const verifyBookingOtp = async (request: FastifyRequest, reply: FastifyReply) => {
   const driverId = request.user?.id;
-  const { bookingId, otp } = request.body as any;
+  const bookingId = (request.body as any)?.bookingId || (request.params as any)?.bookingId;
+  const otp = (request.body as any)?.otp;
 
   if (!driverId) {
     return reply.status(401).send({ error: 'Unauthorized: Driver authentication required' });
@@ -1466,7 +1486,8 @@ export const verifyBookingOtp = async (request: FastifyRequest, reply: FastifyRe
 
 export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply) => {
   const userId = request.user?.id;
-  const { bookingId, reason = 'Cancelled by participant' } = request.body as any;
+  const bookingId = (request.body as any)?.bookingId || (request.params as any)?.bookingId;
+  const reason = (request.body as any)?.reason || 'Cancelled by participant';
 
   if (!userId) {
     return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
@@ -1584,7 +1605,8 @@ export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply
 
 export const updateTripStatus = async (request: FastifyRequest, reply: FastifyReply) => {
   const userId = request.user?.id;
-  const { bookingId, status: newStatus } = request.body as any;
+  const bookingId = (request.body as any)?.bookingId || (request.params as any)?.bookingId;
+  const newStatus = (request.body as any)?.status;
 
   if (!userId) {
     return reply.status(401).send({ error: 'Unauthorized' });

@@ -309,6 +309,18 @@ describe('Mandi Strict Location Lock — Dynamic Isolation & Anti-Leakage', () =
     ctx.window.mandiSearchCrop = 'cotton';
     const englishRates = ctx.getFilteredMandiRates();
     expect(englishRates.length).toBe(4);
+
+    // Romanized phonetic search "kapas"
+    ctx.mandiSearchCrop = 'kapas';
+    ctx.window.mandiSearchCrop = 'kapas';
+    const kapasRates = ctx.getFilteredMandiRates();
+    expect(kapasRates.length).toBe(4);
+
+    // Romanized phonetic search "patti"
+    ctx.mandiSearchCrop = 'patti';
+    ctx.window.mandiSearchCrop = 'patti';
+    const pattiRates = ctx.getFilteredMandiRates();
+    expect(pattiRates.length).toBe(4);
   });
 
   it('M.D.13: clearMandiCropSearch and resetMandiCropFilter restore crop filter and update UI', () => {

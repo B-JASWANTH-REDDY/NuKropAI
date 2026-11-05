@@ -19738,6 +19738,17 @@ function getFilteredMandiRates() {
       const t = CROP_TRANSLATIONS[transKey];
       terms += ' ' + Object.values(t).join(' ').toLowerCase();
     }
+    const phoneticAliases = {
+      'cotton': 'kapas patti kapus narma',
+      'birds-eye-chili': 'mirchi mirapa mirch chilli chili',
+      'red-onion': 'pyaz kanda ullipaya onion',
+      'russet-potato': 'aloo alu batata bangaladumpa potato',
+      'rice': 'dhan chawal vari paddy rice',
+      'wheat': 'gehun godhumalu kanak wheat'
+    };
+    if (phoneticAliases[transKey]) {
+      terms += ' ' + phoneticAliases[transKey];
+    }
     return terms;
   };
 
@@ -21356,11 +21367,14 @@ function renderMandiCardsHtml() {
   }
 
   const cropHeaderBanner = (activeCrop || activeLoc) ? `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px 10px;font-size:11px;font-weight:700;color:#475569;">
-      <span>${activeCrop ? `🌾 <strong>${activeCrop}</strong>: ` : ''}${TL(`Showing ${list.length} Mandi ${list.length === 1 ? 'Rate' : 'Rates'}`, `${list.length} మార్కెట్ ధరలు`, `${list.length} मंडी भाव`)}${activeLoc ? ` in ${activeLoc}` : ' (All India)'}</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px 10px;font-size:11px;font-weight:700;color:#475569;background:#F8FAF8;border-radius:12px;margin-bottom:10px;border:1px solid #E2ECE2;">
+      <span style="display:inline-flex;align-items:center;gap:4px;">
+        ${activeCrop ? `🌾 <strong style="color:#0B4628;">${activeCrop}</strong>: ` : ''}
+        <span>${TL(`Showing ${list.length} Mandi ${list.length === 1 ? 'Rate' : 'Rates'}`, `${list.length} మార్కెట్ ధరలు`, `${list.length} मंडी भाव`)}${activeLoc ? ` in ${activeLoc}` : ' (All India)'}</span>
+      </span>
       ${activeLoc ? `
-        <button type="button" onclick="selectMandiState('all')" style="background:none;border:none;color:#15803D;font-size:10.5px;font-weight:800;cursor:pointer;text-decoration:underline;">
-          ${TL('Explore All India ↗', 'అన్ని రాష్ట్రాల్లో చూడండి ↗', 'अखिल भारतीय देखें ↗')}
+        <button type="button" onclick="selectMandiState('all')" style="background:#E8F5E9;border:1.2px solid #86EFAC;color:#15803D;border-radius:12px;padding:3px 9px;font-size:10.5px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:3px;box-shadow:0 1px 4px rgba(21,128,61,0.12);transition:all 0.15s ease;">
+          <span>🌐</span> ${TL('Show All States', 'అన్ని రాష్ట్రాలు', 'सभी राज्य देखें')}
         </button>
       ` : ''}
     </div>

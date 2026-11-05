@@ -109,3 +109,4 @@ This document establishes the canonical feature inventory of the NuKropAI Agrari
 | **AW.6** | Deep Link Screen Navigation | `IMPLEMENTED AND VERIFIED` | `nukrop://screen/home` and `nukrop://screen/market` | `tests/test_android_widgets_integration.js: AW-5, AW-6` |
 | **AW.7** | AndroidBridge Data Sync | `IMPLEMENTED AND VERIFIED` | `updateWeatherWidget()`, `updateMandiWidget()` | `tests/test_android_widgets_integration.js: AW-6, AW-7` |
 | **AW.8** | Logout & Account Privacy Isolation | `IMPLEMENTED AND VERIFIED` | `clearWidgetData()` resets widget to locked prompt on sign-out | `tests/test_android_widgets_integration.js: AW-6`, `AndroidWidgetsTest.kt` |
+

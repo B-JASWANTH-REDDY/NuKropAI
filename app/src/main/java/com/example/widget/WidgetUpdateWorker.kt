@@ -1,8 +1,10 @@
 package com.example.widget
 
 import android.content.Context
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -84,7 +86,12 @@ class WidgetUpdateWorker(
         private const val WORK_NAME = "nukrop_widget_periodic_sync"
 
         fun schedulePeriodicUpdates(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
             val periodicWorkRequest = PeriodicWorkRequestBuilder<WidgetUpdateWorker>(30, TimeUnit.MINUTES)
+                .setConstraints(constraints)
                 .addTag("nukrop_widget_sync")
                 .build()
 
@@ -96,3 +103,4 @@ class WidgetUpdateWorker(
         }
     }
 }
+

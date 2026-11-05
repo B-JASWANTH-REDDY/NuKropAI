@@ -68,3 +68,4 @@ To protect farmers and drivers from phishing or untrusted redirects, `MainActivi
 - `data.gov.in`
 - `accounts.google.com`
 - Any valid government domain matching `*.gov.in` or `*.nic.in` without embedded credentials.
+

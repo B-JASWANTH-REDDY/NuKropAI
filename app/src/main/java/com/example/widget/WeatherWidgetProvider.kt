@@ -99,3 +99,4 @@ class WeatherWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+

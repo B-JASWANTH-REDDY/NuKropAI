@@ -112,3 +112,4 @@ NuKropAI provides two functional, native Android home-screen widgets that bridge
    - Subtext: `"Session closed · Tap to authenticate"`
 3. **No Account Leakage**:
    Switching between Farmer A and Farmer B never reveals Farmer A's farm coordinate or crop book in the widget preview.
+

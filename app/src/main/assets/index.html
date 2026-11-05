@@ -21582,7 +21582,7 @@ function renderMandiCardsHtml() {
       <!-- Arrival & Min-Max details -->
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:#475569;margin-bottom:6px;padding:0 2px;">
         <span>📊 <strong>${TL('Range', 'ధరల పరిమితి', 'Range')}:</strong> ${item.minPrice ? '₹' + item.minPrice.toLocaleString() : '₹' + item.modalPrice.toLocaleString()} - ${item.maxPrice ? '₹' + item.maxPrice.toLocaleString() : '₹' + item.modalPrice.toLocaleString()}</span>
-        <span>🚚 <strong>${TL('Arrivals', 'రాక', 'Arrivals')}:</strong> ${item.arrivals ? item.arrivals.toLocaleString() + ' Qtl' : 'Official Volume'}</span>
+        <span>🚚 <strong>${TL('Arrivals', 'రాక', 'Arrivals')}:</strong> ${item.arrivals ? item.arrivals.toLocaleString() + ' Qtl' : TL('Volume Pending', 'రాక నమోదు కాలేదు', 'आवक विवरण प्रतीक्षारत')}</span>
       </div>
 
       <!-- Provenance & Official Source -->
@@ -22145,7 +22145,7 @@ function syncMandiToAndroidWidget(topItem) {
       const pVal = topItem.modalPrice || topItem.modal_price || 7480;
       const minVal = topItem.minPrice || topItem.min_price || Math.round(pVal * 0.95);
       const maxVal = topItem.maxPrice || topItem.max_price || Math.round(pVal * 1.05);
-      const arrVal = topItem.arrivals || 2400;
+      const arrVal = topItem.arrivals ? Number(topItem.arrivals).toLocaleString('en-IN') : null;
 
       window.AndroidBridge.updateMandiWidget(JSON.stringify({
         market: `${mName}, ${sName}`,
@@ -22154,7 +22154,7 @@ function syncMandiToAndroidWidget(topItem) {
         price: `₹${Number(pVal).toLocaleString('en-IN')}`,
         unit: topItem.unit || '/ quintal',
         range: `📊 Range: ₹${Number(minVal).toLocaleString('en-IN')} - ₹${Number(maxVal).toLocaleString('en-IN')}`,
-        arrivals: `🚜 ${Number(arrVal).toLocaleString('en-IN')} Qtl`,
+        arrivals: arrVal ? `🚜 Arrivals: ${arrVal} Qtl` : `🚜 Trading Volume Pending`,
         badge: topItem.badge || '🏛️ AGMARKNET',
         updated: `Agmarknet DMI · ${topItem.tradeDate || '04/11/2026'} · Tap to explore`
       }));
@@ -23111,7 +23111,15 @@ function submitEditedCommunityPost() {
 
 async function saveEditedCommunityPost(postId, newTitle, newText, newCrop) {
   const p = COMMUNITY_POSTS_CATALOG.find(x => x.id === postId);
-  if (!p) return;
+  if (!p) return false;
+
+  if (!isOwnCommunityPost(p)) {
+    console.warn('Unauthorized post edit attempt for post:', postId);
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast(TL('Unauthorized: You can only edit your own posts', 'అనధికారికం: మీరు మీ స్వంత పోస్ట్‌లను మాత్రమే సవరించగలరు', 'अनधिकृत: आप केवल अपनी पोस्ट संपादित कर सकते हैं'), 'error');
+    }
+    return false;
+  }
 
   p.title = { en: newTitle, te: newTitle, hi: newTitle };
   p.text = { en: newText, te: newText, hi: newText };
@@ -23158,10 +23166,18 @@ async function saveEditedCommunityPost(postId, newTitle, newText, newCrop) {
 
 async function deleteCommunityPost(postId) {
   const p = COMMUNITY_POSTS_CATALOG.find(x => x.id === postId);
-  if (!p) return;
+  if (!p) return false;
+
+  if (!isOwnCommunityPost(p)) {
+    console.warn('Unauthorized post delete attempt for post:', postId);
+    if (typeof showLuxuryToast === 'function') {
+      showLuxuryToast(TL('Unauthorized: You can only delete your own posts', 'అనధికారికం: మీరు మీ స్వంత పోస్ట్‌లను మాత్రమే తొలగించగలరు', 'अनधिकृत: आप केवल अपनी पोस्ट हटा सकते हैं'), 'error');
+    }
+    return false;
+  }
 
   if (typeof confirm === 'function' && !confirm(TL('Are you sure you want to delete this post?', 'మీరు ఖచ్చితంగా ఈ పోస్ట్‌ను తొలగించాలనుకుంటున్నారా?', 'क्या आप वाकई यह पोस्ट हटाना चाहते हैं?'))) {
-    return;
+    return false;
   }
 
   const postIndex = COMMUNITY_POSTS_CATALOG.findIndex(x => x.id === postId);
@@ -28189,7 +28205,7 @@ async function fetchRealMandiRatesLive(targetState = null, customGps = null) {
           minPrice: minPriceNum,
           maxPrice: maxPriceNum,
           unit: '/Qtl',
-          arrivals: Number(r.arrivals || 2400),
+          arrivals: r.arrivals ? Number(r.arrivals) : null,
           change: r.trend === 'UP' ? '+1.5%' : (r.trend === 'DOWN' ? '-1.0%' : '0.0%'),
           up: r.trend !== 'DOWN',
           badge: honestBadge,
@@ -41026,29 +41042,47 @@ function initRealPriceAlerts() {
 }
 
 function initWeatherAlerts() {
-  // Real time-of-day weather advisory
-  const hour = new Date().getHours();
-  let weatherMsg = '';
-  let weatherTitle = '';
+  if (!liveWeather || !liveWeather.isLoaded || liveWeather.status === 'UNAVAILABLE') {
+    // Zero manufactured alerts if live meteorological data is absent
+    return;
+  }
 
-  if (hour >= 5 && hour < 9) {
-    weatherTitle = '🌅 Morning Spray Window Open';
-    weatherMsg = 'Ideal spray conditions: wind < 8 km/h, temp 22°C. Perfect for foliar application.';
-  } else if (hour >= 9 && hour < 12) {
-    weatherTitle = '☀️ Optimal Sowing Conditions';
-    weatherMsg = 'Soil temp 28°C, humidity 65%. Good day for transplanting and field operations.';
-  } else if (hour >= 12 && hour < 15) {
-    weatherTitle = '🌡️ Avoid Spray — Peak Heat Alert';
-    weatherMsg = 'Temperature > 35°C. Spray chemicals will evaporate. Resume after 4 PM.';
-  } else if (hour >= 15 && hour < 18) {
-    weatherTitle = '🌤️ Evening Spray Window Approaching';
-    weatherMsg = 'Conditions improving. Start irrigation to avoid heat stress on crops.';
-  } else if (hour >= 18 && hour < 21) {
-    weatherTitle = '🌙 Evening Spray Window Active';
-    weatherMsg = 'Cool temperature, low wind. Best time for pesticide and fungicide spray.';
+  const windNum = parseInt(liveWeather.wind || liveWeather.windSpeed) || 0;
+  const tempNum = parseInt(liveWeather.temp) || 0;
+  const precipProb = parseInt(liveWeather.precipProbability) || 0;
+  const activeCropName = (typeof farmerProfile !== 'undefined' && farmerProfile.crops && farmerProfile.crops[0]) || 'Crop';
+
+  let weatherTitle = '';
+  let weatherMsg = '';
+
+  if (windNum > 15) {
+    weatherTitle = '⚠️ ' + TL('High Wind Alert: Postpone Spraying', 'భారీ గాలి హెచ్చరిక: పిచికారీ వాయిదా వేయండి', 'तेज हवा चेतावनी: छिड़काव स्थगित करें');
+    weatherMsg = TL(
+      `Wind speed is ${windNum} km/h (threshold: ≤15 km/h). Droplet drift risk is critical. Postpone chemical foliar application on ${activeCropName}.`,
+      `గాలి వేగం ${windNum} km/h (పరిమితి: ≤15 km/h). మందు గాలికి కొట్టుకుపోయే ప్రమాదం ఉంది. ${activeCropName} పిచికారీ వాయిదా వేయండి.`,
+      `हवा की गति ${windNum} किमी/घंटा है (सीमा: ≤15 किमी/घंटा)। छिड़काव बहाव का खतरा है। ${activeCropName} पर छिड़काव स्थगित करें।`
+    );
+  } else if (precipProb > 40) {
+    weatherTitle = '🌧️ ' + TL('Rain Forecast Alert: Rain Wash Risk', 'వర్షం సూచన హెచ్చరిక: మందు కడిగిపోయే ప్రమాదం', 'बारिश का पूर्वानुमान: दवा धुलने का खतरा');
+    weatherMsg = TL(
+      `Rain probability is ${precipProb}% within forecast window. Rain wash-off risk before curing. Hold foliar spray on ${activeCropName}.`,
+      `రాబోయే సమయంలో వర్ష సూచన ${precipProb}%. మందు ఆకులపై నిలవక ముందే కడిగిపోయే అవకాశం ఉంది. ${activeCropName} పిచికారీ నిలిపివేయండి.`,
+      `पूर्वानुमान अवधि में बारिश की संभावना ${precipProb}% है। धुलने का जोखिम। ${activeCropName} पर छिड़काव रोकें।`
+    );
+  } else if (tempNum > 32) {
+    weatherTitle = '🌡️ ' + TL('High Temperature Advisory: Evaporation Risk', 'అధిక ఉష్ణోగ్రత సలహా: మందు ఆవిరయ్యే ప్రమాదం', 'उच्च तापमान सलाह: वाष्पीकरण जोखिम');
+    weatherMsg = TL(
+      `Temperature is ${tempNum}°C (threshold: ≤30°C). Spray droplets risk rapid evaporation or leaf scorch. Schedule application early morning or evening.`,
+      `ఉష్ణోగ్రత ${tempNum}°C (పరిమితి: ≤30°C). మందు చుక్కలు ఆవిరయ్యే లేదా ఆకులు కమిలిపోయే ప్రమాదం ఉంది. ఉదయం లేదా సాయంత్రం వేళల్లో పిచికారీ చేయండి.`,
+      `तापमान ${tempNum}°C है (सीमा: ≤30°C)। तेजी से वाष्पीकरण का खतरा। सुबह या शाम को छिड़काव करें।`
+    );
   } else {
-    weatherTitle = "🌾 Tomorrow's Farm Advisory";
-    weatherMsg = 'Spray window: 6 AM–10 AM. Check soil moisture before irrigation.';
+    weatherTitle = '🌤️ ' + TL('Optimal Spray Window Open', 'అనుకూలమైన పిచికారీ సమయం', 'अनुकूल छिड़काव समय');
+    weatherMsg = TL(
+      `Optimal conditions: Temp ${tempNum}°C, Wind ${windNum} km/h, Rain prob ${precipProb}%. Verify chemical label and crop stage before spraying ${activeCropName}.`,
+      `అనుకూల పరిస్థితులు: ఉష్ణోగ్రత ${tempNum}°C, గాలి ${windNum} km/h, వర్షం ${precipProb}%. ${activeCropName} పిచికారీకి ముందు లేబుల్ పరిశీలించండి.`,
+      `अनुकूल स्थिति: तापमान ${tempNum}°C, हवा ${windNum} किमी/घंटा। छिड़काव से पहले कीटनाशक लेबल जांचें।`
+    );
   }
 
   setTimeout(() => {

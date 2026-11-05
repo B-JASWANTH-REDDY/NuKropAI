@@ -113,3 +113,4 @@
 4. **Controlled Pre-Requisites for Production Promotion**:
    Promotion to full commercial production requires completing commercial merchant onboarding (UPI gateway), carrier DLT registration (SMS OTP), and physical device acceptance testing on live cellular networks.
    The application is fully ready for controlled field trials and limited pilot farmer deployment.
+

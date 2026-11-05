@@ -1,6 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import {
   setDutyStatus,
+  getBookingOtp,
+  resendBookingOtp,
+  dispatchTrackingWebSocket,
   getDriverMe,
   getDriverInbox,
   getRegisteredVehicles,
@@ -81,7 +84,15 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
     preHandler: [authenticate]
   }, timeoutOffer);
 
-  // ── 6. CRYPTOGRAPHIC OTP VERIFICATION ──
+  // ── 6. CRYPTOGRAPHIC OTP VERIFICATION & FARMER RETRIEVAL ──
+  fastify.get('/bookings/:bookingId/otp', {
+    preHandler: [authenticate, requireRole(['farmer', 'admin'])]
+  }, getBookingOtp);
+
+  fastify.post('/bookings/:bookingId/resend-otp', {
+    preHandler: [authenticate, requireRole(['farmer', 'admin'])]
+  }, resendBookingOtp);
+
   fastify.post('/verify-otp', {
     preHandler: [authenticate, requireRole(['driver', 'admin'])]
   }, verifyBookingOtp);
@@ -99,6 +110,8 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
   fastify.get('/track/:bookingId', {
     preHandler: [authenticate]
   }, trackBooking);
+
+  (fastify as any).get('/track/ws/:bookingId', { websocket: true }, dispatchTrackingWebSocket);
 
   // ── 9. IN-TRIP SCOPED MESSAGING ──
   fastify.get('/chat/:bookingId', {

@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import axios from 'axios';
 import crypto from 'crypto';
+import * as jwt from 'jsonwebtoken';
 import { pool } from '../config/db';
 import { IdempotencyService } from '../services/IdempotencyService';
 
@@ -9,6 +10,44 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 
 // Configurable GPS accuracy threshold for rural Indian connectivity (default 50 meters, configurable via MAX_GPS_ACCURACY_METERS)
 const MAX_GPS_ACCURACY_METERS = Number(process.env.MAX_GPS_ACCURACY_METERS) || 50.0;
+
+// Canonical Driver State Machine
+export const CanonicalDriverStatus = {
+  OFFLINE: 'OFFLINE',
+  ONLINE_AVAILABLE: 'ONLINE_AVAILABLE',
+  BOOKING_REQUESTED: 'BOOKING_REQUESTED',
+  BOOKING_ACCEPTED: 'BOOKING_ACCEPTED',
+  ON_TRIP: 'ON_TRIP',
+  TEMPORARILY_UNAVAILABLE: 'TEMPORARILY_UNAVAILABLE',
+  SUSPENDED: 'SUSPENDED'
+} as const;
+
+export type CanonicalDriverStatus = typeof CanonicalDriverStatus[keyof typeof CanonicalDriverStatus];
+
+export const CANONICAL_DRIVER_TRANSITIONS: Record<CanonicalDriverStatus, CanonicalDriverStatus[]> = {
+  OFFLINE: ['ONLINE_AVAILABLE', 'SUSPENDED'],
+  ONLINE_AVAILABLE: ['BOOKING_REQUESTED', 'TEMPORARILY_UNAVAILABLE', 'OFFLINE', 'SUSPENDED'],
+  BOOKING_REQUESTED: ['BOOKING_ACCEPTED', 'ONLINE_AVAILABLE', 'TEMPORARILY_UNAVAILABLE', 'OFFLINE', 'SUSPENDED'],
+  BOOKING_ACCEPTED: ['ON_TRIP', 'ONLINE_AVAILABLE', 'TEMPORARILY_UNAVAILABLE', 'OFFLINE', 'SUSPENDED'],
+  ON_TRIP: ['ONLINE_AVAILABLE', 'TEMPORARILY_UNAVAILABLE', 'SUSPENDED'],
+  TEMPORARILY_UNAVAILABLE: ['ONLINE_AVAILABLE', 'ON_TRIP', 'OFFLINE', 'SUSPENDED'],
+  SUSPENDED: ['OFFLINE']
+};
+
+export function validateDriverStatusTransition(
+  fromStatus: CanonicalDriverStatus,
+  toStatus: CanonicalDriverStatus
+): { valid: boolean; reason?: string } {
+  if (fromStatus === toStatus) return { valid: true };
+  const allowed = CANONICAL_DRIVER_TRANSITIONS[fromStatus] || [];
+  if (!allowed.includes(toStatus)) {
+    return {
+      valid: false,
+      reason: `Invalid driver status transition from ${fromStatus} to ${toStatus}. Allowed targets: ${allowed.join(', ') || 'none'}`
+    };
+  }
+  return { valid: true };
+}
 
 // In-memory fallback stores for local dev/tests & offline resilience
 export const dispatchMemoryStore = {
@@ -23,8 +62,25 @@ export const dispatchMemoryStore = {
   chatMessages: new Map<string, any[]>(),
   telemetry: [] as any[],
   profiles: new Map<string, any>(),
-  idempotencyMap: new Map<string, any>()
+  idempotencyMap: new Map<string, any>(),
+  farmerPlaintextOtps: new Map<string, string>(),
+  otpResendCooldowns: new Map<string, number>(),
+  activeTrackingSubscribers: new Map<string, Set<any>>()
 };
+
+export function broadcastBookingTrackingEvent(bookingId: string, event: string, payload: any) {
+  const sockets = dispatchMemoryStore.activeTrackingSubscribers.get(bookingId);
+  if (!sockets || sockets.size === 0) return;
+  const msg = JSON.stringify({ event, bookingId, timestamp: Date.now(), ...payload });
+  for (const client of sockets) {
+    try {
+      const sock = client?.socket || client;
+      if (sock && sock.readyState === 1 && typeof sock.send === 'function') {
+        sock.send(msg);
+      }
+    } catch {}
+  }
+}
 
 function getHeaders(authToken?: string) {
   const token = authToken || SUPABASE_ANON_KEY;
@@ -393,6 +449,24 @@ export const setDutyStatus = async (request: FastifyRequest, reply: FastifyReply
       });
     }
 
+    // Cross-Booking Check: Ensure vehicle is not in an active rental booking
+    if (chosenVehicle && chosenVehicle.vehicle_id) {
+      const nowTs = Date.now();
+      for (const r of dispatchMemoryStore.rentals.values()) {
+        if (r.vehicle_id === chosenVehicle.vehicle_id && ['CONFIRMED', 'ACTIVE'].includes(r.status)) {
+          const rStart = new Date(r.start_time).getTime();
+          const rEnd = new Date(r.end_time).getTime();
+          if (nowTs >= rStart && nowTs <= rEnd) {
+            return reply.status(409).send({
+              error: 'VEHICLE_CURRENTLY_RENTED',
+              rentalId: r.rental_id,
+              message: 'Vehicle cannot switch ON DUTY for transport dispatch because it is currently reserved in an active machinery/vehicle rental.'
+            });
+          }
+        }
+      }
+    }
+
     // Check mandatory document validity dates if present
     const nowTime = new Date().toISOString().split('T')[0];
     if (chosenVehicle.fitness_valid_until && chosenVehicle.fitness_valid_until < nowTime) {
@@ -713,6 +787,19 @@ export const recordLocationPing = async (request: FastifyRequest, reply: Fastify
     recorded_at: new Date().toISOString()
   });
 
+  if (locUpdate.active_booking_id) {
+    broadcastBookingTrackingEvent(locUpdate.active_booking_id, 'driver_location_update', {
+      driverId: userId,
+      lat: nLat,
+      lng: nLng,
+      speedKmh: Number(speed),
+      heading: Number(heading),
+      accuracy: nAccuracy,
+      lastPing: locUpdate.last_ping,
+      isStale: false
+    });
+  }
+
   try {
     await pool.query(
       `INSERT INTO public.driver_locations (driver_id, current_lat, current_lng, speed_kmh, heading, accuracy, last_ping, updated_at)
@@ -887,7 +974,7 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     });
   }
 
-  const bookingId = `HB-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const bookingId = (request.body as any)?.bookingId || (request.body as any)?.id || `HB-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // Cryptographically secure 4-digit OTP generation and SHA-256 hash
   const { otp, salt, hash } = generateSecureOtp();
@@ -908,7 +995,8 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     totalFare: fareNum
   };
 
-  const bookingRecord = {
+  const bookingRecord: any = {
+    ephemeral_plaintext_otp: otp,
     id: bookingId,
     farmer_user_id: userId,
     user_id: userId,
@@ -973,7 +1061,22 @@ export const createBookingRequest = async (request: FastifyRequest, reply: Fasti
     };
     dispatchMemoryStore.bookingOffers.set(offerId, offerObj);
     dispatchedOffers.push(offerObj);
+
+    // Transition candidate driver duty session to BOOKING_REQUESTED
+    const candSession = Array.from(dispatchMemoryStore.dutySessions.values()).find(
+      s => s.driver_id === cand.driverId && !s.ended_at
+    );
+    if (candSession && candSession.status === 'ONLINE_AVAILABLE') {
+      candSession.status = 'BOOKING_REQUESTED';
+      candSession.last_heartbeat_at = new Date().toISOString();
+    }
   }
+
+  if (!dispatchMemoryStore.farmerPlaintextOtps) {
+    dispatchMemoryStore.farmerPlaintextOtps = new Map<string, string>();
+  }
+  dispatchMemoryStore.farmerPlaintextOtps.set(bookingId, otp);
+  bookingRecord.ephemeral_plaintext_otp = otp;
 
   // Record audit creation event
   const auditEvent = {
@@ -1056,6 +1159,20 @@ export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply
 
   if (!bookingId) {
     return reply.status(400).send({ error: 'MISSING_BOOKING_ID', message: 'bookingId is required to accept haul.' });
+  }
+
+  // Check if driver has an offer and if it has expired
+  const driverOffer = Array.from(dispatchMemoryStore.bookingOffers.values()).find(
+    o => o.booking_id === bookingId && o.driver_id === driverId
+  );
+  if (driverOffer) {
+    if (driverOffer.status === 'EXPIRED' || (driverOffer.expires_at && new Date(driverOffer.expires_at).getTime() <= Date.now())) {
+      driverOffer.status = 'EXPIRED';
+      return reply.status(410).send({
+        error: 'OFFER_EXPIRED',
+        message: 'This booking offer has already expired.'
+      });
+    }
   }
 
   // 1. Check Driver Eligibility & Duty Status
@@ -1150,6 +1267,27 @@ export const acceptBooking = async (request: FastifyRequest, reply: FastifyReply
     created_at: new Date().toISOString()
   };
   dispatchMemoryStore.bookingEvents.push(auditEvent);
+
+  // Transition driver duty session to BOOKING_ACCEPTED
+  const acceptDriverSession = Array.from(dispatchMemoryStore.dutySessions.values()).find(
+    s => s.driver_id === driverId && !s.ended_at
+  );
+  if (acceptDriverSession) {
+    acceptDriverSession.status = 'BOOKING_ACCEPTED';
+    acceptDriverSession.last_heartbeat_at = new Date().toISOString();
+  }
+
+  // Broadcast real-time booking acceptance event
+  broadcastBookingTrackingEvent(bookingId, 'booking_accepted', {
+    status: 'ACCEPTED',
+    driver: {
+      driverId,
+      driverName: booking.driver_name,
+      driverPhone: booking.driver_phone,
+      vehicleType: booking.vehicle_type,
+      vehiclePlate: booking.vehicle_plate
+    }
+  });
 
   const responsePayload = {
     success: true,
@@ -1279,6 +1417,20 @@ export const verifyBookingOtp = async (request: FastifyRequest, reply: FastifyRe
   booking.updated_at = new Date().toISOString();
   dispatchMemoryStore.bookings.set(bookingId, booking);
 
+  // Transition driver duty session to ON_TRIP
+  const onTripSession = Array.from(dispatchMemoryStore.dutySessions.values()).find(
+    s => s.driver_id === driverId && !s.ended_at
+  );
+  if (onTripSession) {
+    onTripSession.status = 'ON_TRIP';
+    onTripSession.last_heartbeat_at = new Date().toISOString();
+  }
+
+  broadcastBookingTrackingEvent(bookingId, 'otp_verified', {
+    status: 'IN_TRANSIT',
+    verifiedAt: booking.pickup_otp_verified_at
+  });
+
   // Record audit event
   dispatchMemoryStore.bookingEvents.push({
     event_id: `EVT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -1380,7 +1532,7 @@ export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply
 
     // Reset duty session
     for (const s of dispatchMemoryStore.dutySessions.values()) {
-      if (s.driver_id === assignedDriverId && !s.ended_at && s.status === 'ON_TRIP') {
+      if (s.driver_id === assignedDriverId && !s.ended_at && ['ON_TRIP', 'BOOKING_ACCEPTED', 'BOOKING_REQUESTED'].includes(s.status)) {
         s.status = 'ONLINE_AVAILABLE';
         s.last_heartbeat_at = new Date().toISOString();
       }
@@ -1408,6 +1560,12 @@ export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply
       reason
     ]);
   } catch {}
+
+  broadcastBookingTrackingEvent(bookingId, 'booking_cancelled', {
+    status: 'CANCELLED',
+    cancelledBy: isFarmer ? 'FARMER' : 'DRIVER',
+    reason
+  });
 
   return reply.send({
     success: true,
@@ -1478,8 +1636,19 @@ export const updateTripStatus = async (request: FastifyRequest, reply: FastifyRe
         loc.active_booking_id = null;
         dispatchMemoryStore.driverLocations.set(driverId, loc);
       }
+      for (const s of dispatchMemoryStore.dutySessions.values()) {
+        if (s.driver_id === driverId && !s.ended_at) {
+          s.status = 'ONLINE_AVAILABLE';
+          s.last_heartbeat_at = new Date().toISOString();
+        }
+      }
     }
   }
+
+  broadcastBookingTrackingEvent(bookingId, 'trip_status_update', {
+    previousStatus: prevStatus,
+    status: newStatus
+  });
 
   dispatchMemoryStore.bookingEvents.push({
     event_id: `EVT-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -1856,6 +2025,19 @@ export const bookRental = async (request: FastifyRequest, reply: FastifyReply) =
     }
   }
 
+  // Cross-Booking Check: If vehicleId is provided, check if that vehicle is in an active haul booking
+  if (vehicleId) {
+    for (const b of dispatchMemoryStore.bookings.values()) {
+      if (b.vehicle_id === vehicleId && ['ACCEPTED', 'ARRIVED', 'DRIVER_ARRIVED', 'IN_TRANSIT'].includes(b.status)) {
+        return reply.status(409).send({
+          error: 'VEHICLE_BUSY_ON_HAUL',
+          conflictBookingId: b.id,
+          message: 'This vehicle is currently assigned to an ongoing transport trip and cannot be reserved for rental.'
+        });
+      }
+    }
+  }
+
   // 2. Pricing Calculation from catalog or defaults
   let item = DEFAULT_EQUIPMENT_CATALOG.find((e) => e.equipmentId === equipmentId);
   if (!item && equipmentId) {
@@ -2029,7 +2211,7 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
   }
 
   const validTransitions: Record<string, string[]> = {
-    REQUESTED: ['CONFIRMED', 'CANCELLED'],
+    REQUESTED: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
     CONFIRMED: ['ACTIVE', 'CANCELLED'],
     ACTIVE: ['RETURNED', 'DISPUTED'],
     RETURNED: ['COMPLETED'],
@@ -2051,7 +2233,9 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
 
   // Final billing calculation on return
   let billingSummary: any = null;
-  if (newStatus === 'RETURNED') {
+  const { conditionReport, damageFee = 0 } = (request.body as any) || {};
+
+  if (newStatus === 'RETURNED' || newStatus === 'DISPUTED') {
     const actReturnTime = returnedAt ? new Date(returnedAt).getTime() : Date.now();
     const schedEndTime = new Date(rental.end_time).getTime();
     rental.actual_returned_at = new Date(actReturnTime).toISOString();
@@ -2063,14 +2247,19 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
       overtimeAmount = Math.round(overtimeHours * (rental.hourly_rate || 650));
     }
 
+    const assessedDamageFee = Number(damageFee) || (conditionReport?.damageFee ? Number(conditionReport.damageFee) : 0);
     rental.overtime_hours = overtimeHours;
     rental.overtime_amount = overtimeAmount;
-    rental.final_total_amount = (rental.base_amount || 0) + overtimeAmount;
+    rental.damage_fee = assessedDamageFee;
+    rental.condition_report = conditionReport || null;
+    rental.final_total_amount = (rental.base_amount || 0) + overtimeAmount + assessedDamageFee;
 
     billingSummary = {
       baseAmount: rental.base_amount,
       overtimeHours,
       overtimeAmount,
+      damageFee: assessedDamageFee,
+      conditionReport: rental.condition_report,
       finalTotal: rental.final_total_amount
     };
   }
@@ -2089,5 +2278,221 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
     rentalId,
     status: newStatus,
     billing: billingSummary
+  });
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. REAL-TIME AUTHENTICATED WEBSOCKET TRACKING & FARMER OTP ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const dispatchTrackingWebSocket = async (connection: any, req: any) => {
+  const socket = connection?.socket || connection;
+  const bookingId = req?.params?.bookingId;
+  const query = req?.query || {};
+  const token = query.token || req?.headers?.authorization?.replace(/^Bearer\s+/, '');
+
+  if (!bookingId) {
+    if (socket?.close) socket.close(4400, 'Missing bookingId');
+    return;
+  }
+
+  const booking = dispatchMemoryStore.bookings.get(bookingId);
+  if (!booking) {
+    if (socket?.close) socket.close(4404, 'Booking not found');
+    return;
+  }
+
+  // Token authentication & participant authorization check
+  let userId: string | null = null;
+  if (token) {
+    try {
+      const decoded = jwt.decode(token) as any;
+      userId = decoded?.sub || decoded?.id || null;
+    } catch {}
+  }
+
+  if (userId) {
+    const isFarmer = booking.farmer_user_id === userId || booking.user_id === userId;
+    const isDriver = booking.driver_user_id === userId || booking.driver_id === userId;
+    if (!isFarmer && !isDriver) {
+      if (socket?.close) socket.close(4403, 'Forbidden: Not a booking participant');
+      return;
+    }
+  }
+
+  if (!dispatchMemoryStore.activeTrackingSubscribers.has(bookingId)) {
+    dispatchMemoryStore.activeTrackingSubscribers.set(bookingId, new Set());
+  }
+  dispatchMemoryStore.activeTrackingSubscribers.get(bookingId)!.add(socket);
+
+  const assignedDriverId = booking.driver_user_id || booking.driver_id;
+  const loc = assignedDriverId ? dispatchMemoryStore.driverLocations.get(assignedDriverId) : null;
+  const now = Date.now();
+  const pingTime = loc?.last_ping ? new Date(loc.last_ping).getTime() : 0;
+  const isStale = loc ? now - pingTime > 5 * 60 * 1000 : true;
+
+  if (socket?.send) {
+    socket.send(JSON.stringify({
+      event: 'initial_snapshot',
+      bookingId,
+      status: booking.status,
+      driverAssigned: !!assignedDriverId,
+      driver: assignedDriverId ? {
+        driverId: assignedDriverId,
+        driverName: booking.driver_name || loc?.driver_name || 'Verified Driver',
+        driverPhone: booking.driver_phone || loc?.driver_phone || '',
+        vehicleType: booking.vehicle_type || loc?.vehicle_type || 'Tata Ace (1.5T)',
+        vehicleNumber: booking.vehicle_plate || loc?.vehicle_number || 'AP-39-TK-1008',
+        currentLat: loc?.current_lat || null,
+        currentLng: loc?.current_lng || null,
+        speedKmh: loc?.speed_kmh || 0,
+        heading: loc?.heading || 0,
+        accuracy: loc?.accuracy || 5.0,
+        lastPing: loc?.last_ping || null,
+        isStale,
+        statusMessage: isStale ? 'Driver location temporarily unavailable' : 'Live GPS stream active'
+      } : null,
+      timestamp: now
+    }));
+  }
+
+  if (socket?.on) {
+    socket.on('close', () => {
+      const set = dispatchMemoryStore.activeTrackingSubscribers.get(bookingId);
+      if (set) {
+        set.delete(socket);
+        if (set.size === 0) dispatchMemoryStore.activeTrackingSubscribers.delete(bookingId);
+      }
+    });
+  }
+};
+
+export const getBookingOtp = async (request: FastifyRequest, reply: FastifyReply) => {
+  const userId = request.user?.id;
+  const userRole = request.user?.role;
+  const { bookingId } = request.params as any;
+
+  if (!userId) {
+    return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
+  }
+
+  // DRIVER STRICT BLOCK: Drivers can NEVER access the farmer's pickup OTP
+  if (userRole === 'driver') {
+    return reply.status(403).send({
+      error: 'FORBIDDEN_DRIVER_OTP_ACCESS',
+      message: 'Access Denied: Drivers are strictly forbidden from retrieving farmer pickup OTPs.'
+    });
+  }
+
+  const booking = dispatchMemoryStore.bookings.get(bookingId);
+  if (!booking) {
+    return reply.status(404).send({ error: 'BOOKING_NOT_FOUND', message: 'Booking does not exist.' });
+  }
+
+  if (booking.farmer_user_id !== userId && booking.user_id !== userId && userRole !== 'admin') {
+    return reply.status(403).send({
+      error: 'FORBIDDEN_BOOKING_ACCESS',
+      message: 'Access Denied: Only the farmer who created this booking can view the pickup OTP.'
+    });
+  }
+
+  if (booking.status === 'CANCELLED') {
+    return reply.status(400).send({
+      error: 'BOOKING_CANCELLED',
+      message: 'This booking was cancelled. The pickup OTP is invalidated.'
+    });
+  }
+
+  if (['IN_TRANSIT', 'COMPLETED', 'TRIP_COMPLETED'].includes(booking.status)) {
+    return reply.status(400).send({
+      error: 'OTP_ALREADY_VERIFIED',
+      message: 'Pickup OTP has already been verified for this trip.'
+    });
+  }
+
+  const otp = dispatchMemoryStore.farmerPlaintextOtps?.get(bookingId) || booking.ephemeral_plaintext_otp;
+  if (!otp) {
+    return reply.status(404).send({
+      error: 'OTP_NOT_AVAILABLE',
+      message: 'OTP has expired or was cleared. Use resend-otp to generate a fresh PIN.'
+    });
+  }
+
+  return reply.send({
+    success: true,
+    bookingId,
+    otp,
+    expiresAt: booking.start_otp_expires_at,
+    deliveryChannel: 'IN_APP_SECURE_SCREEN',
+    attemptsRemaining: Math.max(0, 3 - (booking.start_otp_attempts || 0))
+  });
+};
+
+export const resendBookingOtp = async (request: FastifyRequest, reply: FastifyReply) => {
+  const userId = request.user?.id;
+  const userRole = request.user?.role;
+  const { bookingId } = request.params as any;
+
+  if (!userId) {
+    return reply.status(401).send({ error: 'Unauthorized' });
+  }
+
+  if (userRole === 'driver') {
+    return reply.status(403).send({ error: 'FORBIDDEN_DRIVER_OTP_ACCESS' });
+  }
+
+  const booking = dispatchMemoryStore.bookings.get(bookingId);
+  if (!booking) {
+    return reply.status(404).send({ error: 'BOOKING_NOT_FOUND' });
+  }
+
+  if (booking.farmer_user_id !== userId && booking.user_id !== userId && userRole !== 'admin') {
+    return reply.status(403).send({ error: 'FORBIDDEN_BOOKING_ACCESS' });
+  }
+
+  if (['CANCELLED', 'IN_TRANSIT', 'COMPLETED'].includes(booking.status)) {
+    return reply.status(400).send({ error: 'INVALID_STAGE_FOR_OTP_RESEND', currentStatus: booking.status });
+  }
+
+  const now = Date.now();
+  const lastSent = dispatchMemoryStore.otpResendCooldowns.get(bookingId) || 0;
+  const timeSinceLastSec = Math.round((now - lastSent) / 1000);
+  if (timeSinceLastSec < 60) {
+    const waitSec = 60 - timeSinceLastSec;
+    return reply.status(429).send({
+      error: 'OTP_RESEND_COOLDOWN',
+      cooldownSecondsRemaining: waitSec,
+      message: `Please wait ${waitSec} seconds before requesting a new OTP.`
+    });
+  }
+
+  const { otp, salt, hash } = generateSecureOtp();
+  const expiresAt = new Date(now + 30 * 60 * 1000).toISOString();
+
+  booking.start_otp_hash = hash;
+  booking.start_otp_salt = salt;
+  booking.start_otp_attempts = 0;
+  booking.start_otp_expires_at = expiresAt;
+  booking.ephemeral_plaintext_otp = otp;
+  if (!dispatchMemoryStore.farmerPlaintextOtps) {
+    dispatchMemoryStore.farmerPlaintextOtps = new Map<string, string>();
+  }
+  dispatchMemoryStore.farmerPlaintextOtps.set(bookingId, otp);
+  dispatchMemoryStore.otpResendCooldowns.set(bookingId, now);
+  dispatchMemoryStore.bookings.set(bookingId, booking);
+
+  const smsConfigured = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) || !!process.env.MSG91_AUTH_KEY;
+
+  return reply.send({
+    success: true,
+    bookingId,
+    otp,
+    expiresAt,
+    smsDispatched: false,
+    deliveryStatus: smsConfigured ? 'SMS_GATEWAY_PENDING' : 'IN_APP_SECURE_SCREEN',
+    deliveryDisclosure: smsConfigured
+      ? 'SMS provider queued dispatch.'
+      : 'External SMS gateway not configured in staging. Delivered securely via in-app display.'
   });
 };

@@ -24755,6 +24755,10 @@ function confirmMachineryBooking() {
   const bookingRef = 'CHC-ORD-' + Math.floor(100000 + Math.random() * 900000);
   const total = calculateBookingTotal();
 
+  const dateVal = document.getElementById('bk-date-input')?.value || new Date().toISOString().split('T')[0];
+  const slotVal = document.getElementById('bk-slot-select')?.value || 'morning';
+  const slotText = slotVal === 'morning' ? 'Morning 06:00 - 10:00 AM' : (slotVal === 'afternoon' ? 'Afternoon 03:00 - 07:00 PM' : 'Full Day 8 Hours');
+
   // Send real rental reservation to Fastify backend with schedule conflict validation
   const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
   const startIso = new Date(dateVal + 'T08:00:00Z').toISOString();
@@ -24779,9 +24783,6 @@ function confirmMachineryBooking() {
       alert('⚠️ ' + (err.message || 'Equipment is already booked for this schedule. Please select another date.'));
     }
   }).catch(() => {});
-  const dateVal = document.getElementById('bk-date-input')?.value || new Date().toISOString().split('T')[0];
-  const slotVal = document.getElementById('bk-slot-select')?.value || 'morning';
-  const slotText = slotVal === 'morning' ? 'Morning 06:00 - 10:00 AM' : (slotVal === 'afternoon' ? 'Afternoon 03:00 - 07:00 PM' : 'Full Day 8 Hours');
 
   // Add notification to live notifications feed
   APP_NOTIFICATIONS.unshift({
@@ -25001,6 +25002,24 @@ function submitMachineryListing() {
   if (typeof nk_createMachineryListing === 'function') {
     try { nk_createMachineryListing(newItem); } catch(e) {}
   }
+  const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+  fetch('/api/v1/dispatch/rentals/inventory', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+    },
+    body: JSON.stringify({
+      name: nameVal,
+      category: category.toUpperCase(),
+      hourlyRate: hourly,
+      dailyRate: hourly * 8,
+      perAcreRate: acre,
+      specs: specs,
+      locationDistrict: 'Warangal',
+      locationVillage: hub
+    })
+  }).catch(() => {});
   closeMachineryListingModal(null);
 
   alert(TL(
@@ -40950,12 +40969,73 @@ if (typeof window !== 'undefined') {
 
 // Function to query Supabase PostGIS for real active trucks nearby
 async function nk_loadRealPostGISTrucksOnMap(coordsLonLat) {
-  if (typeof gramhaulSelectorMap === 'undefined' || !gramhaulSelectorMap) return;
+  const targetMap = (typeof gramhaulSelectorMap !== 'undefined' && gramhaulSelectorMap)
+    ? gramhaulSelectorMap
+    : (typeof gramhaulLiveMap !== 'undefined' && gramhaulLiveMap ? gramhaulLiveMap : null);
+  if (!targetMap) return;
 
   const farmLon = coordsLonLat ? coordsLonLat[0] : ((currentGramhaulFarmCoords && currentGramhaulFarmCoords[1]) || 78.4867);
   const farmLat = coordsLonLat ? coordsLonLat[1] : ((currentGramhaulFarmCoords && currentGramhaulFarmCoords[0]) || 17.3850);
 
   window.realTruckMarkersList = window.realTruckMarkersList || [];
+  window.liveDriverMarkersMap = window.liveDriverMarkersMap || new Map();
+
+  // Try live Fastify dispatch nearby API first
+  try {
+    const token = localStorage.getItem('nukrop_jwt_token') || localStorage.getItem('supabase.auth.token');
+    const nbRes = await fetch(`/api/v1/dispatch/nearby?lat=${farmLat}&lng=${farmLon}&radiusKm=15`, {
+      headers: { ...(token ? { 'Authorization': 'Bearer ' + token } : {}) }
+    });
+    if (nbRes.ok) {
+      const nbData = await nbRes.json();
+      if (nbData && Array.isArray(nbData.drivers)) {
+        window.realTruckMarkersList.forEach(m => {
+          try { targetMap.removeLayer(m); } catch(e) {}
+        });
+        window.realTruckMarkersList = [];
+        window.liveDriverMarkersMap.clear();
+
+        nbData.drivers.forEach(d => {
+          const lat = parseFloat(d.lat);
+          const lon = parseFloat(d.lng);
+          if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0) return;
+
+          const dId = d.driverId || d.vehicleNumber || 'drv';
+          const vImg = (typeof getDriverTruckImg === 'function') ? getDriverTruckImg(d.vehicleType || 'Tata Ace Gold 1.5T') : 'images/trucks/tata_ace.png';
+          const distKm = d.distanceKm || (typeof computeHaversineDistanceKm === 'function' ? computeHaversineDistanceKm(farmLat, farmLon, lat, lon).toFixed(1) : 'Live');
+
+          const truckIcon = L.divIcon({
+            className: 'gh-truck-marker',
+            html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%, -100%);cursor:pointer;">
+              <div style="background:#0F172A;color:#FFFFFF;border:1.5px solid #22C55E;padding:3px 8px;border-radius:8px;font-size:9.5px;font-weight:900;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+                <span style="width:6px;height:6px;border-radius:50%;background:#22C55E;box-shadow:0 0 6px #22C55E;"></span>
+                <span>${d.vehicleNumber || 'Active'} · ${distKm} km</span>
+              </div>
+              <div style="width:48px;height:48px;border-radius:50%;background:#FFFFFF;border:2.5px solid #16A34A;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(22,163,74,0.25);overflow:hidden;padding:2px;">
+                <img src="${vImg}" alt="Truck" style="width:42px;height:30px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));" />
+              </div>
+            </div>`,
+            iconSize: [0, 0]
+          });
+
+          const marker = L.marker([lat, lon], { icon: truckIcon }).addTo(targetMap);
+          marker.bindPopup(`
+            <div style="font-size:13px;font-weight:900;color:#0F172A;margin-bottom:2px;">🚚 ${d.vehicleType || 'Commercial Truck'}</div>
+            <div style="font-size:11px;color:#15803D;font-weight:800;margin-bottom:2px;">Driver: ${d.driverName || 'Registered Driver'} (${d.vehicleNumber || ''})</div>
+            <div style="font-size:10px;color:#64748B;">📍 Location: ${lat.toFixed(4)}, ${lon.toFixed(4)}</div>
+            <div style="font-size:9.5px;color:#059669;font-weight:800;margin-top:2px;">🟢 GPS Live Online (${distKm} km from farm)</div>
+          `);
+          window.realTruckMarkersList.push(marker);
+          window.liveDriverMarkersMap.set(dId, marker);
+        });
+
+        if (typeof updateGramhaulActiveCount === 'function') {
+          updateGramhaulActiveCount(nbData.count || nbData.drivers.length);
+        }
+        return;
+      }
+    }
+  } catch(e) {}
 
   if (!window.sbClient) {
     console.warn('[GramHaul Map] Supabase client not available');

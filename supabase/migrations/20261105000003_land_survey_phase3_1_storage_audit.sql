@@ -140,3 +140,4 @@ SET
   scraping_enabled = FALSE,
   permission_notes = 'Central monitoring program dashboard. Does not host individual parcel boundaries or village cadastral files.'
 WHERE source_code = 'CENTRAL_DILRMP';
+

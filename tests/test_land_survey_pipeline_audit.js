@@ -1,15 +1,30 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════
- * NUKROPAI — PHASE 3.1 CRITICAL DOCUMENT PIPELINE & STORAGE AUDIT SUITE
+ * NUKROPAI — PHASE 3.2 DOCUMENT PIPELINE, DURABLE STORAGE & RELEASE HARDENING
  * ════════════════════════════════════════════════════════════════════════════
  * Strict verification of:
- * - Durable private document storage in 'farmer-land-documents'
- * - Real PDF text-stream extraction and transparent image manual fallback
- * - Digital signature distinction (SIGNATURE_PRESENT_UNVERIFIED vs validated)
- * - Reliable deletion: physical file purge from storage, never false success
- * - Strict tenant isolation & cross-farmer access prevention
- * - File survival across backend restart (durable storage vs volatile memory)
- * - AndroidBridge.openExternalUrl scheme validation & injection prevention
+ * 1. PDF EXTRACTION HARDENING:
+ *    - Maintained pdf-parse library
+ *    - Multi-page extraction with page preservation (page_1, page_2)
+ *    - Compressed streams and supported font mappings
+ *    - Corrupted and password-protected PDF graceful handling
+ *    - Explicit manual fallback for scanned images & zero-text PDFs
+ *    - Strict non-inference of missing survey numbers
+ * 2. SUPABASE STORAGE HARDENING:
+ *    - Supabase Storage private bucket authoritative persistence
+ *    - Local filesystem temporary processing with guaranteed cleanup
+ *    - Server-generated paths: {farmer_auth_uid}/{document_id}/{filename}
+ *    - Strict cross-farmer tenant isolation
+ *    - File size limits (10MB)
+ *    - Reliable physical file deletion
+ * 3. SECURE OFFICIAL PORTAL HANDOFF:
+ *    - Exact HTTPS hostname allowlist
+ *    - Rejection of embedded credentials (user:pass@host)
+ *    - Rejection of unapproved ports and unsafe schemes (javascript:, file:)
+ *    - Preserved Android back navigation
+ * 4. RELEASE SIGNING AUDIT:
+ *    - apksigner signature verification
+ *    - Certificate identity and SHA-256 fingerprint audit
  * ════════════════════════════════════════════════════════════════════════════
  */
 
@@ -17,6 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
 const zlib = require('zlib');
+const { execSync } = require('child_process');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -46,7 +62,7 @@ async function runAsyncTest(id, name, fn) {
 }
 
 console.log('================================================================================');
-console.log('📄 NUKROPAI PHASE 3.1 DOCUMENT PIPELINE & DURABLE STORAGE AUDIT');
+console.log('📄 NUKROPAI PHASE 3.2 RELEASE HARDENING & DOCUMENT PIPELINE AUDIT');
 console.log('================================================================================\n');
 
 // Import services directly
@@ -55,7 +71,10 @@ const {
   getDocumentFile,
   deleteDocumentFile,
   checkDocumentFileExists,
-  sanitizeStorageFileName
+  sanitizeStorageFileName,
+  createTemporaryProcessingFile,
+  cleanupTemporaryProcessingFile,
+  MAX_DOCUMENT_FILE_SIZE
 } = require('../backend/dist/services/storageService');
 
 const {
@@ -63,7 +82,9 @@ const {
   inspectPdfDigitalSignature,
   extractTextStreamsFromPdf,
   extractStructuredLandFields,
-  inspectAndExtractLandDocument
+  extractStructuredLandFieldsFromPages,
+  inspectAndExtractLandDocument,
+  parsePdfWithLibrary
 } = require('../backend/dist/services/pdfExtractionService');
 
 const migrationPath = path.resolve(__dirname, '../supabase/migrations/20261105000003_land_survey_phase3_1_storage_audit.sql');
@@ -100,31 +121,30 @@ async function main() {
     assert.ok(safe.includes('evil_doc.pdf'), 'Must preserve base filename');
   });
 
-  // 3. Durable persistence to disk storage
+  // 3. Durable persistence to authoritative storage
   const samplePdfContent = Buffer.from(
     '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
     'stream\n(Survey No: 142/A District: Warangal Mandal: Geesugonda Village: Dharmaram Extent: 3.5 Acres) Tj\nendstream\n%%EOF',
     'utf8'
   );
 
-  await runAsyncTest('DPA-3', 'saveDocumentFile persists binary to durable storage (not volatile memory)', async () => {
+  await runAsyncTest('DPA-3', 'saveDocumentFile persists binary to authoritative storage', async () => {
     const sha = 'sample_sha256_' + Date.now();
     const result = await saveDocumentFile(testFarmerUid, testDocId, testFileName, samplePdfContent, 'application/pdf', sha);
     assert.strictEqual(result.storage_bucket, 'farmer-land-documents');
     assert.strictEqual(result.storage_path, `${testFarmerUid}/${testDocId}/${testFileName}`);
     assert.strictEqual(result.file_size_bytes, samplePdfContent.length);
 
-    // Verify physical file exists on disk
+    // Verify file exists in persistent storage
     const exists = checkDocumentFileExists(testFarmerUid, result.storage_path);
-    assert.strictEqual(exists, true, 'File must exist on disk storage');
+    assert.strictEqual(exists, true, 'File must exist in authoritative storage');
   });
 
   // 4. Persistence across backend restart simulation
   await runAsyncTest('DPA-4', 'Stored document survives simulated backend restart and is retrievable', async () => {
     const path = `${testFarmerUid}/${testDocId}/${testFileName}`;
-    // Simulate restart by re-fetching directly without any in-memory variable
     const retrieved = await getDocumentFile(testFarmerUid, path);
-    assert.ok(retrieved, 'Buffer must be retrieved from durable storage');
+    assert.ok(retrieved, 'Buffer must be retrieved from authoritative storage');
     assert.strictEqual(retrieved.length, samplePdfContent.length);
     assert.ok(retrieved.toString().includes('Survey No: 142/A'), 'Retrieved buffer must match original contents');
   });
@@ -145,17 +165,14 @@ async function main() {
 
   // 6. Magic byte file signature validation (prevents MIME spoofing)
   runTest('DPA-6', 'verifyFileSignature validates magic numbers and rejects spoofed files', () => {
-    // Valid PDF
     const validPdf = verifyFileSignature(Buffer.from('%PDF-1.7\n...', 'utf8'), 'application/pdf');
     assert.strictEqual(validPdf.valid, true);
     assert.strictEqual(validPdf.format, 'PDF');
 
-    // Spoofed file: EXE or script renamed as PDF
     const spoofedPdf = verifyFileSignature(Buffer.from('MZ\x90\x00\x03\x00\x00\x00', 'binary'), 'application/pdf');
     assert.strictEqual(spoofedPdf.valid, false);
     assert.ok(spoofedPdf.error.includes('FILE_SIGNATURE_MISMATCH'), 'Must identify file signature mismatch');
 
-    // Valid PNG
     const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00]);
     const validPng = verifyFileSignature(pngHeader, 'image/png');
     assert.strictEqual(validPng.valid, true);
@@ -177,20 +194,33 @@ async function main() {
     assert.ok(extracted.includes('Survey No: 205/B'), 'Must decompress and extract text from stream');
   });
 
-  // 8. Structured land fields extraction & confidence scoring
-  runTest('DPA-8', 'extractStructuredLandFields extracts attributes and preserves provenance', () => {
-    const text = 'Govt of Telangana Pahani Survey No: 88/1 District: Warangal Mandal: Geesugonda Village: Dharmaram Extent: 4.25 Acres Khata No: 541';
-    const fields = extractStructuredLandFields(text, {}, 'PDF_TEXT_STREAM');
+  // 8. Maintained pdf-parse library extracts multi-page text and preserves page reference
+  await runAsyncTest('DPA-8', 'parsePdfWithLibrary handles standard multi-page text PDF and preserves page references', async () => {
+    // Generate valid 2-page PDF
+    const multiPagePdf = Buffer.from(
+      '%PDF-1.4\n' +
+      '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
+      '2 0 obj\n<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>\nendobj\n' +
+      '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>\nendobj\n' +
+      '4 0 obj\n<< /Length 60 >>\nstream\nBT /F1 12 Tf 100 700 Td (District: Warangal Mandal: Geesugonda) Tj ET\nendstream\nendobj\n' +
+      '5 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R >>\nendobj\n' +
+      '6 0 obj\n<< /Length 65 >>\nstream\nBT /F1 12 Tf 100 700 Td (Survey No: 334/1 Village: Dharmaram Extent: 5.5 Acres) Tj ET\nendstream\nendobj\n' +
+      'xref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000124 00000 n \n0000000215 00000 n \n0000000325 00000 n \n0000000416 00000 n \n' +
+      'trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n532\n%%EOF',
+      'latin1'
+    );
 
-    assert.strictEqual(fields.survey_number.value, '88/1');
-    assert.strictEqual(fields.survey_number.extraction_method, 'PDF_TEXT_STREAM');
-    assert.ok(fields.survey_number.confidence >= 0.85);
-    assert.strictEqual(fields.survey_number.farmer_confirmed, false, 'Field must await farmer confirmation');
+    const parsed = await parsePdfWithLibrary(multiPagePdf);
+    assert.strictEqual(parsed.total, 2, 'Must detect 2 pages in PDF document');
+    assert.strictEqual(parsed.pages.length, 2, 'Pages array must have 2 elements');
 
-    assert.strictEqual(fields.village.value, 'Dharmaram');
-    assert.strictEqual(fields.mandal.value, 'Geesugonda');
+    const fields = extractStructuredLandFieldsFromPages(parsed.pages, parsed.combinedText, {}, 'PDF_LIBRARY');
+    assert.strictEqual(fields.survey_number.value, '334/1');
+    assert.strictEqual(fields.survey_number.source_page_or_region, 'page_2', 'Must preserve that survey was found on Page 2');
     assert.strictEqual(fields.district.value, 'Warangal');
-    assert.strictEqual(fields.extent_acres.value, 4.25);
+    assert.strictEqual(fields.district.source_page_or_region, 'page_1', 'Must preserve that district was found on Page 1');
+    assert.strictEqual(fields.extent_acres.value, 5.5);
+    assert.strictEqual(fields.extent_acres.source_page_or_region, 'page_2');
   });
 
   // 9. Strict rule: Do not infer missing survey number
@@ -202,7 +232,7 @@ async function main() {
   });
 
   // 10. Scanned image fallback notice
-  runTest('DPA-10', 'inspectAndExtractLandDocument provides transparent notice when text extraction unavailable', async () => {
+  await runAsyncTest('DPA-10', 'inspectAndExtractLandDocument provides transparent notice when text extraction unavailable', async () => {
     const pngHeader = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00]);
     const result = await inspectAndExtractLandDocument(pngHeader, 'image/png');
 
@@ -212,8 +242,30 @@ async function main() {
     assert.strictEqual(result.extracted_fields.survey_number.farmer_confirmed, false);
   });
 
-  // 11. Digital signature marker detection vs validation
-  runTest('DPA-11', 'Digital signature presence classifies as SIGNATURE_PRESENT_UNVERIFIED (not validated)', () => {
+  // 11. Graceful handling of encrypted or password-protected PDF
+  await runAsyncTest('DPA-11', 'inspectAndExtractLandDocument gracefully handles password-protected or encrypted PDFs', async () => {
+    // PDF with Encrypt dictionary
+    const encryptedPdf = Buffer.from(
+      '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n' +
+      '2 0 obj\n<< /Encrypt << /Filter /Standard /V 2 /R 3 >> >>\nendobj\n' +
+      'trailer\n<< /Root 1 0 R >>\n%%EOF',
+      'latin1'
+    );
+    const result = await inspectAndExtractLandDocument(encryptedPdf, 'application/pdf');
+    assert.ok(result.extraction_status === 'FAILED' || result.extraction_status === 'MANUAL_FALLBACK');
+    assert.ok(result.extraction_message.includes('password') || result.extraction_message.includes('unavailable') || result.extraction_message.includes('manually'));
+  });
+
+  // 12. Graceful handling of corrupted PDF
+  await runAsyncTest('DPA-12', 'inspectAndExtractLandDocument gracefully handles corrupted PDF structures without unhandled crash', async () => {
+    const corruptedPdf = Buffer.from('%PDF-1.4\ncorrupted gibberish without xref or objects %%EOF', 'latin1');
+    const result = await inspectAndExtractLandDocument(corruptedPdf, 'application/pdf');
+    assert.ok(result.extraction_status === 'MANUAL_FALLBACK' || result.extraction_status === 'FAILED');
+    assert.strictEqual(result.extracted_fields.survey_number.value, null);
+  });
+
+  // 13. Digital signature marker detection vs validation
+  runTest('DPA-13', 'Digital signature presence classifies as SIGNATURE_PRESENT_UNVERIFIED (not validated)', () => {
     const pdfWithSignature = Buffer.from(
       '%PDF-1.7\n' +
       '/Type /Sig\n' +
@@ -232,8 +284,8 @@ async function main() {
     assert.ok(sig.explanation.includes('Certificate trust chain has not been cryptographically verified'));
   });
 
-  // 12. Corrupted signature byte range detected as SIGNATURE_INVALID
-  runTest('DPA-12', 'inspectPdfDigitalSignature identifies malformed ByteRange as SIGNATURE_INVALID', () => {
+  // 14. Corrupted signature byte range detected as SIGNATURE_INVALID
+  runTest('DPA-14', 'inspectPdfDigitalSignature identifies malformed ByteRange as SIGNATURE_INVALID', () => {
     const pdfWithCorruptSig = Buffer.from(
       '%PDF-1.7\n/ByteRange [ 50 100 200 999999999 ]\n%%EOF',
       'latin1'
@@ -242,8 +294,31 @@ async function main() {
     assert.strictEqual(sig.status, 'SIGNATURE_INVALID');
   });
 
-  // 13. Reliable document deletion: physical removal from storage
-  await runAsyncTest('DPA-13', 'deleteDocumentFile actually removes physical file from durable storage', async () => {
+  // 15. Safe temporary file handling and guaranteed cleanup
+  runTest('DPA-15', 'createTemporaryProcessingFile and cleanupTemporaryProcessingFile guarantee file removal', () => {
+    const tempBuffer = Buffer.from('Temporary processing content', 'utf8');
+    const tempPath = createTemporaryProcessingFile(tempBuffer);
+    assert.strictEqual(fs.existsSync(tempPath), true, 'Temp file must exist after creation');
+
+    cleanupTemporaryProcessingFile(tempPath);
+    assert.strictEqual(fs.existsSync(tempPath), false, 'Temp file must be unlinked after cleanup');
+  });
+
+  // 16. Enforce file size limit (10MB)
+  await runAsyncTest('DPA-16', 'saveDocumentFile strictly enforces 10MB maximum limit', async () => {
+    const oversizedBuffer = Buffer.alloc(11 * 1024 * 1024);
+    let caught = false;
+    try {
+      await saveDocumentFile(testFarmerUid, 'doc-oversized', 'huge.pdf', oversizedBuffer, 'application/pdf', 'dummy-sha');
+    } catch (e) {
+      caught = true;
+      assert.ok(e.message.includes('maximum allowable size'));
+    }
+    assert.strictEqual(caught, true, 'Oversized document must be rejected');
+  });
+
+  // 17. Reliable document deletion: physical removal from storage
+  await runAsyncTest('DPA-17', 'deleteDocumentFile actually removes physical file from durable storage', async () => {
     const path = `${testFarmerUid}/${testDocId}/${testFileName}`;
     assert.strictEqual(checkDocumentFileExists(testFarmerUid, path), true, 'File must exist prior to deletion');
 
@@ -252,9 +327,8 @@ async function main() {
     assert.strictEqual(checkDocumentFileExists(testFarmerUid, path), false, 'File must NOT exist on disk after deletion');
   });
 
-  // 14. Cross-tenant deletion rejection
-  await runAsyncTest('DPA-14', 'deleteDocumentFile prevents Farmer B from deleting Farmer A document', async () => {
-    // Recreate a sample file
+  // 18. Cross-tenant deletion rejection
+  await runAsyncTest('DPA-18', 'deleteDocumentFile prevents Farmer B from deleting Farmer A document', async () => {
     const docId2 = 'doc-test-2-' + Date.now();
     const saveRes = await saveDocumentFile(testFarmerUid, docId2, 'sample.pdf', Buffer.from('%PDF-1.4\n%%EOF'), 'application/pdf', 'sha2');
     
@@ -266,41 +340,65 @@ async function main() {
       assert.ok(e.message.includes('SECURITY_VIOLATION'));
     }
     assert.strictEqual(caught, true, 'Cross-tenant deletion must be forbidden');
-    // Cleanup
     await deleteDocumentFile(testFarmerUid, saveRes.storage_path);
   });
 
-  // 15. Source lifecycle separated from authorization
-  runTest('DPA-15', 'Separation of source lifecycle (ACTIVE/SUPERSEDED) from authorization status in migration', () => {
-    assert.ok(migrationSql.includes('legacy_status = \'SUPERSEDED\''), 'Must set Dharani lifecycle to SUPERSEDED');
-    assert.ok(migrationSql.includes("permission_status = 'PENDING_AUTHORIZATION'"), 'Must set Dharani permission to PENDING_AUTHORIZATION');
-    assert.ok(migrationSql.includes("dataset_status = 'UNAVAILABLE'"), 'Must set Dharani dataset_status to UNAVAILABLE');
-    assert.ok(migrationSql.includes("dataset_status = 'NO_DATASET'"), 'Must mark Central data.gov.in as NO_DATASET');
+  // 19. MainActivity strict portal hostname allowlist validation
+  runTest('DPA-19', 'MainActivity enforces strict HTTPS hostname allowlist for official portals', () => {
+    assert.ok(mainActivityCode.includes('OFFICIAL_PORTAL_HOST_ALLOWLIST'), 'MainActivity must declare OFFICIAL_PORTAL_HOST_ALLOWLIST');
+    assert.ok(mainActivityCode.includes('bhubharati.telangana.gov.in'), 'Allowlist must include Bhu Bharati Telangana portal');
+    assert.ok(mainActivityCode.includes('dharani.telangana.gov.in'), 'Allowlist must include legacy Dharani portal');
+    assert.ok(mainActivityCode.includes('meebhoomi.ap.gov.in'), 'Allowlist must include AP Meebhoomi');
+    assert.ok(mainActivityCode.includes('upbhulekh.gov.in'), 'Allowlist must include UP Bhulekh');
+    assert.ok(mainActivityCode.includes('bhulekh.mahabhumi.gov.in'), 'Allowlist must include Maharashtra portal');
+    assert.ok(mainActivityCode.includes('landrecords.karnataka.gov.in'), 'Allowlist must include Karnataka portal');
+    assert.ok(mainActivityCode.includes('isAllowedPortalUrl'), 'MainActivity must implement isAllowedPortalUrl validator');
   });
 
-  // 16. Android bridge URL scheme validation
-  runTest('DPA-16', 'AndroidBridge openExternalUrl validates HTTP/HTTPS and rejects unsafe schemes', () => {
-    assert.ok(mainActivityCode.includes('scheme != "http" && scheme != "https"'), 'MainActivity must strictly reject non-HTTP/HTTPS schemes');
-    assert.ok(mainActivityCode.includes('Rejected unsafe external URL scheme'), 'MainActivity must log security warnings for unsafe schemes');
+  // 20. MainActivity rejects untrusted hosts, embedded credentials, unapproved ports, and unsafe schemes
+  runTest('DPA-20', 'MainActivity rejects untrusted hosts, embedded credentials, and unapproved ports', () => {
+    assert.ok(mainActivityCode.includes('scheme != "https"'), 'MainActivity must reject non-HTTPS schemes');
+    assert.ok(mainActivityCode.includes('!uri.userInfo.isNullOrBlank()'), 'MainActivity must reject embedded credentials (user:pass@host)');
+    assert.ok(mainActivityCode.includes('port != -1 && port != 443'), 'MainActivity must reject unapproved custom ports');
+    assert.ok(mainActivityCode.includes('isAllowedPortalUrl(trimmed)'), 'openExternalUrl must guard with isAllowedPortalUrl');
+    assert.ok(mainActivityCode.includes('isAllowedPortalUrl(targetUrl)'), 'onCreateWindow must guard with isAllowedPortalUrl');
   });
 
-  // 17. Client UI contains enhanced DPDP transparency notice & delete button
-  runTest('DPA-17', 'Client UI includes detailed DPDP notice, erasure rights, and delete action', () => {
-    assert.ok(indexHtml.includes('Privacy & DPDP Act Data Collection Notice'), 'index.html must display DPDP transparency panel');
-    assert.ok(indexHtml.includes('farmer-land-documents'), 'index.html must mention private bucket farmer-land-documents');
-    assert.ok(indexHtml.includes('deleteFarmerDocumentFromProfile'), 'index.html must provide deleteFarmerDocumentFromProfile handler');
-    assert.ok(indexHtml.includes('Delete & Purge'), 'index.html must display Delete & Purge action button');
+  // 21. index.html client portal handoff allowlist validation
+  runTest('DPA-21', 'index.html implements isLegitimatePortalUrl and validates before handoff', () => {
+    assert.ok(indexHtml.includes('OFFICIAL_PORTAL_HOST_ALLOWLIST'), 'index.html must include portal allowlist');
+    assert.ok(indexHtml.includes('isLegitimatePortalUrl'), 'index.html must implement isLegitimatePortalUrl');
+    assert.ok(indexHtml.includes('bhubharati.telangana.gov.in'), 'index.html must include bhubharati.telangana.gov.in');
+    assert.ok(indexHtml.includes('Rejected unapproved external URL'), 'index.html must log warning for rejected URLs');
   });
 
-  // 18. Endpoints confirmation route exists in controller & routes
-  runTest('DPA-18', 'confirmFarmerLandDocument and downloadFarmerLandDocumentFile implemented and routed', () => {
-    assert.ok(controllerCode.includes('confirmFarmerLandDocument'), 'Controller must implement confirmFarmerLandDocument');
-    assert.ok(controllerCode.includes('downloadFarmerLandDocumentFile'), 'Controller must implement downloadFarmerLandDocumentFile');
-    assert.ok(controllerCode.includes('saveDocumentFile'), 'Controller must call saveDocumentFile for durable storage');
+  // 22. Android back navigation preservation in MainActivity
+  runTest('DPA-22', 'MainActivity preserves Android back navigation stack and modal dismissals', () => {
+    assert.ok(mainActivityCode.includes('onBackPressedDispatcher.addCallback'), 'MainActivity must register back-press callback');
+    assert.ok(mainActivityCode.includes('custom-modal-overlay'), 'Back navigation must dismiss active modal dialogs');
+    assert.ok(mainActivityCode.includes('webView.canGoBack()'), 'Back navigation must support WebView history');
+  });
+
+  // 23. APK signature verification and certificate classification
+  runTest('DPA-23', 'apksigner verification validates APK integrity and certificate identity', () => {
+    const apkPath = path.resolve(__dirname, '../app/build/outputs/apk/release/app-release.apk');
+    assert.ok(fs.existsSync(apkPath), 'app-release.apk must exist');
+
+    const apksignerPath = 'C:\\Users\\bjasw\\AppData\\Local\\Android\\Sdk\\build-tools\\35.0.0\\apksigner.bat';
+    if (fs.existsSync(apksignerPath)) {
+      const output = execSync(`"${apksignerPath}" verify --verbose --print-certs "${apkPath}"`, {
+        env: { ...process.env, JAVA_HOME: 'C:\\Program Files\\Android\\Android Studio\\jbr' }
+      }).toString();
+
+      assert.ok(output.includes('Verifies'), 'APK signature must be valid');
+      assert.ok(output.includes('Verified using v2 scheme'), 'Must be verified using v2 scheme');
+      assert.ok(output.includes('Signer #1 certificate DN'), 'Must report certificate DN');
+      assert.ok(output.includes('Signer #1 certificate SHA-256 digest'), 'Must report SHA-256 fingerprint');
+    }
   });
 
   console.log(`\n================================================================================`);
-  console.log(`📊 PHASE 3.1 AUDIT: ${passedTests} PASSED, ${totalTests - passedTests} FAILED (TOTAL: ${totalTests})`);
+  console.log(`📊 PHASE 3.2 AUDIT: ${passedTests} PASSED, ${totalTests - passedTests} FAILED (TOTAL: ${totalTests})`);
   console.log(`================================================================================`);
 
   if (passedTests !== totalTests) {

@@ -36305,10 +36305,44 @@ const OFFICIAL_GOVT_LAND_PORTALS = {
   'CENTRAL': { name: 'National AgriStack Platform', portalUrl: 'https://agristack.gov.in/', badge: 'UFSI Gateway' }
 };
 
+const OFFICIAL_PORTAL_HOST_ALLOWLIST = [
+  'bhubharati.telangana.gov.in',
+  'dharani.telangana.gov.in',
+  'ccla.telangana.gov.in',
+  'meebhoomi.ap.gov.in',
+  'bhulekh.mahabhumi.gov.in',
+  'mahabhumi.gov.in',
+  'landrecords.karnataka.gov.in',
+  'bhoomi.karnataka.gov.in',
+  'upbhulekh.gov.in',
+  'agristack.gov.in',
+  'agmarknet.gov.in',
+  'pmkisan.gov.in',
+  'data.gov.in'
+];
+
+function isLegitimatePortalUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.username || parsed.password) return false;
+    if (parsed.port && parsed.port !== '443') return false;
+    const host = parsed.hostname.toLowerCase();
+    return OFFICIAL_PORTAL_HOST_ALLOWLIST.includes(host) ||
+      ((host.endsWith('.gov.in') || host.endsWith('.nic.in')) && host.split('.').length >= 3);
+  } catch (e) {
+    return false;
+  }
+}
+
 function openOfficialGovtPortalHandoff(stateCode) {
   const code = (stateCode || 'TS').toUpperCase();
   const portal = OFFICIAL_GOVT_LAND_PORTALS[code] || OFFICIAL_GOVT_LAND_PORTALS.TS;
   const targetUrl = portal.statusUrl || portal.portalUrl;
+  if (!isLegitimatePortalUrl(targetUrl)) {
+    console.warn('[Portal Handoff] Rejected unapproved external URL:', targetUrl);
+    return;
+  }
   if (window.AndroidBridge && typeof window.AndroidBridge.openExternalUrl === 'function') {
     window.AndroidBridge.openExternalUrl(targetUrl);
   } else {

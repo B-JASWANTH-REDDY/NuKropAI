@@ -3,7 +3,11 @@
  * Strictly adheres to:
  * 1. Privacy minimization: Extracts ONLY agricultural parcel attributes (no Aadhaar/bank PII).
  * 2. Magic byte file signature validation (prevents MIME spoofing).
- * 3. Real text stream extraction from digital PDFs via zlib inflate stream parsing.
+ * 3. Maintained PDF parsing library (pdf-parse) supporting:
+ *    - Standard text-based PDFs
+ *    - Multi-page extraction with page references (page_1, page_2, etc.)
+ *    - Compressed content streams and font mappings
+ *    - Graceful handling of unsupported, encrypted, or corrupted PDFs
  * 4. Transparent OCR / manual fallback notice when OCR is unavailable:
  *    "Text extraction is unavailable. Please enter or review the land details manually."
  * 5. Distinct digital signature statuses (differentiating detected markers from verified trust chains).
@@ -20,7 +24,7 @@ export type DigitalSignatureStatus =
 
 export interface ExtractedFieldItem<T = string | number | null> {
   value: T;
-  extraction_method: 'PDF_TEXT_STREAM' | 'LOCAL_OCR' | 'MANUAL_FALLBACK' | 'USER_CONFIRMED';
+  extraction_method: 'PDF_TEXT_STREAM' | 'PDF_LIBRARY' | 'LOCAL_OCR' | 'MANUAL_FALLBACK' | 'USER_CONFIRMED';
   confidence: number;
   source_page_or_region: string;
   farmer_confirmed: boolean;
@@ -51,6 +55,18 @@ export interface DocumentInspectionResult {
     byte_range?: number[];
     explanation: string;
   };
+  page_count?: number;
+}
+
+export interface ParsedPdfPage {
+  pageNumber: number;
+  text: string;
+}
+
+export interface ParsedPdfDocument {
+  total: number;
+  pages: ParsedPdfPage[];
+  combinedText: string;
 }
 
 /**
@@ -140,7 +156,6 @@ export function inspectPdfDigitalSignature(buffer: Buffer): {
 
   // Signature marker exists. In client/offline context without bilateral government Root CA trust store,
   // we strictly classify as SIGNATURE_PRESENT_UNVERIFIED.
-  // The presence of /ByteRange or adbe.pkcs7 is NOT cryptographic signature validation.
   return {
     status: 'SIGNATURE_PRESENT_UNVERIFIED',
     marker_present: true,
@@ -151,8 +166,41 @@ export function inspectPdfDigitalSignature(buffer: Buffer): {
 }
 
 /**
- * Extracts raw textual streams from a PDF buffer.
- * Decompresses /FlateDecode streams using zlib.inflateSync.
+ * Parses a PDF buffer using the maintained pdf-parse library.
+ * Supports multi-page extraction, font mappings, and compressed content streams.
+ * Handles encrypted or corrupted PDFs gracefully.
+ */
+export async function parsePdfWithLibrary(buffer: Buffer): Promise<ParsedPdfDocument> {
+  const pdfModule = require('pdf-parse');
+
+  // Handle pdf-parse v2 class structure
+  if (pdfModule.PDFParse) {
+    const parser = new pdfModule.PDFParse({ data: buffer });
+    const res = await parser.getText();
+    const pages: ParsedPdfPage[] = (res.pages || []).map((p: any) => ({
+      pageNumber: p.num || 1,
+      text: (p.text || '').trim()
+    }));
+    return {
+      total: res.total || pages.length,
+      pages,
+      combinedText: res.text || pages.map(p => p.text).join('\n')
+    };
+  } else if (typeof pdfModule === 'function') {
+    const res = await pdfModule(buffer);
+    return {
+      total: res.numpages || 1,
+      pages: [{ pageNumber: 1, text: (res.text || '').trim() }],
+      combinedText: res.text || ''
+    };
+  }
+
+  throw new Error('PDF_PARSER_UNAVAILABLE: No compatible PDF parser interface found.');
+}
+
+/**
+ * Extracts raw textual streams from a PDF buffer using zlib.inflateSync.
+ * Serves as resilient secondary extraction engine.
  */
 export function extractTextStreamsFromPdf(buffer: Buffer): string {
   const contentLatin1 = buffer.toString('latin1');
@@ -166,7 +214,6 @@ export function extractTextStreamsFromPdf(buffer: Buffer): string {
     const streamEnd = match.index + match[0].lastIndexOf('\nendstream');
     const rawStreamBuffer = buffer.subarray(streamStart, streamEnd > streamStart ? streamEnd : streamStart + match[1].length);
 
-    // Look backward from streamStart to check if stream is /FlateDecode compressed
     const headerSlice = contentLatin1.slice(Math.max(0, match.index - 300), match.index);
     let decompressed: Buffer | null = null;
 
@@ -186,7 +233,6 @@ export function extractTextStreamsFromPdf(buffer: Buffer): string {
 
     if (decompressed) {
       const streamStr = decompressed.toString('utf8');
-      // Extract strings inside parentheses for text operators (str) Tj or [(str1)(str2)] TJ
       const tjRegex = /\(([^)]+)\)\s*Tj/g;
       let tjMatch: RegExpExecArray | null;
       while ((tjMatch = tjRegex.exec(streamStr)) !== null) {
@@ -202,14 +248,12 @@ export function extractTextStreamsFromPdf(buffer: Buffer): string {
         }
       }
 
-      // If stream contains plain text keywords like Survey or District directly
       if (streamStr.includes('Survey') || streamStr.includes('District') || streamStr.includes('Pahani')) {
         extractedText += ' ' + streamStr;
       }
     }
   }
 
-  // Also search directly in latin1 representation for uncompressed metadata
   const textTokens = contentLatin1.match(/\b(?:Survey|Khasra|District|Mandal|Village|Acres?|Khata|Pattadar|Telangana|Andhra|Bhulekh)\b[^\r\n]*/gi);
   if (textTokens) {
     extractedText += ' ' + textTokens.join(' ');
@@ -219,8 +263,219 @@ export function extractTextStreamsFromPdf(buffer: Buffer): string {
 }
 
 /**
- * Extracts structured land fields from raw document text.
- * Rule: "Do not infer a missing survey number."
+ * Extracts structured land fields across PDF pages or raw text.
+ * Rule: "Never infer a missing survey number."
+ * Preserves the exact page reference (e.g., page_1, page_2) where each field was detected.
+ */
+export function extractStructuredLandFieldsFromPages(
+  pages: ParsedPdfPage[],
+  fallbackText: string,
+  declared: {
+    declared_survey_number?: string;
+    declared_subdivision?: string;
+    declared_extent_acres?: number;
+    declared_village?: string;
+    declared_mandal?: string;
+    declared_district?: string;
+  } = {},
+  method: 'PDF_LIBRARY' | 'PDF_TEXT_STREAM' | 'MANUAL_FALLBACK' = 'PDF_LIBRARY'
+): StructuredLandExtraction {
+  let surveyVal: string | null = null;
+  let surveyConf = 0.0;
+  let surveyPage = 'stream_text';
+
+  let subdivVal: string | null = null;
+  let subdivConf = 0.0;
+  let subdivPage = 'stream_text';
+
+  let distVal: string | null = null;
+  let distConf = 0.0;
+  let distPage = 'stream_text';
+
+  let mandalVal: string | null = null;
+  let mandalConf = 0.0;
+  let mandalPage = 'stream_text';
+
+  let villageVal: string | null = null;
+  let villageConf = 0.0;
+  let villagePage = 'stream_text';
+
+  let extentVal: number | null = null;
+  let extentConf = 0.0;
+  let extentPage = 'stream_text';
+
+  let docRefVal: string | null = null;
+  let docRefConf = 0.0;
+  let docRefPage = 'stream_text';
+
+  // Process pages in order to record page numbers
+  const pagesToScan = pages.length > 0 ? pages : [{ pageNumber: 1, text: fallbackText }];
+
+  for (const page of pagesToScan) {
+    const text = page.text || '';
+    const pageLabel = `page_${page.pageNumber}`;
+
+    // 1. Survey Number: Regex matching official Indian land formats (e.g. 142/A, 25/1, 102/B-1)
+    if (!surveyVal) {
+      const surveyMatch = text.match(/\b(?:Survey|Sy|S\.No|Khasra|ఖస్రా|సర్వే|खसरा)\s*(?:No\.?|Number)?\s*[:.\-]?\s*([0-9]+(?:\/[0-9A-Za-z\-]+)?)\b/i);
+      if (surveyMatch && surveyMatch[1]) {
+        surveyVal = surveyMatch[1].trim();
+        surveyConf = 0.95;
+        surveyPage = pageLabel;
+      }
+    }
+
+    // 2. Subdivision
+    if (!subdivVal) {
+      const subdivMatch = text.match(/\b(?:Sub-?\s*division|Sub-?\s*div|హిస్సా|उपविभाग)\s*[:.\-]?\s*([0-9A-Za-z]+)\b/i);
+      if (subdivMatch && subdivMatch[1]) {
+        subdivVal = subdivMatch[1].trim();
+        subdivConf = 0.90;
+        subdivPage = pageLabel;
+      }
+    }
+
+    // 3. District
+    if (!distVal) {
+      const distMatch = text.match(/\b(?:District|Dist|జిల్లా|जिला)\s*[:.\-]?\s*([A-Za-z]{3,25})\b/i);
+      if (distMatch && distMatch[1]) {
+        distVal = distMatch[1].trim();
+        distConf = 0.85;
+        distPage = pageLabel;
+      }
+    }
+
+    // 4. Mandal / Tehsil
+    if (!mandalVal) {
+      const mandalMatch = text.match(/\b(?:Mandal|Taluk|Tahsil|మండలం|तहसील)\s*[:.\-]?\s*([A-Za-z]{3,25})\b/i);
+      if (mandalMatch && mandalMatch[1]) {
+        mandalVal = mandalMatch[1].trim();
+        mandalConf = 0.85;
+        mandalPage = pageLabel;
+      }
+    }
+
+    // 5. Village
+    if (!villageVal) {
+      const villageMatch = text.match(/\b(?:Village|Rev\.?\s*Village|గ్రామం|गांव)\s*[:.\-]?\s*([A-Za-z]{3,25})\b/i);
+      if (villageMatch && villageMatch[1]) {
+        villageVal = villageMatch[1].trim();
+        villageConf = 0.85;
+        villagePage = pageLabel;
+      }
+    }
+
+    // 6. Extent Acres
+    if (extentVal === null) {
+      const extentMatch = text.match(/\b(?:Extent|Area|విస్తీర్ణం|Total\s*Area)\s*[:.\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:Ac|Acres|Guntas|ఎకరాలు)?\b/i);
+      if (extentMatch && extentMatch[1]) {
+        extentVal = parseFloat(extentMatch[1]);
+        extentConf = 0.90;
+        extentPage = pageLabel;
+      }
+    }
+
+    // 7. Document Reference
+    if (!docRefVal) {
+      const refMatch = text.match(/\b(?:Passbook|Khata|ఖాతా|खाता|Doc|RoR)\s*(?:No\.?|ID)?\s*[:.\-]?\s*([0-9A-Za-z\/-]{3,20})\b/i);
+      if (refMatch && refMatch[1]) {
+        docRefVal = refMatch[1].trim();
+        docRefConf = 0.80;
+        docRefPage = pageLabel;
+      }
+    }
+  }
+
+  // Fallback to declared fields ONLY if not extracted from text
+  if (!surveyVal && declared.declared_survey_number) {
+    surveyVal = declared.declared_survey_number.trim();
+    surveyConf = 0.50;
+    surveyPage = 'declared_input';
+  }
+  if (!subdivVal && declared.declared_subdivision) {
+    subdivVal = declared.declared_subdivision.trim();
+    subdivConf = 0.50;
+    subdivPage = 'declared_input';
+  }
+  if (!distVal && declared.declared_district) {
+    distVal = declared.declared_district.trim();
+    distConf = 0.50;
+    distPage = 'declared_input';
+  }
+  if (!mandalVal && declared.declared_mandal) {
+    mandalVal = declared.declared_mandal.trim();
+    mandalConf = 0.50;
+    mandalPage = 'declared_input';
+  }
+  if (!villageVal && declared.declared_village) {
+    villageVal = declared.declared_village.trim();
+    villageConf = 0.50;
+    villagePage = 'declared_input';
+  }
+  if (extentVal === null && declared.declared_extent_acres) {
+    extentVal = declared.declared_extent_acres;
+    extentConf = 0.50;
+    extentPage = 'declared_input';
+  }
+
+  const combinedExcerpt = pagesToScan.map(p => p.text).join(' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+
+  return {
+    survey_number: {
+      value: surveyVal,
+      extraction_method: surveyConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: surveyConf,
+      source_page_or_region: surveyPage,
+      farmer_confirmed: false
+    },
+    subdivision: {
+      value: subdivVal,
+      extraction_method: subdivConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: subdivConf,
+      source_page_or_region: subdivPage,
+      farmer_confirmed: false
+    },
+    district: {
+      value: distVal,
+      extraction_method: distConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: distConf,
+      source_page_or_region: distPage,
+      farmer_confirmed: false
+    },
+    mandal: {
+      value: mandalVal,
+      extraction_method: mandalConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: mandalConf,
+      source_page_or_region: mandalPage,
+      farmer_confirmed: false
+    },
+    village: {
+      value: villageVal,
+      extraction_method: villageConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: villageConf,
+      source_page_or_region: villagePage,
+      farmer_confirmed: false
+    },
+    extent_acres: {
+      value: extentVal,
+      extraction_method: extentConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: extentConf,
+      source_page_or_region: extentPage,
+      farmer_confirmed: false
+    },
+    document_reference: {
+      value: docRefVal,
+      extraction_method: docRefConf > 0.6 ? method : 'MANUAL_FALLBACK',
+      confidence: docRefConf,
+      source_page_or_region: docRefPage,
+      farmer_confirmed: false
+    },
+    raw_text_excerpt: combinedExcerpt
+  };
+}
+
+/**
+ * Backward compatibility helper for legacy call signature
  */
 export function extractStructuredLandFields(
   rawText: string,
@@ -234,146 +489,17 @@ export function extractStructuredLandFields(
   } = {},
   method: 'PDF_TEXT_STREAM' | 'MANUAL_FALLBACK' = 'PDF_TEXT_STREAM'
 ): StructuredLandExtraction {
-  // 1. Survey Number
-  let surveyVal: string | null = null;
-  let surveyConf = 0.0;
-  const surveyMatch = rawText.match(/\b(?:Survey|Sy|S\.No|Khasra|ఖస్రా|సర్వే|खसरा)\s*(?:No\.?|Number)?\s*[:.\-]?\s*([0-9]+(?:\/[0-9A-Za-z]+)?)\b/i);
-
-  if (surveyMatch && surveyMatch[1]) {
-    surveyVal = surveyMatch[1].trim();
-    surveyConf = 0.90;
-  } else if (declared.declared_survey_number) {
-    surveyVal = declared.declared_survey_number.trim();
-    surveyConf = 0.50;
-  }
-
-  // 2. Subdivision
-  let subdivVal: string | null = null;
-  let subdivConf = 0.0;
-  const subdivMatch = rawText.match(/\b(?:Sub-?\s*division|Sub-?\s*div|హిస్సా|उपविभाग)\s*[:.\-]?\s*([0-9A-Za-z]+)\b/i);
-  if (subdivMatch && subdivMatch[1]) {
-    subdivVal = subdivMatch[1].trim();
-    subdivConf = 0.85;
-  } else if (declared.declared_subdivision) {
-    subdivVal = declared.declared_subdivision.trim();
-    subdivConf = 0.50;
-  }
-
-  // 3. District
-  let distVal: string | null = null;
-  let distConf = 0.0;
-  const distMatch = rawText.match(/\b(?:District|Dist|జిల్లా|जिला)\s*[:.\-]?\s*([A-Za-z]{3,25})\b/i);
-  if (distMatch && distMatch[1]) {
-    distVal = distMatch[1].trim();
-    distConf = 0.80;
-  } else if (declared.declared_district) {
-    distVal = declared.declared_district.trim();
-    distConf = 0.50;
-  }
-
-  // 4. Mandal
-  let mandalVal: string | null = null;
-  let mandalConf = 0.0;
-  const mandalMatch = rawText.match(/\b(?:Mandal|Taluk|Tahsil|మండలం|तहसील)\s*[:.\-]?\s*([A-Za-z]{3,25})\b/i);
-  if (mandalMatch && mandalMatch[1]) {
-    mandalVal = mandalMatch[1].trim();
-    mandalConf = 0.80;
-  } else if (declared.declared_mandal) {
-    mandalVal = declared.declared_mandal.trim();
-    mandalConf = 0.50;
-  }
-
-  // 5. Village
-  let villageVal: string | null = null;
-  let villageConf = 0.0;
-  const villageMatch = rawText.match(/\b(?:Village|Rev\.?\s*Village|గ్రామం|गांव)\s*[:.\-]?\s*([A-Za-z]{3,25})\b/i);
-  if (villageMatch && villageMatch[1]) {
-    villageVal = villageMatch[1].trim();
-    villageConf = 0.80;
-  } else if (declared.declared_village) {
-    villageVal = declared.declared_village.trim();
-    villageConf = 0.50;
-  }
-
-  // 6. Extent Acres
-  let extentVal: number | null = null;
-  let extentConf = 0.0;
-  const extentMatch = rawText.match(/\b(?:Extent|Area|విస్తీర్ణం|Total\s*Area)\s*[:.\-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:Ac|Acres|Guntas|ఎకరాలు)?\b/i);
-  if (extentMatch && extentMatch[1]) {
-    extentVal = parseFloat(extentMatch[1]);
-    extentConf = 0.85;
-  } else if (declared.declared_extent_acres) {
-    extentVal = declared.declared_extent_acres;
-    extentConf = 0.50;
-  }
-
-  // 7. Document Reference
-  let docRefVal: string | null = null;
-  let docRefConf = 0.0;
-  const refMatch = rawText.match(/\b(?:Passbook|Khata|ఖాతా|खाता|Doc|RoR)\s*(?:No\.?|ID)?\s*[:.\-]?\s*([0-9A-Za-z\/-]{3,20})\b/i);
-  if (refMatch && refMatch[1]) {
-    docRefVal = refMatch[1].trim();
-    docRefConf = 0.75;
-  }
-
-  return {
-    survey_number: {
-      value: surveyVal,
-      extraction_method: surveyConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: surveyConf,
-      source_page_or_region: surveyConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    subdivision: {
-      value: subdivVal,
-      extraction_method: subdivConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: subdivConf,
-      source_page_or_region: subdivConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    district: {
-      value: distVal,
-      extraction_method: distConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: distConf,
-      source_page_or_region: distConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    mandal: {
-      value: mandalVal,
-      extraction_method: mandalConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: mandalConf,
-      source_page_or_region: mandalConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    village: {
-      value: villageVal,
-      extraction_method: villageConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: villageConf,
-      source_page_or_region: villageConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    extent_acres: {
-      value: extentVal,
-      extraction_method: extentConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: extentConf,
-      source_page_or_region: extentConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    document_reference: {
-      value: docRefVal,
-      extraction_method: docRefConf > 0.6 ? method : 'MANUAL_FALLBACK',
-      confidence: docRefConf,
-      source_page_or_region: docRefConf > 0.6 ? 'stream_text' : 'declared_input',
-      farmer_confirmed: false
-    },
-    raw_text_excerpt: rawText.slice(0, 300)
-  };
+  return extractStructuredLandFieldsFromPages([], rawText, declared, method === 'PDF_TEXT_STREAM' ? 'PDF_TEXT_STREAM' : 'MANUAL_FALLBACK');
 }
 
 /**
  * Master Document Inspection & Extraction pipeline:
- * Verifies magic bytes, checks signatures, extracts text streams from PDF,
- * or safely falls back for scanned documents/images with transparent disclosures.
+ * 1. Verifies magic bytes (rejects spoofed files).
+ * 2. Checks PDF digital signatures without false claims.
+ * 3. Uses maintained pdf-parse library to extract text and handle multi-page documents.
+ * 4. Gracefully handles corrupted, encrypted, or password-protected PDFs.
+ * 5. Provides honest manual-entry fallback for scanned PDFs and image files:
+ *    "Text extraction is unavailable. Please enter or review the land details manually."
  */
 export async function inspectAndExtractLandDocument(
   buffer: Buffer,
@@ -404,33 +530,82 @@ export async function inspectAndExtractLandDocument(
   let extractedFields: StructuredLandExtraction;
   let extractionStatus: 'SUCCESS' | 'PARTIAL' | 'MANUAL_FALLBACK' | 'FAILED' = 'MANUAL_FALLBACK';
   let extractionMessage = '';
+  let pageCount = 1;
 
   if (sig.format === 'PDF') {
     signatureInfo = inspectPdfDigitalSignature(buffer);
 
-    // Extract text from PDF streams
-    const streamText = extractTextStreamsFromPdf(buffer);
+    let parsedDoc: ParsedPdfDocument | null = null;
+    let pdfParseError: string | null = null;
 
-    if (streamText && streamText.length > 20) {
-      extractedFields = extractStructuredLandFields(streamText, declaredFields, 'PDF_TEXT_STREAM');
-      if (extractedFields.survey_number.value && extractedFields.village.value) {
+    try {
+      parsedDoc = await parsePdfWithLibrary(buffer);
+      pageCount = parsedDoc.total || parsedDoc.pages.length || 1;
+    } catch (err: any) {
+      pdfParseError = err.message || 'PDF parse error';
+      // Specific detection for password / encrypted or corrupted PDFs
+      if (pdfParseError && (pdfParseError.toLowerCase().includes('password') || err.name === 'PasswordException')) {
+        extractedFields = extractStructuredLandFieldsFromPages([], '', declaredFields, 'MANUAL_FALLBACK');
+        return {
+          file_format: 'PDF',
+          magic_bytes_valid: true,
+          extraction_status: 'FAILED',
+          extraction_message: 'PDF is password-protected or encrypted. Please remove password and re-upload, or enter land details manually.',
+          extracted_fields: extractedFields,
+          signature_status: signatureInfo.status,
+          signature_details: signatureInfo,
+          page_count: 0
+        };
+      }
+    }
+
+    // If maintained library extracted text
+    const libText = parsedDoc ? parsedDoc.combinedText.trim() : '';
+
+    if (libText.length > 20) {
+      extractedFields = extractStructuredLandFieldsFromPages(
+        parsedDoc!.pages,
+        libText,
+        declaredFields,
+        'PDF_LIBRARY'
+      );
+
+      if (extractedFields.survey_number.value && (extractedFields.village.value || extractedFields.district.value)) {
         extractionStatus = 'SUCCESS';
-        extractionMessage = 'Text successfully extracted from digital PDF streams. Please review and confirm your details.';
+        extractionMessage = `Text successfully extracted across ${pageCount} page(s). Please review and confirm your land details.`;
       } else {
         extractionStatus = 'PARTIAL';
-        extractionMessage = 'Partial text stream extracted from PDF. Please review and complete missing survey details.';
+        extractionMessage = `Partial land details extracted across ${pageCount} page(s). Please review and complete missing survey details.`;
       }
     } else {
-      // Scanned PDF (no digital text streams)
-      extractionStatus = 'MANUAL_FALLBACK';
-      extractionMessage = 'Text extraction is unavailable. Please enter or review the land details manually.';
-      extractedFields = extractStructuredLandFields('', declaredFields, 'MANUAL_FALLBACK');
+      // Secondary fallback: attempt raw stream inflation
+      const streamText = extractTextStreamsFromPdf(buffer);
+      if (streamText && streamText.length > 20) {
+        extractedFields = extractStructuredLandFieldsFromPages(
+          [],
+          streamText,
+          declaredFields,
+          'PDF_TEXT_STREAM'
+        );
+        if (extractedFields.survey_number.value) {
+          extractionStatus = 'SUCCESS';
+          extractionMessage = 'Text successfully extracted from digital PDF streams. Please review and confirm your details.';
+        } else {
+          extractionStatus = 'PARTIAL';
+          extractionMessage = 'Partial text stream extracted from PDF. Please review and complete missing survey details.';
+        }
+      } else {
+        // Scanned PDF (no digital text streams) — explicit manual fallback required
+        extractionStatus = 'MANUAL_FALLBACK';
+        extractionMessage = 'Text extraction is unavailable. Please enter or review the land details manually.';
+        extractedFields = extractStructuredLandFieldsFromPages([], '', declaredFields, 'MANUAL_FALLBACK');
+      }
     }
   } else {
     // Images (PNG, JPEG) — Scanned photo of passbook/RoR
     extractionStatus = 'MANUAL_FALLBACK';
     extractionMessage = 'Text extraction is unavailable. Please enter or review the land details manually.';
-    extractedFields = extractStructuredLandFields('', declaredFields, 'MANUAL_FALLBACK');
+    extractedFields = extractStructuredLandFieldsFromPages([], '', declaredFields, 'MANUAL_FALLBACK');
   }
 
   return {
@@ -440,6 +615,7 @@ export async function inspectAndExtractLandDocument(
     extraction_message: extractionMessage,
     extracted_fields: extractedFields,
     signature_status: signatureInfo.status,
-    signature_details: signatureInfo
+    signature_details: signatureInfo,
+    page_count: pageCount
   };
 }

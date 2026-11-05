@@ -5,7 +5,9 @@ import {
   saveDocumentFile,
   getDocumentFile,
   deleteDocumentFile,
-  sanitizeStorageFileName
+  sanitizeStorageFileName,
+  createTemporaryProcessingFile,
+  cleanupTemporaryProcessingFile
 } from '../services/storageService';
 import {
   inspectAndExtractLandDocument,
@@ -547,8 +549,9 @@ export async function uploadFarmerLandDocument(
     });
   }
 
-  // Magic byte file signature validation (prevents MIME spoofing)
+  // Magic byte file signature validation & temporary processing with guaranteed cleanup
   let inspection;
+  const tempProcFile = createTemporaryProcessingFile(buffer);
   try {
     inspection = await inspectAndExtractLandDocument(buffer, mime_type, {
       declared_survey_number,
@@ -567,6 +570,9 @@ export async function uploadFarmerLandDocument(
       });
     }
     return reply.status(400).send({ success: false, error: 'DOCUMENT_PARSE_ERROR', message: err.message });
+  } finally {
+    // Guaranteed cleanup of temporary processing file on both success and failure
+    cleanupTemporaryProcessingFile(tempProcFile);
   }
 
   // Compute deterministic SHA-256

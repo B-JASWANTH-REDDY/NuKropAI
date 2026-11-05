@@ -169,13 +169,11 @@ class MainActivity : ComponentActivity() {
             runOnUiThread {
                 try {
                     val trimmed = url.trim()
-                    val uri = Uri.parse(trimmed)
-                    val scheme = uri.scheme?.lowercase()
-                    // Strict URL security: reject unsafe schemes (javascript, file, data, content)
-                    if (scheme != "http" && scheme != "https") {
-                        android.util.Log.w("NuKropBridge", "Rejected unsafe external URL scheme: $scheme")
+                    if (!isAllowedPortalUrl(trimmed)) {
+                        android.util.Log.w("NuKropBridge", "Rejected unapproved or untrusted portal URL: $trimmed")
                         return@runOnUiThread
                     }
+                    val uri = Uri.parse(trimmed)
                     val intent = Intent(Intent.ACTION_VIEW, uri)
                     startActivity(intent)
                 } catch (e: Exception) {
@@ -521,10 +519,16 @@ class MainActivity : ComponentActivity() {
                     tempWebView.webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val targetUrl = request?.url?.toString() ?: return false
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
-                                startActivity(intent)
-                            } catch (e: Exception) {}
+                            if (isAllowedPortalUrl(targetUrl)) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                                    startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("NuKropBridge", "Failed to launch official portal: ${e.message}")
+                                }
+                            } else {
+                                android.util.Log.w("NuKropBridge", "Blocked window.open to unapproved host: $targetUrl")
+                            }
                             return true
                         }
                     }
@@ -760,5 +764,56 @@ class MainActivity : ComponentActivity() {
         webView.removeAllViews()
         webView.destroy()
         super.onDestroy()
+    }
+
+    companion object {
+        // Strict HTTPS hostname allowlist for official government portals & secure auth
+        val OFFICIAL_PORTAL_HOST_ALLOWLIST = setOf(
+            "bhubharati.telangana.gov.in",
+            "dharani.telangana.gov.in",
+            "ccla.telangana.gov.in",
+            "meebhoomi.ap.gov.in",
+            "bhulekh.mahabhumi.gov.in",
+            "mahabhumi.gov.in",
+            "landrecords.karnataka.gov.in",
+            "bhoomi.karnataka.gov.in",
+            "upbhulekh.gov.in",
+            "agristack.gov.in",
+            "agmarknet.gov.in",
+            "pmkisan.gov.in",
+            "data.gov.in",
+            "accounts.google.com"
+        )
+
+        fun isAllowedPortalUrl(rawUrl: String): Boolean {
+            return try {
+                val trimmed = rawUrl.trim()
+                val uri = Uri.parse(trimmed)
+                // 1. Strict HTTPS scheme only (no http, javascript, file, data, content)
+                val scheme = uri.scheme?.lowercase()
+                if (scheme != "https") {
+                    return false
+                }
+                // 2. Reject embedded credentials (user:pass@host)
+                if (!uri.userInfo.isNullOrBlank()) {
+                    return false
+                }
+                // 3. Reject unapproved custom ports (only default HTTPS 443 or unset -1)
+                val port = uri.port
+                if (port != -1 && port != 443) {
+                    return false
+                }
+                // 4. Host validation against official government allowlist or *.gov.in / *.nic.in
+                val host = uri.host?.lowercase() ?: return false
+                val isExplicitlyAllowed = OFFICIAL_PORTAL_HOST_ALLOWLIST.contains(host)
+                val isLegitimateGov = (host.endsWith(".gov.in") || host.endsWith(".nic.in")) &&
+                                      !host.contains("@") &&
+                                      host.split('.').size >= 3
+
+                isExplicitlyAllowed || isLegitimateGov
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 }

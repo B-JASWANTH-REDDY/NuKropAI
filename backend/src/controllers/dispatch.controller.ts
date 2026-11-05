@@ -1435,6 +1435,14 @@ export const verifyBookingOtp = async (request: FastifyRequest, reply: FastifyRe
   booking.status = 'IN_TRANSIT';
   booking.pickup_otp_verified_at = new Date().toISOString();
   booking.updated_at = new Date().toISOString();
+
+  // Single-Use Enforcement: Erase ephemeral plaintext OTP and invalidate hash/salt
+  delete booking.ephemeral_plaintext_otp;
+  booking.start_otp_hash = null;
+  booking.start_otp_salt = null;
+  if (dispatchMemoryStore.farmerPlaintextOtps) {
+    dispatchMemoryStore.farmerPlaintextOtps.delete(bookingId);
+  }
   dispatchMemoryStore.bookings.set(bookingId, booking);
 
   // Transition driver duty session to ON_TRIP
@@ -1530,6 +1538,14 @@ export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply
   booking.cancelled_by_role = isFarmer ? 'FARMER' : 'DRIVER';
   booking.cancelled_at = new Date().toISOString();
   booking.updated_at = new Date().toISOString();
+
+  // Invalidate OTP on cancellation
+  delete booking.ephemeral_plaintext_otp;
+  booking.start_otp_hash = null;
+  booking.start_otp_salt = null;
+  if (dispatchMemoryStore.farmerPlaintextOtps) {
+    dispatchMemoryStore.farmerPlaintextOtps.delete(bookingId);
+  }
   dispatchMemoryStore.bookings.set(bookingId, booking);
 
   // Revoke any pending offers in memory & DB
@@ -1540,22 +1556,30 @@ export const cancelBooking = async (request: FastifyRequest, reply: FastifyReply
     }
   }
 
-  // Release driver if assigned
+  // Release driver if assigned and no concurrent active trips in progress
   const assignedDriverId = booking.driver_user_id || booking.driver_id;
   if (assignedDriverId) {
-    const driverLoc = dispatchMemoryStore.driverLocations.get(assignedDriverId);
-    if (driverLoc) {
-      driverLoc.is_available = true;
-      driverLoc.active_booking_id = null;
-      driverLoc.updated_at = new Date().toISOString();
-      dispatchMemoryStore.driverLocations.set(assignedDriverId, driverLoc);
-    }
+    const hasOtherActiveTrip = Array.from(dispatchMemoryStore.bookings.values()).some(
+      b => (b.driver_user_id === assignedDriverId || b.driver_id === assignedDriverId) &&
+           b.id !== bookingId &&
+           ['ACCEPTED', 'ARRIVED', 'DRIVER_ARRIVED', 'IN_TRANSIT'].includes(b.status)
+    );
 
-    // Reset duty session
-    for (const s of dispatchMemoryStore.dutySessions.values()) {
-      if (s.driver_id === assignedDriverId && !s.ended_at && ['ON_TRIP', 'BOOKING_ACCEPTED', 'BOOKING_REQUESTED'].includes(s.status)) {
-        s.status = 'ONLINE_AVAILABLE';
-        s.last_heartbeat_at = new Date().toISOString();
+    if (!hasOtherActiveTrip) {
+      const driverLoc = dispatchMemoryStore.driverLocations.get(assignedDriverId);
+      if (driverLoc) {
+        driverLoc.is_available = true;
+        driverLoc.active_booking_id = null;
+        driverLoc.updated_at = new Date().toISOString();
+        dispatchMemoryStore.driverLocations.set(assignedDriverId, driverLoc);
+      }
+
+      // Reset duty session ONLY if active and not offline/ended
+      for (const s of dispatchMemoryStore.dutySessions.values()) {
+        if (s.driver_id === assignedDriverId && !s.ended_at && s.status !== 'OFFLINE' && ['ON_TRIP', 'BOOKING_ACCEPTED', 'BOOKING_REQUESTED'].includes(s.status)) {
+          s.status = 'ONLINE_AVAILABLE';
+          s.last_heartbeat_at = new Date().toISOString();
+        }
       }
     }
   }
@@ -2095,7 +2119,9 @@ export const bookRental = async (request: FastifyRequest, reply: FastifyReply) =
     daily_rate: dailyRate,
     base_amount: baseAmount,
     operator_included: !!operatorIncluded,
-    status: 'CONFIRMED',
+    status: (request.body as any)?.status === 'REQUESTED' ? 'REQUESTED' : 'CONFIRMED',
+    deposit_amount: Number((request.body as any)?.depositAmount) || 0,
+    deposit_refund_status: (Number((request.body as any)?.depositAmount) || 0) > 0 ? 'PENDING' : 'N/A',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
@@ -2236,7 +2262,7 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
     REQUESTED: ['CONFIRMED', 'REJECTED', 'CANCELLED'],
     CONFIRMED: ['ACTIVE', 'CANCELLED'],
     ACTIVE: ['RETURNED', 'DISPUTED'],
-    RETURNED: ['COMPLETED'],
+    RETURNED: ['COMPLETED', 'DISPUTED'],
     DISPUTED: ['COMPLETED', 'CANCELLED']
   };
 
@@ -2286,6 +2312,32 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
     };
   }
 
+  if (newStatus === 'ACTIVE') {
+    const { handoverNotes, depositPaid, paymentStatus } = (request.body as any) || {};
+    rental.handover_at = new Date().toISOString();
+    if (handoverNotes) rental.handover_notes = handoverNotes;
+    if (depositPaid !== undefined) rental.deposit_amount = Number(depositPaid);
+    if (paymentStatus) rental.payment_status = paymentStatus;
+  }
+
+  if (newStatus === 'COMPLETED') {
+    const { disputeResolution, depositRefundStatus, finalAgreedAmount } = (request.body as any) || {};
+    if (disputeResolution) rental.dispute_resolution = disputeResolution;
+    if (depositRefundStatus) rental.deposit_refund_status = depositRefundStatus;
+    if (finalAgreedAmount !== undefined) rental.final_total_amount = Number(finalAgreedAmount);
+
+    billingSummary = {
+      baseAmount: rental.base_amount,
+      overtimeHours: rental.overtime_hours || 0,
+      overtimeAmount: rental.overtime_amount || 0,
+      damageFee: rental.damage_fee || 0,
+      conditionReport: rental.condition_report || null,
+      disputeResolution: rental.dispute_resolution || null,
+      depositRefundStatus: rental.deposit_refund_status || 'N/A',
+      finalTotal: rental.final_total_amount || rental.base_amount
+    };
+  }
+
   dispatchMemoryStore.rentals.set(rentalId, rental);
 
   try {
@@ -2299,7 +2351,8 @@ export const updateRentalStatus = async (request: FastifyRequest, reply: Fastify
     success: true,
     rentalId,
     status: newStatus,
-    billing: billingSummary
+    billing: billingSummary,
+    rental
   });
 };
 

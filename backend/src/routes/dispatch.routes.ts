@@ -72,7 +72,15 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
     preHandler: [authenticate, requireRole(['farmer', 'admin'])]
   }, createBookingRequest);
 
+  fastify.post('/bookings', {
+    preHandler: [authenticate, requireRole(['farmer', 'admin'])]
+  }, createBookingRequest);
+
   fastify.post('/accept', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, acceptBooking);
+
+  fastify.post('/bookings/:bookingId/accept', {
     preHandler: [authenticate, requireRole(['driver', 'admin'])]
   }, acceptBooking);
 
@@ -97,13 +105,25 @@ export default async function dispatchRoutes(fastify: FastifyInstance) {
     preHandler: [authenticate, requireRole(['driver', 'admin'])]
   }, verifyBookingOtp);
 
+  fastify.post('/bookings/:bookingId/verify-otp', {
+    preHandler: [authenticate, requireRole(['driver', 'admin'])]
+  }, verifyBookingOtp);
+
   // ── 7. SYNCHRONIZED CANCELLATION ──
   fastify.post('/cancel', {
     preHandler: [authenticate]
   }, cancelBooking);
 
+  fastify.post('/bookings/:bookingId/cancel', {
+    preHandler: [authenticate]
+  }, cancelBooking);
+
   // ── 8. TRIP LIFECYCLE PROGRESSION & TRACKING ──
   fastify.post('/trip-status', {
+    preHandler: [authenticate]
+  }, updateTripStatus);
+
+  fastify.post('/bookings/:bookingId/status', {
     preHandler: [authenticate]
   }, updateTripStatus);
 

@@ -94,7 +94,7 @@
                 days_since_sowing: p.days_sown || 0,
                 inspection_date: p.inspection_stamp,
                 verification_timestamp: p.inspection_stamp,
-                verification_status: 'VERIFIED_BY_OFFICER',
+                verification_status: 'SOURCE_RETRIEVED',
                 irrigation_method: p.irrigation_method || 'Verified Source',
                 growth_stage: p.growth_stage || 'Cultivation Stage',
                 officer_name: p.officer_name || 'Agricultural Officer'

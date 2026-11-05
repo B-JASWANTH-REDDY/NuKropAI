@@ -10,6 +10,7 @@ import simulationRoutes from './simulation.routes';
 import geoRoutes from './geo.routes';
 import aiRoutes from './ai.routes';
 import dispatchRoutes from './dispatch.routes';
+import landSurveyRoutes from './land_survey.routes';
 
 export default async function apiRoutes(fastify: FastifyInstance) {
   fastify.register(authRoutes, { prefix: '/auth' });
@@ -30,4 +31,6 @@ export default async function apiRoutes(fastify: FastifyInstance) {
   fastify.register(aiRoutes, { prefix: '/ai' });
   // Real-Time Driver Marketplace & Dispatch (Phase 7)
   fastify.register(dispatchRoutes, { prefix: '/dispatch' });
+  // Land Survey Intelligence (honest provenance, PENDING_AUTHORIZATION sources)
+  fastify.register(landSurveyRoutes, { prefix: '/land-survey' });
 }

@@ -149,5 +149,5 @@ GRANT EXECUTE ON FUNCTION public.upsert_driver_location(VARCHAR, DOUBLE PRECISIO
 -- 8. Enable Supabase Realtime replication on driver_locations
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_locations;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 

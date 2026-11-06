@@ -15,9 +15,9 @@ android {
   defaultConfig {
     applicationId = "com.nukrop.app"
     minSdk = 24
-    targetSdk = 34
-    versionCode = 1
-    versionName = "1.0"
+    targetSdk = 36
+    versionCode = 2
+    versionName = "1.1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -34,11 +34,36 @@ android {
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/debug.keystore"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-      keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
-      keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+      val keystorePath = System.getenv("KEYSTORE_PATH")
+      val isReleaseTask = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+      if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
+        val storePass = System.getenv("STORE_PASSWORD")
+        val keyUserAlias = System.getenv("KEY_ALIAS")
+        val keyPass = System.getenv("KEY_PASSWORD")
+        if (storePass.isNullOrBlank() || keyUserAlias.isNullOrBlank() || keyPass.isNullOrBlank()) {
+          throw org.gradle.api.GradleException(
+            "FATAL: Production release signing is misconfigured. " +
+            "KEYSTORE_PATH is provided ($keystorePath), but STORE_PASSWORD, KEY_ALIAS, or KEY_PASSWORD are missing."
+          )
+        }
+        storeFile = file(keystorePath)
+        storePassword = storePass
+        keyAlias = keyUserAlias
+        keyPassword = keyPass
+      } else if (isReleaseTask) {
+        throw org.gradle.api.GradleException(
+          "FATAL: Production release signing requires a valid production keystore. " +
+          "KEYSTORE_PATH was not provided or file does not exist ($keystorePath). " +
+          "Silent debug-key fallback on production release builds is strictly prohibited. " +
+          "Configure KEYSTORE_PATH, STORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in environment."
+        )
+      } else {
+        // Fallback for non-release development tasks only (e.g. testDebugUnitTest, lint)
+        storeFile = file("${rootDir}/debug.keystore")
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -50,12 +75,15 @@ android {
 
   buildTypes {
     release {
-      isCrunchPngs = false
-      isMinifyEnabled = false
+      isCrunchPngs = true
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
+      applicationIdSuffix = ".debug"
+      isDebuggable = true
     }
   }
   compileOptions {
@@ -157,30 +185,29 @@ val projectRootDir = rootDir
 val apkOutputDir = layout.buildDirectory.dir("outputs/apk")
 
 tasks.register("syncApkToWeb") {
-    description = "Syncs the newly built APK directly to the root and web/public directory"
+    description = "Syncs authentic release APK to web public download path only if production signed"
     notCompatibleWithConfigurationCache("Dynamic file copy to web directory")
     doLast {
         val releaseApk = apkOutputDir.get().file("release/app-release.apk").asFile
-        val debugApk = apkOutputDir.get().file("debug/app-debug.apk").asFile
-        val candidates = listOf(releaseApk, debugApk).filter { it.exists() }
-        val targetApk = candidates.maxByOrNull { it.lastModified() }
-
-        if (targetApk != null && targetApk.exists()) {
+        if (releaseApk.exists()) {
+            val isProductionConfigured = !System.getenv("KEYSTORE_PATH").isNullOrBlank()
+            if (!isProductionConfigured) {
+                println("⚠️ [Gradle syncApkToWeb] Release APK was compiled without KEYSTORE_PATH. Refusing to copy debug-signed APK to production download paths.")
+                return@doLast
+            }
             val rootApk = File(projectRootDir, "NuKropAI.apk")
             val webPublicDir = File(projectRootDir, "web/public")
             webPublicDir.mkdirs()
-            targetApk.copyTo(rootApk, overwrite = true)
-            targetApk.copyTo(File(webPublicDir, "NuKropAI.apk"), overwrite = true)
-            targetApk.copyTo(File(webPublicDir, "NuKropAI_v2.0.apk"), overwrite = true)
-            targetApk.copyTo(File(webPublicDir, "NuKropAI_latest.apk"), overwrite = true)
-            println("✅ [Gradle] Successfully synced ${targetApk.name} (${targetApk.length() / (1024 * 1024)} MB) to NuKropAI.apk and web/public/!")
-        } else {
-            println("⚠️ [Gradle] No compiled APK found in outputs to sync.")
+            releaseApk.copyTo(rootApk, overwrite = true)
+            releaseApk.copyTo(File(webPublicDir, "NuKropAI.apk"), overwrite = true)
+            releaseApk.copyTo(File(webPublicDir, "NuKropAI_v2.0.apk"), overwrite = true)
+            releaseApk.copyTo(File(webPublicDir, "NuKropAI_latest.apk"), overwrite = true)
+            println("✅ [Gradle] Successfully verified production-signed Release APK (${releaseApk.length() / (1024 * 1024)} MB) synced to public download paths.")
         }
     }
 }
 
-tasks.matching { it.name == "assembleRelease" || it.name == "assembleDebug" }.configureEach {
+tasks.matching { it.name == "assembleRelease" }.configureEach {
     finalizedBy("syncApkToWeb")
 }
 

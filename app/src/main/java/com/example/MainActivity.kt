@@ -30,6 +30,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.widget.WeatherWidgetProvider
+import com.example.widget.MandiWidgetProvider
+import com.example.widget.WidgetUpdateWorker
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 
@@ -117,6 +121,42 @@ class MainActivity : ComponentActivity() {
         }
 
         @JavascriptInterface
+        fun startDriverLocationService(driverId: String, driverName: String, vehiclePlate: String, vehicleType: String) {
+            runOnUiThread {
+                try {
+                    val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                        action = DriverLocationService.ACTION_START_TRACKING
+                        putExtra(DriverLocationService.EXTRA_DRIVER_ID, driverId)
+                        putExtra(DriverLocationService.EXTRA_DRIVER_NAME, driverName)
+                        putExtra(DriverLocationService.EXTRA_VEHICLE_PLATE, vehiclePlate)
+                        putExtra(DriverLocationService.EXTRA_VEHICLE_TYPE, vehicleType)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropLocation", "Failed to start driver location foreground service: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun stopDriverLocationService() {
+            runOnUiThread {
+                try {
+                    val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                        action = DriverLocationService.ACTION_STOP_TRACKING
+                    }
+                    startService(intent)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropLocation", "Failed to stop driver location foreground service: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun openDialer(phoneNumber: String) {
             runOnUiThread {
                 try {
@@ -132,7 +172,13 @@ class MainActivity : ComponentActivity() {
         fun openExternalUrl(url: String) {
             runOnUiThread {
                 try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    val trimmed = url.trim()
+                    if (!isAllowedPortalUrl(trimmed)) {
+                        android.util.Log.w("NuKropBridge", "Rejected unapproved or untrusted portal URL: $trimmed")
+                        return@runOnUiThread
+                    }
+                    val uri = Uri.parse(trimmed)
+                    val intent = Intent(Intent.ACTION_VIEW, uri)
                     startActivity(intent)
                 } catch (e: Exception) {
                     android.util.Log.e("NuKropBridge", "External URL error: ${e.message}")
@@ -163,16 +209,29 @@ class MainActivity : ComponentActivity() {
         fun pickDeviceGoogleAccount() {
             runOnUiThread {
                 try {
-                    val intent = android.accounts.AccountManager.newChooseAccountIntent(
-                        null,
-                        null,
-                        arrayOf("com.google"),
-                        false,
-                        null,
-                        null,
-                        null,
-                        null
-                    )
+                    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        android.accounts.AccountManager.newChooseAccountIntent(
+                            null,
+                            null,
+                            arrayOf("com.google"),
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.accounts.AccountManager.newChooseAccountIntent(
+                            null,
+                            null,
+                            arrayOf("com.google"),
+                            false,
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    }
                     startActivityForResult(intent, 1009)
                 } catch (e: Exception) {
                     android.util.Log.e("NuKropAuth", "Account picker error: ${e.message}")
@@ -181,25 +240,159 @@ class MainActivity : ComponentActivity() {
                         if (accounts.isNotEmpty()) {
                             val email = accounts[0].name
                             val name = email.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                            webView.evaluateJavascript("if(window.onNativeGoogleAccountSelected) window.onNativeGoogleAccountSelected('$email', '$name')", null)
+                            webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountSelected === 'function') window.onNativeGoogleAccountSelected('$email', '$name')", null)
                         } else {
-                            webView.evaluateJavascript("if(window.onNativeGoogleAccountNotFound) window.onNativeGoogleAccountNotFound()", null)
+                            webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
                         }
                     } catch (ex: Exception) {
-                        webView.evaluateJavascript("if(window.onNativeGoogleAccountNotFound) window.onNativeGoogleAccountNotFound()", null)
+                        webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
                     }
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun startDriverTrackingService(driverId: String, driverName: String, vehiclePlate: String, vehicleType: String): Boolean {
+            return try {
+                if (driverId.isBlank() || vehiclePlate.isBlank()) return false
+                val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                    action = DriverLocationService.ACTION_START_TRACKING
+                    putExtra(DriverLocationService.EXTRA_DRIVER_ID, driverId)
+                    putExtra(DriverLocationService.EXTRA_DRIVER_NAME, driverName)
+                    putExtra(DriverLocationService.EXTRA_VEHICLE_PLATE, vehiclePlate)
+                    putExtra(DriverLocationService.EXTRA_VEHICLE_TYPE, vehicleType)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    this@MainActivity.startForegroundService(intent)
+                } else {
+                    this@MainActivity.startService(intent)
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun stopDriverTrackingService(): Boolean {
+            return try {
+                val intent = Intent(this@MainActivity, DriverLocationService::class.java).apply {
+                    action = DriverLocationService.ACTION_STOP_TRACKING
+                }
+                this@MainActivity.startService(intent)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun isDriverTrackingActive(): Boolean {
+            return DriverLocationService.isRunning
+        }
+
+        @JavascriptInterface
+        fun updateWeatherWidget(weatherJson: String) {
+            runOnUiThread {
+                try {
+                    val obj = JSONObject(weatherJson)
+                    val prefs = getSharedPreferences(WeatherWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().apply {
+                        putBoolean("is_logged_out", false)
+                        putString("location", obj.optString("location", "Warangal Rural, Telangana"))
+                        putString("temp", obj.optString("temp", "27°C"))
+                        putString("condition", obj.optString("condition", "☀️ Spray Window: SAFE"))
+                        putString("hilo", obj.optString("hilo", "H: 31°C · L: 21°C"))
+                        putString("humidity", obj.optString("humidity", "💧 71%"))
+                        putString("rainfall", obj.optString("rainfall", "🌧️ 0 mm"))
+                        putString("wind", obj.optString("wind", "💨 9 km/h"))
+                        putString("status", obj.optString("status", "LIVE"))
+                        putString("updated", obj.optString("updated", "Open-Meteo API · Updated just now · Tap to open"))
+                        if (obj.has("lat")) putFloat("lat", obj.optDouble("lat", 17.9689).toFloat())
+                        if (obj.has("lon")) putFloat("lon", obj.optDouble("lon", 79.5941).toFloat())
+                        apply()
+                    }
+                    WeatherWidgetProvider.updateAllWidgets(this@MainActivity)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropWidget", "Failed to update weather widget: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun updateMandiWidget(mandiJson: String) {
+            runOnUiThread {
+                try {
+                    val obj = JSONObject(mandiJson)
+                    val prefs = getSharedPreferences(MandiWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    prefs.edit().apply {
+                        putBoolean("is_logged_out", false)
+                        putString("market", obj.optString("market", "Warangal APMC, Telangana"))
+                        putString("crop", obj.optString("crop", "Cotton (Kapas)"))
+                        putString("variety", obj.optString("variety", "Variety: Medium Staple"))
+                        putString("price", obj.optString("price", "₹7,480"))
+                        putString("unit", obj.optString("unit", "/ quintal"))
+                        putString("range", obj.optString("range", "📊 Range: ₹7,100 - ₹7,650"))
+                        putString("arrivals", obj.optString("arrivals", "🚜 2,400 Qtl"))
+                        putString("badge", obj.optString("badge", "🏛️ AGMARKNET"))
+                        putString("updated", obj.optString("updated", "Agmarknet DMI · Trade Date: 04/11/2026 · Tap to explore"))
+                        apply()
+                    }
+                    MandiWidgetProvider.updateAllWidgets(this@MainActivity)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropWidget", "Failed to update mandi widget: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun clearWidgetData() {
+            runOnUiThread {
+                try {
+                    val weatherPrefs = getSharedPreferences(WeatherWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    weatherPrefs.edit().putBoolean("is_logged_out", true).apply()
+                    val mandiPrefs = getSharedPreferences(MandiWidgetProvider.PREFS_NAME, Context.MODE_PRIVATE)
+                    mandiPrefs.edit().putBoolean("is_logged_out", true).apply()
+                    WeatherWidgetProvider.updateAllWidgets(this@MainActivity)
+                    MandiWidgetProvider.updateAllWidgets(this@MainActivity)
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropWidget", "Failed to clear widget data: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun getDeviceAccountsJson(): String {
+            return try {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(this@MainActivity, android.Manifest.permission.GET_ACCOUNTS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    val accounts = android.accounts.AccountManager.get(this@MainActivity).getAccountsByType("com.google")
+                    val jsonArr = org.json.JSONArray()
+                    for (acc in accounts) {
+                        jsonArr.put(acc.name)
+                    }
+                    jsonArr.toString()
+                } else {
+                    "[]"
+                }
+            } catch (e: Exception) {
+                "[]"
             }
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 1009 && resultCode == Activity.RESULT_OK && data != null) {
-            val accountName = data.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
-            if (!accountName.isNullOrEmpty()) {
-                val name = accountName.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                webView.evaluateJavascript("if(window.onNativeGoogleAccountSelected) window.onNativeGoogleAccountSelected('$accountName', '$name')", null)
+        if (requestCode == 1009) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                val accountName = data.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
+                if (!accountName.isNullOrEmpty()) {
+                    val name = accountName.substringBefore("@").replace(".", " ").split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                    webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountSelected === 'function') window.onNativeGoogleAccountSelected('$accountName', '$name')", null)
+                } else {
+                    webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
+                }
+            } else {
+                webView.evaluateJavascript("if(typeof window.onNativeGoogleAccountNotFound === 'function') window.onNativeGoogleAccountNotFound()", null)
             }
         }
     }
@@ -291,6 +484,9 @@ class MainActivity : ComponentActivity() {
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true || permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
             fetchAndSendLocationToWebView()
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && permissions[Manifest.permission.POST_NOTIFICATIONS] == true) {
+            webView.evaluateJavascript("if (typeof onNativeNotificationPermissionGranted === 'function') onNativeNotificationPermissionGranted();", null)
+        }
     }
 
     fun fetchAndSendLocationToWebView() {
@@ -365,11 +561,15 @@ class MainActivity : ComponentActivity() {
                 databaseEnabled = true
                 allowFileAccess = true
                 allowContentAccess = true
-                allowFileAccessFromFileURLs = true
-                allowUniversalAccessFromFileURLs = true
+                // Security: disable cross-origin file access for production
+                @Suppress("DEPRECATION")
+                allowFileAccessFromFileURLs = false
+                @Suppress("DEPRECATION")
+                allowUniversalAccessFromFileURLs = false
                 mediaPlaybackRequiresUserGesture = false
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                cacheMode = WebSettings.LOAD_NO_CACHE
+                // Required for loading local assets that may reference HTTPS resources
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                cacheMode = WebSettings.LOAD_DEFAULT
                 useWideViewPort = true
                 loadWithOverviewMode = true
                 setSupportZoom(false)
@@ -380,8 +580,10 @@ class MainActivity : ComponentActivity() {
                 javaScriptCanOpenWindowsAutomatically = true
             }
 
-            WebView.setWebContentsDebuggingEnabled(true)
-            clearCache(true)
+            // Only enable WebView debugging in debug builds
+            if (android.os.Build.TYPE == "eng" || BuildConfig.DEBUG) {
+                WebView.setWebContentsDebuggingEnabled(true)
+            }
 
             // Expose native bridge to Javascript
             addJavascriptInterface(WebAppInterface(), "AndroidBridge")
@@ -431,10 +633,16 @@ class MainActivity : ComponentActivity() {
                     tempWebView.webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val targetUrl = request?.url?.toString() ?: return false
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
-                                startActivity(intent)
-                            } catch (e: Exception) {}
+                            if (isAllowedPortalUrl(targetUrl)) {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                                    startActivity(intent)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("NuKropBridge", "Failed to launch official portal: ${e.message}")
+                                }
+                            } else {
+                                android.util.Log.w("NuKropBridge", "Blocked window.open to unapproved host: $targetUrl")
+                            }
                             return true
                         }
                     }
@@ -634,21 +842,38 @@ class MainActivity : ComponentActivity() {
             }
         })
 
+        // Schedule Android Background Widget Updates
+        WidgetUpdateWorker.schedulePeriodicUpdates(applicationContext)
+
         // Check for deep link on cold launch
-        handleAuthDeepLink(intent)
+        handleAppDeepLinks(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleAuthDeepLink(intent)
+        handleAppDeepLinks(intent)
     }
 
-    private fun handleAuthDeepLink(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme == "nukrop" && uri.host == "auth-callback") {
-            val fullUrl = uri.toString()
-            webView.evaluateJavascript("if (typeof handleAuthCallback === 'function') handleAuthCallback('$fullUrl');", null)
+    private fun handleAppDeepLinks(intent: Intent?) {
+        val uri = intent?.data
+        if (uri != null) {
+            if (uri.scheme == "nukrop" && uri.host == "auth-callback") {
+                val fullUrl = uri.toString()
+                webView.evaluateJavascript("if (typeof handleAuthCallback === 'function') handleAuthCallback('$fullUrl');", null)
+                return
+            }
+            if (uri.scheme == "nukrop" && uri.host == "screen") {
+                val targetScreen = uri.path?.removePrefix("/") ?: "home"
+                val mappedScreen = if (targetScreen == "weather") "home" else targetScreen
+                webView.evaluateJavascript("if (typeof openScreen === 'function') openScreen('$mappedScreen');", null)
+                return
+            }
+        }
+        val extraTarget = intent?.getStringExtra("EXTRA_TARGET_SCREEN")
+        if (!extraTarget.isNullOrBlank()) {
+            val mappedScreen = if (extraTarget == "weather") "home" else extraTarget
+            webView.evaluateJavascript("if (typeof openScreen === 'function') openScreen('$mappedScreen');", null)
         }
     }
 
@@ -665,7 +890,61 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        webView.stopLoading()
+        webView.clearHistory()
+        webView.removeAllViews()
         webView.destroy()
         super.onDestroy()
+    }
+
+    companion object {
+        // Strict HTTPS hostname allowlist for official government portals & secure auth
+        val OFFICIAL_PORTAL_HOST_ALLOWLIST = setOf(
+            "bhubharati.telangana.gov.in",
+            "dharani.telangana.gov.in",
+            "ccla.telangana.gov.in",
+            "meebhoomi.ap.gov.in",
+            "bhulekh.mahabhumi.gov.in",
+            "mahabhumi.gov.in",
+            "landrecords.karnataka.gov.in",
+            "bhoomi.karnataka.gov.in",
+            "upbhulekh.gov.in",
+            "agristack.gov.in",
+            "agmarknet.gov.in",
+            "pmkisan.gov.in",
+            "data.gov.in",
+            "accounts.google.com"
+        )
+
+        fun isAllowedPortalUrl(rawUrl: String): Boolean {
+            return try {
+                val trimmed = rawUrl.trim()
+                val uri = Uri.parse(trimmed)
+                // 1. Strict HTTPS scheme only (no http, javascript, file, data, content)
+                val scheme = uri.scheme?.lowercase()
+                if (scheme != "https") {
+                    return false
+                }
+                // 2. Reject embedded credentials (user:pass@host)
+                if (!uri.userInfo.isNullOrBlank()) {
+                    return false
+                }
+                // 3. Reject unapproved custom ports (only default HTTPS 443 or unset -1)
+                val port = uri.port
+                if (port != -1 && port != 443) {
+                    return false
+                }
+                // 4. Host validation against official government allowlist or *.gov.in / *.nic.in
+                val host = uri.host?.lowercase() ?: return false
+                val isExplicitlyAllowed = OFFICIAL_PORTAL_HOST_ALLOWLIST.contains(host)
+                val isLegitimateGov = (host.endsWith(".gov.in") || host.endsWith(".nic.in")) &&
+                                      !host.contains("@") &&
+                                      host.split('.').size >= 3
+
+                isExplicitlyAllowed || isLegitimateGov
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 }

@@ -724,55 +724,55 @@ DO $$
 BEGIN
   -- Safely add canonical tables to realtime publication
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_comments;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_likes;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_telemetry;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.haul_bookings;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.peer_messages;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.mandi_live_rates;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.khata_transactions;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.machinery_listings;
-EXCEPTION WHEN OTHERS THEN NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- ══════════════════════════════════════════════════════════════════════════════

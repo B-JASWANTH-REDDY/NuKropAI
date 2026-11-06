@@ -75,7 +75,7 @@ CRITICAL REQUIREMENT: You MUST answer ENTIRELY in ${targetLang}. Keep your respo
           "Authorization": `Bearer ${groqApiKey}`,
         },
         body: JSON.stringify({
-          model: "qwen/qwen3.6-27b",
+          model: Deno.env.get("GROQ_MODEL") || "qwen/qwen3.8-27b",
           messages: [
             {
               role: "system",
@@ -83,6 +83,7 @@ CRITICAL REQUIREMENT: You MUST answer ENTIRELY in ${targetLang}. Keep your respo
             },
             { role: "user", content: query },
           ],
+
           max_tokens: 500,
           temperature: 0.3,
         }),

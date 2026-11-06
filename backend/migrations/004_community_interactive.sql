@@ -105,11 +105,17 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public insert on community_posts') THEN
         CREATE POLICY "Allow public insert on community_posts" ON public.community_posts FOR INSERT WITH CHECK (true);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public update on community_posts') THEN
-        CREATE POLICY "Allow public update on community_posts" ON public.community_posts FOR UPDATE USING (true) WITH CHECK (true);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow author update on community_posts') THEN
+        CREATE POLICY "Allow author update on community_posts" ON public.community_posts FOR UPDATE USING (
+            auth.uid()::text = user_id OR auth.role() = 'service_role' OR user_id IS NULL
+        ) WITH CHECK (
+            auth.uid()::text = user_id OR auth.role() = 'service_role' OR user_id IS NULL
+        );
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public delete on community_posts') THEN
-        CREATE POLICY "Allow public delete on community_posts" ON public.community_posts FOR DELETE USING (true);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow author delete on community_posts') THEN
+        CREATE POLICY "Allow author delete on community_posts" ON public.community_posts FOR DELETE USING (
+            auth.uid()::text = user_id OR auth.role() = 'service_role' OR user_id IS NULL
+        );
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public read on post_likes') THEN

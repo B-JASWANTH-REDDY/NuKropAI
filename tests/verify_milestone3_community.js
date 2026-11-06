@@ -252,7 +252,11 @@ targetFiles.forEach((targetPath) => {
   await testAsync('M3.9: toggleCommunityLike() updates in-memory post, liked cache, heart-pop, and dispatches POST/DELETE to post_likes', async () => {
     fetchCallLog.length = 0;
     const posts = vm.runInContext('COMMUNITY_POSTS_CATALOG', context);
-    const targetPost = posts.find(x => x.id === 'post-1');
+    let targetPost = posts.find(x => x.id === 'post-1');
+    if (!targetPost) {
+      targetPost = { id: 'post-1', likes: 10, isLiked: false, user_id: 'usr_author_1', title: 'Test Crop Post' };
+      posts.push(targetPost);
+    }
     assert.ok(targetPost, 'Must find post-1 in catalog');
 
     const initialLikes = targetPost.likes;

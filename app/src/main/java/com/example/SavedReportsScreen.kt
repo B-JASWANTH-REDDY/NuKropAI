@@ -51,13 +51,16 @@ fun SavedReportsScreen(onNavigateBack: () -> Unit) {
         try {
             withContext(Dispatchers.IO) {
                 val reportList = mutableListOf<SavedReport>()
-                val projection = arrayOf(
+                val baseProjection = mutableListOf(
                     MediaStore.Files.FileColumns._ID,
                     MediaStore.Files.FileColumns.DISPLAY_NAME,
                     MediaStore.Files.FileColumns.DATE_MODIFIED,
-                    MediaStore.Files.FileColumns.SIZE,
-                    MediaStore.Files.FileColumns.RELATIVE_PATH
+                    MediaStore.Files.FileColumns.SIZE
                 )
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    baseProjection.add(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                }
+                val projection = baseProjection.toTypedArray()
                 val selection = "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
                 val selectionArgs = arrayOf("NuKropAI_Report_%")
                 val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"

@@ -9,11 +9,12 @@ const logger = pino({
 });
 
 // Setup queues
-export const DataIngestionQueue = new Queue('DataIngestion', { connection: redisClient });
-export const AIOrchestrationQueue = new Queue('AIOrchestration', { connection: redisClient });
+export const DataIngestionQueue = new Queue('DataIngestion', { connection: redisClient as any });
+export const AIOrchestrationQueue = new Queue('AIOrchestration', { connection: redisClient as any });
 
-// Import jobs (we'll implement mandiIngestion next)
+// Import jobs
 import { handleMandiIngestion } from './jobs/mandiIngestion';
+import { ingestLandRecords } from './jobs/landSurveyIngestion';
 
 // Orchestrator Worker
 export function startOrchestrator() {
@@ -26,6 +27,8 @@ export function startOrchestrator() {
     switch(job.name) {
       case 'sync_mandi_prices':
         return await handleMandiIngestion(job.data);
+      case 'sync_land_survey_records':
+        return await ingestLandRecords(job.data.sourceCode, job.data.records, job.data.method);
       case 'sync_weather_forecast':
         // Implement weather ingestion
         return;
@@ -35,7 +38,7 @@ export function startOrchestrator() {
       default:
         throw new Error(`Unknown job name: ${job.name}`);
     }
-  }, { connection: redisClient, concurrency: 5 });
+  }, { connection: redisClient as any, concurrency: 5 });
 
   dataWorker.on('completed', (job) => {
     logger.info(`Job ${job.id} completed successfully`);

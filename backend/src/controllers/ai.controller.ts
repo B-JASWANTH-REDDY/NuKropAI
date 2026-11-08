@@ -101,17 +101,42 @@ export async function diagnoseCropFoliar(request: FastifyRequest, reply: Fastify
         let prediction: any = null;
         let providerProvenance = '';
 
-        const systemPrompt = `You are an expert ICAR agricultural pathologist. Analyze this crop foliar specimen (${targetCrop}). Diagnose the disease or deficiency, severity (None, Low, Medium, High, or Critical), confidence score percentage (0-100), biological pathogen, organic bio-formulation remedy, precise chemical tank mix dosage in ml/L or g/L, and safety advisory. Language: ${langName}. Respond strictly in valid JSON matching this schema:
+        const systemPrompt = `You are NuKropAI, an elite ICAR agricultural pathologist and soil agronomist. 
+Carefully inspect this image in detail.
+
+Step 1: Authenticity and Subject Verification:
+Determine whether the image contains an actual agricultural crop plant, leaf, foliar sample, pest specimen, or farm soil sample.
+If the image does NOT contain an agricultural crop, leaf, or soil (e.g. it is a human face, pet/animal, vehicle, indoor furniture, electronic screen, random object, cartoon, or non-agricultural photo):
+Respond strictly in JSON matching this format:
 {
+  "isPlantOrSoil": false,
+  "detectedSubject": "Identified non-crop subject (e.g. Person, Automobile, Room, etc.)",
+  "diseaseName": "Unknown / Non-Crop Image",
+  "severity": "None",
+  "confidence": 0,
+  "pathogen": "None",
+  "symptoms": "The provided image does not appear to be an agricultural crop leaf or soil specimen. Please upload or capture a clear photo of an actual plant leaf or farm soil.",
+  "organicSolution": "None required. Please retake photo focusing directly on the affected crop leaf or soil.",
+  "chemicalSolution": "None applicable. No agro-chemical prescription for non-crop images.",
+  "sprayAdvisory": "N/A - Re-scan required with an authentic farm specimen."
+}
+
+Step 2: If the image IS an agricultural crop (${targetCrop}) or soil specimen:
+Diagnose the specific condition, pest damage, fungal/bacterial/viral disease, or nutrient deficiency.
+Language: ${langName}.
+Provide authentic ICAR registered commercial products (e.g. CIB&RC approved brand names with active ingredient and precise dosage in ml/L or g/L), organic bio-formulations (e.g. Neem oil 1500 ppm, Trichoderma viride, Beauveria bassiana, Jeevamrutha), and application safety windows.
+Respond strictly in valid JSON matching this schema:
+{
+  "isPlantOrSoil": true,
   "crop": "${targetCrop}",
-  "diseaseName": "Disease or Healthy Foliar Tissue",
-  "severity": "Low",
-  "confidence": 88,
-  "pathogen": "Identified biological pathogen or None",
+  "diseaseName": "Authentic Disease Name or Healthy Foliar Tissue",
+  "severity": "None | Low | Medium | High | Critical",
+  "confidence": 92,
+  "pathogen": "Specific biological pathogen name or Nutrient deficiency",
   "symptoms": "Detailed foliar symptoms observed",
-  "organicSolution": "ICAR verified organic remedy",
-  "chemicalSolution": "Chemical tank mix dosage",
-  "sprayAdvisory": "Safe application window"
+  "organicSolution": "ICAR verified organic remedy with precise dilution and frequency",
+  "chemicalSolution": "Approved CIB&RC chemical product name, active ingredient, and tank mix dosage (e.g. 2 ml/L)",
+  "sprayAdvisory": "Exact meteorological spray window and safety guidelines"
 }`;
 
         // Strategy 1: Groq Cloud API (High-Speed Multimodal Vision)
@@ -194,21 +219,23 @@ export async function diagnoseCropFoliar(request: FastifyRequest, reply: Fastify
             });
         }
 
-        // Persist confirmed scan to database under authenticated user
+        // Persist scan to database under authenticated user
         const client = await pool.connect();
         let persistedScan = null;
+        const scanStatus = prediction.isPlantOrSoil === false ? 'REJECTED_NON_CROP' : 'CONFIRMED';
         try {
             const dbResult = await client.query(`
                 INSERT INTO disease_scans (user_id, crop_type, disease_detected, confidence_score, severity, treatment_recommendation, status)
-                VALUES ($1, $2, $3, $4, $5, $6, 'CONFIRMED')
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id, created_at
             `, [
                 user.id,
                 targetCrop,
                 prediction.diseaseName || 'Foliar Anomaly',
-                parseFloat(prediction.confidence) || 85.0,
-                prediction.severity || 'Medium',
-                prediction.chemicalSolution || prediction.organicSolution || 'Apply ICAR advisory'
+                parseFloat(prediction.confidence) || 0.0,
+                prediction.severity || 'None',
+                prediction.chemicalSolution || prediction.organicSolution || 'No prescription',
+                scanStatus
             ]);
             persistedScan = dbResult.rows[0];
         } catch (dbErr) {

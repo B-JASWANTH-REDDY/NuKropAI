@@ -73,10 +73,40 @@ class MainActivity : ComponentActivity() {
     private var textToSpeech: TextToSpeech? = null
     private var isTtsReady = false
 
+    private var pendingTtsText: String? = null
+    private var pendingTtsLang: String? = null
+
+    private fun initTextToSpeech() {
+        if (textToSpeech != null && isTtsReady) return
+        try {
+            textToSpeech = TextToSpeech(this) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    isTtsReady = true
+                    configureBestFemaleIndianVoice(textToSpeech)
+                    val pendingText = pendingTtsText
+                    val pendingLang = pendingTtsLang
+                    if (!pendingText.isNullOrBlank()) {
+                        pendingTtsText = null
+                        pendingTtsLang = null
+                        WebAppInterface().speakText(pendingText, pendingLang ?: "en")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("NuKropTTS", "TTS init error: ${e.message}")
+        }
+    }
+
     inner class WebAppInterface {
         @JavascriptInterface
         fun speakText(text: String, lang: String): Boolean {
-            if (!isTtsReady || textToSpeech == null) return false
+            if (text.isBlank()) return false
+            if (!isTtsReady || textToSpeech == null) {
+                pendingTtsText = text
+                pendingTtsLang = lang
+                runOnUiThread { initTextToSpeech() }
+                return true
+            }
             runOnUiThread {
                 try {
                     val locale = when (lang.lowercase()) {
@@ -85,6 +115,11 @@ class MainActivity : ComponentActivity() {
                         "ta", "ta-in" -> Locale("ta", "IN")
                         "kn", "kn-in" -> Locale("kn", "IN")
                         "mr", "mr-in" -> Locale("mr", "IN")
+                        "ml", "ml-in" -> Locale("ml", "IN")
+                        "gu", "gu-in" -> Locale("gu", "IN")
+                        "bn", "bn-in" -> Locale("bn", "IN")
+                        "pa", "pa-in" -> Locale("pa", "IN")
+                        "or", "or-in" -> Locale("or", "IN")
                         else -> Locale("en", "IN")
                     }
                     configureBestFemaleIndianVoice(textToSpeech, locale)
@@ -502,6 +537,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
             tts?.language = effectiveLocale
+            tts?.setPitch(1.12f)
+            tts?.setSpeechRate(0.95f)
             val voices = tts?.voices ?: return
             val targetLang = effectiveLocale.language
             val indianVoices = voices.filter { v ->
@@ -517,8 +554,6 @@ class MainActivity : ComponentActivity() {
             if (femaleVoice != null) {
                 tts?.voice = femaleVoice
             }
-            tts?.setPitch(1.12f)
-            tts?.setSpeechRate(0.95f)
         } catch (e: Exception) {
             android.util.Log.w("NuKropTTS", "Voice config fallback: ${e.message}")
         }

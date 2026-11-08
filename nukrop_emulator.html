@@ -3043,7 +3043,7 @@ function nuKropSpeak(text, langCode, buttonElement) {
       const localeMap = {
         'te': 'te-IN', 'hi': 'hi-IN', 'ta': 'ta-IN', 'kn': 'kn-IN',
         'ml': 'ml-IN', 'mr': 'mr-IN', 'gu': 'gu-IN', 'bn': 'bn-IN',
-        'pa': 'pa-IN', 'en': 'en-IN'
+        'pa': 'pa-IN', 'or': 'or-IN', 'en': 'en-IN'
       };
       const preferredLocale = localeMap[targetLang] || 'en-IN';
 
@@ -3051,9 +3051,11 @@ function nuKropSpeak(text, langCode, buttonElement) {
         ? cachedWebSpeechVoices
         : (typeof window.speechSynthesis.getVoices === 'function' ? (window.speechSynthesis.getVoices() || []) : []);
 
-      // Find best Indian female voice
-      let bestVoice = voices.find(v => (v.lang === preferredLocale || v.lang.includes('IN')) && /female|woman|heera|kavya|kalpana|zira|swara|veena/i.test(v.name))
-        || voices.find(v => v.lang === preferredLocale)
+      // Prioritize authentic native Indian language voice first, then female Indian voice
+      let bestVoice = voices.find(v => (v.lang === preferredLocale || v.lang.replace('_', '-').toLowerCase() === preferredLocale.toLowerCase()) && /female|woman|heera|kavya|kalpana|zira|swara|veena|geeta/i.test(v.name))
+        || voices.find(v => (v.lang === preferredLocale || v.lang.replace('_', '-').toLowerCase() === preferredLocale.toLowerCase()))
+        || voices.find(v => v.lang.toLowerCase().startsWith(targetLang))
+        || voices.find(v => (v.lang === 'hi-IN' || v.lang === 'en-IN') && /female|woman|heera|kavya|kalpana|zira/i.test(v.name))
         || voices.find(v => v.lang.includes('IN'))
         || voices.find(v => /female|woman/i.test(v.name));
 
@@ -3109,6 +3111,11 @@ function nuKropSpeak(text, langCode, buttonElement) {
           }
         };
 
+        try {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        } catch(e) {}
         window.speechSynthesis.speak(utter);
       }
 
@@ -3741,7 +3748,7 @@ const I18N = {
     home: 'Home', community: 'Community', scanner: 'Scanner', market: 'Market', profile: 'Profile',
     title: 'NuKropAI', liveBadge: 'LIVE', today: 'today', addCrop: 'Add', liveMandiTitle: 'Live Mandi Rate',
     spraySafe: 'SAFE', sprayCaution: 'CAUTION', sprayFavorable: 'Ideal Spray Window', sprayHighWind: 'High Wind / Caution', sprayPillDetails: 'View Details ›',
-    humidity: 'Humidity', precipitation: 'Rainfall', pressure: 'Pressure', wind: 'Wind Speed',
+    humidity: 'Humidity', precipitation: 'Rainfall', pressure: 'Pressure', wind: 'Wind',
     sunrise: 'Sunrise', sunset: 'Sunset', sprayPillSafe: 'Spraying: Safe', sprayPillCaution: 'Spraying: Delay',
     sprayPillDetails: 'View Details ›', modalSprayTitle: 'Agricultural Spraying Advisory',
     modalSpraySub: 'Real-Time Atmospheric Safety Index', sprayOptimalStatus: '✓ OPTIMAL & SAFE TO SPRAY NOW',
@@ -20226,31 +20233,35 @@ function getFilteredMandiRates() {
   }
 
   // REAL LIVE STATE-LEVEL FALLBACK:
-  // If the specific mandal/APMC does not trade the selected crop,
-  // automatically expand to all APMC markets within the farmer's live state trading this crop!
+  // If the specific mandal/APMC does not trade the selected crop (or if mandal has no direct APMC records),
+  // automatically expand to all APMC markets within the farmer's live state trading this crop (or all state mandis)!
   const effectiveState = stateQ || (mandiQ ? (() => {
     const foundItem = AGMARKNET_MANDI_CATALOG.find(x => {
-      const mName = ((x.mandi && x.mandi.en) || String(x.mandi || '')).toLowerCase();
-      return mName.includes(mandiQ) || mandiQ.includes(mName);
+      const mName = ((x.mandi && (x.mandi.en + ' ' + (x.mandi.te||'') + ' ' + (x.mandi.hi||''))) || String(x.mandi || '')).toLowerCase();
+      const dName = String(x.district || '').toLowerCase();
+      return mName.includes(mandiQ) || mandiQ.includes(mName) || dName.includes(mandiQ) || mandiQ.includes(dName);
     });
-    return foundItem ? ((foundItem.state && foundItem.state.en) || '').toLowerCase() : '';
+    return foundItem ? ((foundItem.state && foundItem.state.en) || '').toLowerCase() : (localStorage.getItem('user_live_state') || 'telangana').toLowerCase();
   })() : '');
 
-  if (effectiveState && (cropQ || popQ !== 'all')) {
+  if (effectiveState) {
     const targetCrop = (popQ !== 'all' ? popQ : cropQ).toLowerCase();
     const stateMatches = AGMARKNET_MANDI_CATALOG.filter(item => {
       const matchState = ((item.state && (item.state.en + ' ' + (item.state.te || '') + ' ' + (item.state.hi || ''))) || String(item.state || '')).toLowerCase();
       if (!matchState.includes(effectiveState)) return false;
       if (popQ !== 'all') return itemMatchesPopular(item, popQ);
-      if (cropQ === 'cotton') return itemMatchesPopular(item, 'cotton');
-      if (cropQ === 'potato') return itemMatchesPopular(item, 'potato');
-      if (cropQ === 'chilli') return itemMatchesPopular(item, 'chilli');
-      if (cropQ === 'wheat') return itemMatchesPopular(item, 'wheat');
-      if (cropQ === 'tomato') return itemMatchesPopular(item, 'tomato');
-      if (cropQ === 'onion') return itemMatchesPopular(item, 'onion');
-      if (cropQ === 'rice') return itemMatchesPopular(item, 'rice');
-      if (cropQ === 'paddy') return itemMatchesPopular(item, 'paddy');
-      return getCropSearchKeywords(item).includes(targetCrop);
+      if (cropQ) {
+        if (cropQ === 'cotton') return itemMatchesPopular(item, 'cotton');
+        if (cropQ === 'potato') return itemMatchesPopular(item, 'potato');
+        if (cropQ === 'chilli') return itemMatchesPopular(item, 'chilli');
+        if (cropQ === 'wheat') return itemMatchesPopular(item, 'wheat');
+        if (cropQ === 'tomato') return itemMatchesPopular(item, 'tomato');
+        if (cropQ === 'onion') return itemMatchesPopular(item, 'onion');
+        if (cropQ === 'rice') return itemMatchesPopular(item, 'rice');
+        if (cropQ === 'paddy') return itemMatchesPopular(item, 'paddy');
+        return getCropSearchKeywords(item).includes(targetCrop);
+      }
+      return true;
     });
     if (stateMatches.length > 0) {
       return stateMatches;
@@ -22755,7 +22766,7 @@ function rehydrateCommunityStories() {
   try {
     // Purge any stock Unsplash avatar from user storage
     const storedUserAvatar = localStorage.getItem('nukrop_user_avatar');
-    if (storedUserAvatar && storedUserAvatar.includes('unsplash.com')) {
+    if (storedUserAvatar && (storedUserAvatar.includes('unsplash.com') || storedUserAvatar.includes('placeholder'))) {
       localStorage.removeItem('nukrop_user_avatar');
     }
 
@@ -22763,15 +22774,21 @@ function rehydrateCommunityStories() {
     if (rawStories) {
       let parsed = JSON.parse(rawStories);
       if (Array.isArray(parsed)) {
-        // Strip out fake Jacku7376 story and remove unsplash fallbacks
+        // Strip out fake Jacku7376 story and non-authentic images
         parsed = parsed.filter(s => {
           if (!s) return false;
           const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
-          if (aName.toLowerCase().includes('jacku') || aName.toLowerCase().includes('test')) return false;
-          if (s.avatarUrl && s.avatarUrl.includes('unsplash.com')) {
+          const sTitle = typeof s.title === 'object' ? (s.title.en || '') : String(s.title || '');
+          const sUid = String(s.user_id || '');
+          if (/jacku|test|dummy|fake|sample/i.test(aName) || /jacku|test|dummy/i.test(sTitle) || /jacku|test/i.test(sUid)) return false;
+          if (s.avatarUrl && (s.avatarUrl.includes('unsplash.com') || s.avatarUrl.includes('placeholder'))) {
             s.avatarUrl = null;
           }
-          if (s.mediaUrl && s.mediaUrl.includes('unsplash.com')) {
+          if (!s.mediaUrl || s.mediaUrl.includes('unsplash.com') || s.mediaUrl.includes('placeholder')) {
+            return false;
+          }
+          // Only permit genuine user uploads (data URI or authentic upload)
+          if (!s.mediaUrl.startsWith('data:image/') && !s.mediaUrl.startsWith('blob:')) {
             return false;
           }
           return true;
@@ -22781,25 +22798,15 @@ function rehydrateCommunityStories() {
     }
 
     const userStories = JSON.parse(localStorage.getItem('nukrop_community_stories') || '[]');
-    if (Array.isArray(userStories) && userStories.length > 0) {
-      const valid = userStories.filter(u => u && u.id && u.mediaUrl && !u.mediaUrl.includes('unsplash.com'));
-      COMMUNITY_STORIES_CATALOG = [...valid, ...COMMUNITY_STORIES_CATALOG.filter(c => !valid.some(v => v.id === c.id))];
+    if (Array.isArray(userStories)) {
+      const valid = userStories.filter(u => u && u.id && u.mediaUrl && (u.mediaUrl.startsWith('data:image/') || u.mediaUrl.startsWith('blob:')));
+      COMMUNITY_STORIES_CATALOG = valid;
+    } else {
+      COMMUNITY_STORIES_CATALOG = [];
     }
-
-    // Clean initial catalog stories from test entries or unsplash photos
-    COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG.filter(s => {
-      if (!s) return false;
-      const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
-      if (aName.toLowerCase().includes('jacku') || aName.toLowerCase().includes('test')) return false;
-      if (s.avatarUrl && s.avatarUrl.includes('unsplash.com')) {
-        s.avatarUrl = null;
-      }
-      if (s.mediaUrl && s.mediaUrl.includes('unsplash.com')) {
-        return false;
-      }
-      return true;
-    });
-  } catch(e) {}
+  } catch(e) {
+    COMMUNITY_STORIES_CATALOG = [];
+  }
   if (typeof window !== 'undefined') window.COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG;
 }
 rehydrateCommunityStories();
@@ -23004,11 +23011,24 @@ let COMMUNITY_POSTS_CATALOG = (function() {
   return [];
 })();
 
-// Rehydrate real posts created by user from local storage
+// Rehydrate real posts created by user from local storage (clean duplicates & tests)
 try {
   const localSavedPosts = JSON.parse(localStorage.getItem('nukrop_community_posts') || '[]');
   if (Array.isArray(localSavedPosts) && localSavedPosts.length > 0) {
-    COMMUNITY_POSTS_CATALOG = localSavedPosts;
+    const seen = new Set();
+    const cleanList = [];
+    for (const lp of localSavedPosts) {
+      if (!lp) continue;
+      const t = String((lp.title && (lp.title.en || lp.title)) || '').trim().toLowerCase();
+      const a = String((lp.author && (lp.author.en || lp.author)) || lp.author_name || '').trim().toLowerCase();
+      if (t.includes('test post') || t.includes('test like')) continue;
+      const sig = a + ':::' + t;
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      cleanList.push(lp);
+    }
+    COMMUNITY_POSTS_CATALOG = cleanList;
+    localStorage.setItem('nukrop_community_posts', JSON.stringify(cleanList));
   }
 } catch(e) {}
 
@@ -24082,14 +24102,25 @@ async function fetchCommunityPostsFromSupabase() {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         const likedIds = getCommunityLikedIds();
-        const remotePosts = data.map(p => {
+        const seenSignatures = new Set();
+        const remotePosts = [];
+        for (const p of data) {
+          if (!p) continue;
+          const rawTitle = String(p.title || '').trim();
+          const rawAuthor = String(p.author_name || '').trim();
+          if (!rawTitle) continue;
+          if (/test post|test like|dummy post|fake|sample post/i.test(rawTitle) || /test like/i.test(rawAuthor)) continue;
+          const sig = (rawAuthor + ':::' + rawTitle).toLowerCase();
+          if (seenSignatures.has(sig)) continue;
+          seenSignatures.add(sig);
+
           const userLiked = likedIds.includes(p.id);
           const remoteLikes = p.likes_count !== undefined ? Number(p.likes_count) : 0;
           const effectiveLikes = userLiked ? Math.max(1, remoteLikes) : remoteLikes;
-          return {
+          remotePosts.push({
             id: p.id,
             user_id: p.user_id || null,
-            author: { en: p.author_name, te: p.author_name, hi: p.author_name },
+            author: { en: p.author_name || 'Farmer', te: p.author_name || 'రైతు', hi: p.author_name || 'किसान' },
             avatar: '👨‍🌾',
             village: { en: p.author_village || 'Kisan Hub', te: p.author_village || 'రైతు కేంద్రం', hi: p.author_village || 'किसान केंद्र' },
             cropId: p.crop_id || 'cotton',
@@ -24107,8 +24138,8 @@ async function fetchCommunityPostsFromSupabase() {
               author: { en: c.author_name, te: c.author_name, hi: c.author_name },
               text: { en: c.content, te: c.content, hi: c.content }
             })) : []
-          };
-        });
+          });
+        }
         COMMUNITY_POSTS_CATALOG = remotePosts;
         window.COMMUNITY_POSTS_CATALOG = remotePosts;
         try { localStorage.setItem('nukrop_community_posts', JSON.stringify(COMMUNITY_POSTS_CATALOG)); } catch(e) {}
@@ -24424,13 +24455,15 @@ function generateCommunityFeedHtml(posts) {
         </div>
 
         <!-- 6. Engagement Summary Line -->
-        <div style="font-size:12px;color:#0F172A;font-weight:600;margin-bottom:6px;">
-          ${postLikes > 0 ? `<strong>${postLikes}</strong> ${TL('farmers found this helpful', 'రైతులకు ఉపయోగపడింది', 'किसानों को उपयोगी लगा')}` : `<span style="color:#64748B;">${TL('Be the first to appreciate this post', 'ఈ పోస్ట్‌ను మొదట అభినందించండి', 'सबसे पहले पसंद करें')}</span>`}
+        <div style="font-size:12px;color:#0F172A;font-weight:700;margin-bottom:6px;">
+          ${postLikes > 0 ? `<strong>${postLikes}</strong> ${TL('farmers found this helpful', 'రైతులకు ఉపయోగపడింది', 'किसानों को उपयोगी लगा')}` : `<span style="color:#64748B;font-size:11.5px;font-weight:600;">🌱 ${TL('Be the first to appreciate this post', 'ఈ పోస్ట్‌ను మొదట అభినందించండి', 'सबसे पहले पसंद करें')}</span>`}
         </div>
 
-        <!-- 7. Comments Link & Drawer -->
-        <div style="font-size:12px;color:#64748B;font-weight:700;cursor:pointer;margin-top:2px;" onclick="toggleCommunityComments('${p.id}')">
-          ${postComments.length > 0 ? `${TL('View all', 'అన్ని చూడండి', 'सभी देखें')} ${postComments.length} ${TL('expert answers', 'నిపుణుల సమాధానాలు', 'विशेषज्ञ उत्तर')}...` : `${TL('Be the first to answer this question...', 'ఈ ప్రశ్నకు మొదటి సమాధానం రాయండి...', 'पहला उत्तर लिखें...')}`}
+        <!-- 7. Comments Link & Drawer Button -->
+        <div style="margin-top:4px;">
+          <button onclick="toggleCommunityComments('${p.id}')" style="background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D;font-size:11px;font-weight:800;border-radius:12px;padding:6px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+            <span>💬</span> ${postComments.length > 0 ? `${TL('View', 'చూడండి', 'देखें')} ${postComments.length} ${TL('expert answers', 'నిపుణుల సమాధానాలు', 'विशेषज्ञ उत्तर')}` : `${TL('Answer this question...', 'ఈ ప్రశ్నకు సమాధానం రాయండి...', 'पहला उत्तर लिखें...')}`}
+          </button>
         </div>
 
         <!-- 8. Expanded Comments Drawer -->
@@ -30900,7 +30933,7 @@ function sendAiChatMessage(customPrompt) {
       qLower.includes('what do you do')
     ) {
       responseText = TL(
-        '👨‍🔬 **I am NuKropAI Agronomist Engine**\n\nYour 24/7 agrarian intelligence copilot powered by ICAR (Indian Council of Agricultural Research) and PJTSAU agronomy science, integrated with TokenRouter NVIDIA Nemotron reasoning.\n\nI can:\n1. 🔍 Diagnose plant diseases & prescribe organic and chemical tank mixes\n2. 📊 Track live APMC mandi rates across 3,200+ yards\n3. 🌦️ Calculate exact 3-hour micro-weather spray windows\n4. 🧪 Formulate exact NPK fertilizer schedules for your specific soil\n5. 🗣️ Speak and listen in 11 Indian languages',
+        '👨‍🔬 **I am NuKropAI Agronomist Engine**\n\nYour 24/7 agrarian intelligence copilot powered by ICAR (Indian Council of Agricultural Research) and PJTSAU agronomy science, integrated with NuKropAI Multimodal Vision & Neural Reasoning.\n\nI can:\n1. 🔍 Diagnose plant diseases & prescribe organic and chemical tank mixes\n2. 📊 Track live APMC mandi rates across 3,200+ yards\n3. 🌦️ Calculate exact 3-hour micro-weather spray windows\n4. 🧪 Formulate exact NPK fertilizer schedules for your specific soil\n5. 🗣️ Speak and listen in 11 Indian languages',
         '👨‍🔬 **నేను NuKropAI వ్యవసాయ శాస్త్రవేత్త ఇంజిన్**\n\nభారతీయ వ్యవసాయ పరిశోధనా మండలి (ICAR) మరియు PJTSAU ఆధారంగా రూపొందించబడిన మీ డిజిటల్ వ్యవసాయ సలహాదారుని.\n\nనేను చేయగల పనులు:\n1. 🔍 పంట తెగుళ్లను గుర్తించి సరైన మందుల మోతాదు చెప్పడం\n2. 📊 3,200+ మార్కెట్ల లైవ్ ధరలను అందించడం\n3. 🌦️ పిచికారీకి అనుకూల వాతావరణ సమయాలను లెక్కించడం\n4. 🧪 మీ నేల స్వభావానికి సరిపడే ఎరువులను సిఫార్సు చేయడం\n5. 🗣️ తెలుగుతో సహా 11 భారతీయ భాషల్లో మాట్లాడడం',
         '👨‍🔬 **मैं NuKropAI कृषि वैज्ञानिक इंजन हूं**\n\nICAR और PJTSAU पर आधारित आपका डिजिटल कृषि सलाहकार। मैं फसल रोग निदान, ताजा मंडी भाव, और मौसम आधारित सही छिड़काव समय बताने में सक्षम हूं।'
       );
@@ -32388,17 +32421,17 @@ const APP_VIEWS = {
       </div>
       <div style="display:flex;gap:6px;align-items:center;">
         
-        <select id="top-lang-select" onchange="setLanguage(this.value)" style="background:#FFFFFF;border:1.5px solid #D6E4D6;border-radius:20px;padding:4px 8px;font-size:10.5px;font-weight:800;color:#1B5E20;outline:none;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+        <select id="top-lang-select" onchange="setLanguage(this.value)" style="height:36px;background:#FFFFFF;border:1.5px solid #D6E4D6;border-radius:18px;padding:0 10px;font-size:11px;font-weight:800;color:#1B5E20;outline:none;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.04);display:flex;align-items:center;">
           ${Object.values(INDIAN_LANGUAGES).map(lang => `<option value="${lang.code}" ${currentLang===lang.code?'selected':''}>${lang.name}</option>`).join('')}
         </select>
 
-        <button onclick="openPriceAlertModal()" style="position:relative;width:38px;height:38px;border-radius:50%;background:#DCFCE7;border:1.5px solid #86EFAC;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(22,163,74,0.18);transition:transform 0.15s cubic-bezier(0.16,1,0.3,1);" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'" title="${TL('Price Alerts & Notifications', 'ధర అలర్ట్‌లు & నోటిఫికేషన్లు', 'भाव अलर्ट व सूचनाएं')}">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <button onclick="openPriceAlertModal()" style="position:relative;width:36px;height:36px;border-radius:50%;background:#DCFCE7;border:1.5px solid #86EFAC;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(22,163,74,0.18);transition:transform 0.15s cubic-bezier(0.16,1,0.3,1);flex-shrink:0;" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'" title="${TL('Price Alerts & Notifications', 'ధర అలర్ట్‌లు & నోటిఫికేషన్లు', 'भाव अलर्ट व सूचनाएं')}">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             <circle cx="12" cy="3" r="1" fill="#15803D"/>
           </svg>
-          ${(()=>{ const uc = APP_NOTIFICATIONS.filter(n=>!n.read).length; return uc > 0 ? `<span id="notif-bell-badge" style="position:absolute;top:-3px;right:-3px;background:#DC2626;color:#FFFFFF;border:2px solid #FFFFFF;border-radius:9px;min-width:18px;height:18px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;box-shadow:0 2px 6px rgba(220,38,38,0.45);pointer-events:none;">${uc}</span>` : ''; })()}
+          ${(()=>{ const uc = APP_NOTIFICATIONS.filter(n=>!n.read).length; return uc > 0 ? `<span id="notif-bell-badge" style="position:absolute;top:-2px;right:-2px;background:#DC2626;color:#FFFFFF;border:2px solid #FFFFFF;border-radius:10px;min-width:18px;height:18px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;box-shadow:0 2px 6px rgba(220,38,38,0.45);pointer-events:none;box-sizing:border-box;">${uc}</span>` : ''; })()}
         </button>
       </div>
     </div>
@@ -32427,23 +32460,27 @@ const APP_VIEWS = {
     <!-- Location-Based Live Mandi Banner (Clean White & Premium) -->
     <div style="margin:0 18px 12px;" class="m3-card">
       <div id="home-mandi-card-container" style="padding:14px 16px;background:#FFFFFF;border-radius:20px;border:1px solid #E2E8F0;box-shadow:0 2px 10px rgba(0,0,0,0.03);transition:all 0.3s ease;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;gap:10px;" onclick="openScreen('market',null);syncSideNav('btn-market')">
-          <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">
-            <div style="width:40px;height:40px;border-radius:12px;background:#F0FDF4;border:1px solid #DCFCE7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            </div>
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;">
-                <span style="font-size:13.5px;font-weight:900;color:#0F172A;line-height:1.2;">${t.liveMandiTitle}</span>
-                <span style="background:#F0FDF4;color:#16A34A;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;border:1px solid #BBF7D0;white-space:nowrap;">🌾 ${cropName}</span>
+        <div style="cursor:pointer;" onclick="openScreen('market',null);syncSideNav('btn-market')">
+          <!-- Row 1: Live Title + Refresh + Live Price -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+              <div style="width:36px;height:36px;border-radius:10px;background:#F0FDF4;border:1px solid #DCFCE7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              </div>
+              <div style="display:flex;align-items:center;gap:5px;min-width:0;">
+                <span style="font-size:14px;font-weight:900;color:#0F172A;white-space:nowrap;">${t.liveMandiTitle}</span>
                 <button id="home-mandi-refresh-btn" onclick="event.stopPropagation();refreshMandiRatesLive();" style="background:none;border:none;cursor:pointer;font-size:11px;padding:2px;color:#64748B;line-height:1;display:inline-flex;align-items:center;" title="Refresh live rate"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></button>
               </div>
-              <div style="font-size:12px;color:#64748B;margin-top:3px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${mandiName}</div>
             </div>
+            <div id="home-mandi-live-price" style="font-size:18px;font-weight:900;color:#0F172A;line-height:1;white-space:nowrap;flex-shrink:0;">${mandiInfo.price} <span style="font-size:11px;color:#64748B;font-weight:700;">${mandiInfo.unit}</span></div>
           </div>
-          <div style="text-align:right;flex-shrink:0;margin-left:6px;display:flex;flex-direction:column;align-items:flex-end;">
-            <div id="home-mandi-live-price" style="font-size:20px;font-weight:900;color:#0F172A;line-height:1.2;white-space:nowrap;">${mandiInfo.price} <span style="font-size:11px;color:#64748B;font-weight:700;">${mandiInfo.unit}</span></div>
-            <div id="home-mandi-live-change" style="font-size:10px;font-weight:800;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;margin-top:4px;white-space:nowrap;">${formatMandiBadge(mandiInfo.catalogItem && mandiInfo.catalogItem.badge, mandiInfo.catalogItem && mandiInfo.catalogItem.tradeDate)}</div>
+          <!-- Row 2: Crop Pill + Mandi Name + Live Badge -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;">
+              <span style="background:#F0FDF4;color:#16A34A;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;border:1px solid #BBF7D0;white-space:nowrap;flex-shrink:0;">🌾 ${cropName}</span>
+              <span style="font-size:11px;color:#64748B;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${mandiName}</span>
+            </div>
+            <div id="home-mandi-live-change" style="font-size:9.5px;font-weight:800;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:2px 7px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;">${formatMandiBadge(mandiInfo.catalogItem && mandiInfo.catalogItem.badge, mandiInfo.catalogItem && mandiInfo.catalogItem.tradeDate)}</div>
           </div>
         </div>
 
@@ -32466,7 +32503,7 @@ const APP_VIEWS = {
       <span style="background:#F0FDF4;color:#15803D;border:1px solid #DCFCE7;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:0.02em;flex-shrink:0;z-index:2;box-shadow:2px 0 6px rgba(255,255,255,0.95);">
         🌾 ${TL('MARKET', 'మార్కెట్', 'मंडी')}
       </span>
-      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 2px;">
+      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 2px;-webkit-mask-image:linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);mask-image:linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);">
         <div class="news-ticker-track">
           ${renderLiveMandiTickerItemsHtml()}
         </div>
@@ -32582,7 +32619,7 @@ const APP_VIEWS = {
           <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 2px;border-left:1px solid #E2ECE2;">
             <div style="font-size:9px;color:#64748B;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:3px;">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2.3"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
-              <span>${t.windSpeed || t.wind}</span>
+              <span>${t.wind || 'Wind'}</span>
             </div>
             <div style="font-size:12px;font-weight:900;color:#0F172A;margin-top:2px;white-space:nowrap;" id="w-wind">${liveWeather.wind || (liveWeather.windSpeed !== null ? liveWeather.windSpeed : '-- km/h')}</div>
           </div>
@@ -34017,7 +34054,7 @@ const APP_VIEWS = {
         </div>
       </div>
       <span style="background:#DCFCE7;color:#15803D;font-size:9.5px;font-weight:900;padding:3px 8px;border-radius:10px;border:1px solid #86EFAC;">
-        ⚡ TokenRouter Nemotron Active
+        ⚡ NuKropAI Agronomist Engine · ICAR Active
       </span>
     </div>
 
@@ -34644,20 +34681,18 @@ const APP_VIEWS = {
 
     <!-- Community Profile Social Stats (Symmetrically Padded & Responsive) -->
     <div id="comm-feed-container-parent" style="padding:0 18px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:12px 10px;margin:10px 0 14px;box-shadow:0 2px 6px rgba(0,0,0,0.03);">
-        <div style="flex:1;min-width:0;text-align:center;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:12px 6px;margin:10px 0 14px;box-shadow:0 2px 6px rgba(0,0,0,0.03);text-align:center;">
+        <div style="padding:0 4px;">
           <div id="profile-stat-followers" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowersCount()}</div>
-          <div style="font-size:11px;font-weight:700;color:#64748B;white-space:nowrap;">Followers</div>
+          <div style="font-size:10.5px;font-weight:700;color:#64748B;white-space:nowrap;">${TL('Followers', 'ఫాలోవర్స్', 'फॉलोअर्स')}</div>
         </div>
-        <div style="width:1px;height:24px;background:#E2E8F0;"></div>
-        <div style="flex:1;min-width:0;text-align:center;">
-          <div id="profile-stat-following" style="font-size:16px;font-weight:900;color:#0F172A;">0</div>
-          <div style="font-size:11px;font-weight:700;color:#64748B;white-space:nowrap;">Following</div>
+        <div style="padding:0 4px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
+          <div id="profile-stat-following" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowingCount()}</div>
+          <div style="font-size:10.5px;font-weight:700;color:#64748B;white-space:nowrap;">${TL('Following', 'ఫాలోయింగ్', 'फॉलोइंग')}</div>
         </div>
-        <div style="width:1px;height:24px;background:#E2E8F0;"></div>
-        <div style="flex:1;min-width:0;text-align:center;">
-          <div id="profile-stat-myposts" style="font-size:16px;font-weight:900;color:#0F172A;">0</div>
-          <div style="font-size:11px;font-weight:700;color:#64748B;white-space:nowrap;">My Posts</div>
+        <div style="padding:0 4px;">
+          <div id="profile-stat-myposts" style="font-size:16px;font-weight:900;color:#0F172A;">${getMyPostsCount()}</div>
+          <div style="font-size:10.5px;font-weight:700;color:#64748B;white-space:nowrap;">${TL('My Posts', 'నా పోస్ట్‌లు', 'मेरी पोस्ट')}</div>
         </div>
       </div>
     </div>
@@ -38359,7 +38394,52 @@ function fetchAndVerifyRealLandRecord() {
 function getAgristackFarmerCardHtml() {
   const dpiStore = (typeof AgriStackDPI !== 'undefined') ? AgriStackDPI.getStore() : { data: null, activeParcelIndex: 0 };
 
+  let claims = [];
+  try { claims = JSON.parse(localStorage.getItem('nukrop_land_claims') || '[]'); } catch(e) {}
+
   if (!dpiStore.data || !dpiStore.data.farmer_profile) {
+    if (claims.length > 0) {
+      const firstClaim = claims[0];
+      const farmerName = firstClaim.owner_full_name || localStorage.getItem('nukrop_farmer_name') || 'Farmer';
+      const totalAcres = claims.reduce((acc, c) => acc + (parseFloat(c.area_acres) || 0), 0);
+      const holdingsFormatted = totalAcres > 0 ? `${totalAcres.toFixed(2)} Acres (${claims.length} Parcels)` : `${claims.length} Parcels`;
+      return `
+        <div style="background:linear-gradient(135deg,#065F46 0%,#047857 55%,#064E3B 100%);border-radius:22px;padding:18px 20px;color:#FFFFFF;box-shadow:0 8px 24px rgba(4,120,87,0.3);margin-bottom:14px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.2);">
+          <div style="position:absolute;right:-10px;bottom:-15px;font-size:100px;opacity:0.06;pointer-events:none;">🏛️</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);padding:3px 10px;border-radius:20px;backdrop-filter:blur(4px);">
+              <span>🏛️</span>
+              <span style="font-size:9.5px;font-weight:900;letter-spacing:0.04em;">LAND SURVEY — RECORD REGISTERED</span>
+            </div>
+            <span style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);border-radius:20px;padding:3px 9px;font-size:9.5px;font-weight:900;color:#A7F3D0;display:inline-flex;align-items:center;gap:4px;backdrop-filter:blur(4px);">
+              ✓ FARMER CLAIMED
+            </span>
+          </div>
+          <div style="font-size:21px;font-weight:900;letter-spacing:-0.2px;line-height:1.2;">${farmerName}</div>
+          <div style="display:inline-flex;align-items:center;margin-top:5px;">
+            <span style="background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.16);padding:2px 8px;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700;color:#D1FAE5;">
+              CLAIM ID: ${firstClaim.id}
+            </span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.18);">
+            <div>
+              <div style="font-size:9.5px;opacity:0.8;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;">Farmer-Claimed Land (RoR Passbook)</div>
+              <div style="font-size:15px;font-weight:900;color:#FFFFFF;margin-top:2px;">${holdingsFormatted}</div>
+              <div style="font-size:10.5px;color:#A7F3D0;margin-top:2px;font-weight:600;">
+                ${firstClaim.village ? firstClaim.village + ', ' : ''}${firstClaim.mandal ? firstClaim.mandal + ', ' : ''}${firstClaim.district || firstClaim.state_code}
+              </div>
+            </div>
+            <div style="background:#FFFFFF;padding:5px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,0.15);flex-shrink:0;">
+              <div style="width:38px;height:38px;background:#0F172A;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#FFFFFF;font-size:7px;font-weight:900;text-align:center;line-height:1.15;">
+                <span>QR</span>
+                <span style="color:#4ADE80;">RoR</span>
+                <span style="color:#A7F3D0;">CLAIM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     return `
       <div style="background:linear-gradient(135deg,#065F46 0%,#047857 55%,#064E3B 100%);border-radius:22px;padding:22px 18px;color:#FFFFFF;box-shadow:0 8px 24px rgba(4,120,87,0.28);margin-bottom:14px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.2);text-align:center;">
         <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);padding:3px 10px;border-radius:20px;margin-bottom:10px;backdrop-filter:blur(4px);">
@@ -38467,7 +38547,13 @@ function getAgristackDynamicBodyHtml() {
   if (typeof dpiStore.activeParcelIndex === 'number') {
     activeParcelIndex = dpiStore.activeParcelIndex;
   }
-  const parcels = (dpiStore.data && dpiStore.data.parcels) || [];
+  let parcels = (dpiStore.data && dpiStore.data.parcels) || [];
+  if (parcels.length === 0) {
+    try {
+      const claims = JSON.parse(localStorage.getItem('nukrop_land_claims') || '[]');
+      if (Array.isArray(claims) && claims.length > 0) parcels = claims;
+    } catch(e) {}
+  }
   const p = parcels[activeParcelIndex] || parcels[0] || null;
   const isTe = currentLang === 'te';
   const isHi = currentLang === 'hi';
@@ -39372,6 +39458,37 @@ async function callGroqAI(userPrompt, systemInstruction) {
     console.warn('Server-side AI Advisor call failed:', err.message);
   }
 
+  // Direct High-Speed Groq Cloud Fallback (Client LocalStorage Configuration)
+  const clientGroqKey = (typeof localStorage !== 'undefined' ? (localStorage.getItem('nukrop_groq_api_key') || localStorage.getItem('groq_api_key')) : null);
+  const groqKeys = clientGroqKey ? [clientGroqKey] : [];
+  for (const gKey of groqKeys) {
+    try {
+      const gRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${gKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: `You are NuKropAI, an elite ICAR agricultural expert advising Indian farmers. Respond concisely, authoritatively, and practically in ${targetLang === 'te' ? 'Telugu (తెలుగు)' : (targetLang === 'hi' ? 'Hindi (हिंदी)' : 'English')}. Always prescribe authentic CIB&RC approved brand names with active ingredient, precise dosage per 15L spray tank or per acre, and organic formulations (Neem oil, Jeevamrutha).` },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.2,
+          max_tokens: 450
+        })
+      });
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        const content = gData.choices?.[0]?.message?.content;
+        if (content && content.length > 10) {
+          return content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+        }
+      }
+    } catch(gErr) {}
+  }
+
   // Graceful fallback to verified ICAR agricultural knowledge
   if (isTe) {
     return `ICAR పరిశోధనా కేంద్రం సిఫార్సు: పంట తెగుళ్ల నివారణకు సమతుల్య NPK ఎరువులు మరియు సిఫార్సు చేసిన మోతాదులో సేంద్రీయ/రసాయన ద్రావణాన్ని పిచికారీ చేయండి.`;
@@ -40131,6 +40248,73 @@ function saveCurrentScanReportToHistory(scanId) {
   }
 }
 
+function getRecommendedCibrcMedicines(cropKey, diseaseName, isSoil) {
+  const dNorm = (diseaseName || '').toLowerCase();
+  
+  if (isSoil || dNorm.includes('soil') || dNorm.includes('deficiency') || dNorm.includes('chlorosis')) {
+    return [
+      { name: 'Multiplex Zinc High (Chelated Zinc EDTA 12%)', desc: 'Karnataka Agro · ₹280 / 500g · Foliar: 1.5 g/L (Soil: 10 kg/Acre)', dose: '1.5 g/L' },
+      { name: 'IFFCO Sagarika Bio-Fertilizer (Seaweed Extract 28%)', desc: 'IFFCO · ₹420 / 1L · Foliar Spray: 2.5 ml/L', dose: '2.5 ml/L' }
+    ];
+  }
+  
+  if (dNorm.includes('curl') || dNorm.includes('whitefly') || dNorm.includes('aphid') || dNorm.includes('thrip') || dNorm.includes('jassid') || dNorm.includes('hopper') || dNorm.includes('mosaic') || dNorm.includes('sucking')) {
+    return [
+      { name: 'Confidor 200 SL (Imidacloprid 17.8% SL)', desc: 'Bayer CropScience · ₹420 / 100ml · Dose: 0.5 ml/L', dose: '0.5 ml/L' },
+      { name: 'NeemAzal-T/S 10,000 ppm (Pure Bio-Insecticide)', desc: 'Parry Bio · ₹480 / 500ml · Dose: 2.0 ml/L', dose: '2.0 ml/L' }
+    ];
+  }
+  
+  if (dNorm.includes('blight') || dNorm.includes('mildew') || dNorm.includes('fungal') || dNorm.includes('blast') || dNorm.includes('rust') || dNorm.includes('spot') || dNorm.includes('rot') || dNorm.includes('anthracnose')) {
+    return [
+      { name: 'Nativo 75 WG (Tebuconazole 50% + Trifloxystrobin 25%)', desc: 'Bayer CropScience · ₹980 / 100g · Dose: 1.0 g/L', dose: '1.0 g/L' },
+      { name: 'Amistar Top (Azoxystrobin 18.2% + Difenoconazole 11.4% SC)', desc: 'Syngenta · ₹1,450 / 200ml · Dose: 1.0 ml/L', dose: '1.0 ml/L' }
+    ];
+  }
+  
+  if (dNorm.includes('wilt') || dNorm.includes('canker') || dNorm.includes('bacterial')) {
+    return [
+      { name: 'Plantomycin (Streptomycin Sulphate 9% + Tetracycline 1% SP)', desc: 'Aries Agro · ₹110 / 50g · Dose: 0.5 g/L', dose: '0.5 g/L' },
+      { name: 'Kocide 3000 (Copper Hydroxide 46.1% DF)', desc: 'Corteva Agriscience · ₹780 / 500g · Dose: 2.0 g/L', dose: '2.0 g/L' }
+    ];
+  }
+  
+  if (dNorm.includes('bollworm') || dNorm.includes('caterpillar') || dNorm.includes('borer') || dNorm.includes('spodoptera') || dNorm.includes('armyworm')) {
+    return [
+      { name: 'Coragen 18.5% SC (Chlorantraniliprole)', desc: 'FMC India · ₹1,850 / 150ml · Dose: 0.4 ml/L (60 ml/Acre)', dose: '0.4 ml/L' },
+      { name: 'Proclaim 5 SG (Emamectin Benzoate 5% SG)', desc: 'Syngenta · ₹520 / 100g · Dose: 0.5 g/L (80 g/Acre)', dose: '0.5 g/L' }
+    ];
+  }
+  
+  // Healthy foliar or general crop tonic
+  return [
+    { name: 'IFFCO Nano Urea Liquid (4% N w/v)', desc: 'IFFCO · ₹225 / 500ml · Foliar Spray: 4.0 ml/L', dose: '4.0 ml/L' },
+    { name: 'Isabion Amino Acids & Bio-Nutritional Spray', desc: 'Syngenta · ₹650 / 500ml · Dose: 2.0 ml/L', dose: '2.0 ml/L' }
+  ];
+}
+window.getRecommendedCibrcMedicines = getRecommendedCibrcMedicines;
+
+function clearAndRetakeScan() {
+  uploadedScanImageData = null;
+  const preview = document.getElementById('scan-preview-image');
+  if (preview) { preview.src = ''; preview.style.display = 'none'; }
+  const ph = document.getElementById('camera-placeholder');
+  if (ph) { ph.style.display = 'flex'; }
+  const fileInp = document.getElementById('plant-file-input');
+  if (fileInp) fileInp.value = '';
+  const diagBox = document.getElementById('scan-diag-box');
+  if (diagBox) diagBox.style.display = 'none';
+  const btn = document.getElementById('run-scan-btn');
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<span>⚡</span> <span>${TL('Run AI Pathology Diagnosis', 'AI తెగుళ్ల నిర్ధారణ ప్రారంభించండి', 'AI फसल रोग जांच शुरू करें')}</span>`;
+    btn.style.background = 'linear-gradient(135deg, #15803D 0%, #16A34A 100%)';
+  }
+  const v = document.getElementById('scanner-camera-viewport');
+  if (v) v.scrollIntoView({ behavior: 'smooth' });
+}
+window.clearAndRetakeScan = clearAndRetakeScan;
+
 async function startScannerDiagnostic() {
   if (liveCameraStream) { captureFrameFromLiveCamera(); }
   const btn = document.getElementById('run-scan-btn');
@@ -40203,7 +40387,84 @@ async function startScannerDiagnostic() {
     }
   }
 
-  // 2. Direct Gemini Vision API if client key provided and backend was offline
+  // 2. Secondary: Direct Groq Vision API (qwen/qwen3.8-27b) with Authenticity Verification
+  if (!isAiLive && uploadedScanImageData) {
+    const clientGroqKey = (typeof localStorage !== 'undefined' ? (localStorage.getItem('nukrop_groq_api_key') || localStorage.getItem('groq_api_key')) : null);
+    const groqKeys = clientGroqKey ? [clientGroqKey] : [];
+    const langName = currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English');
+    const groqSystemPrompt = `You are NuKropAI, an expert ICAR agricultural pathologist and soil scientist.
+Carefully inspect this image in detail.
+Step 1: Authenticity and Subject Verification:
+Determine whether the image contains an actual agricultural crop plant, leaf, pest, or farm soil sample.
+If the image does NOT contain an agricultural crop, leaf, or soil (e.g. it is a human, animal/pet, vehicle, indoor room/furniture, electronic screen, non-agricultural item, or cartoon):
+Respond strictly in JSON matching this schema:
+{
+  "isPlantOrSoil": false,
+  "detectedSubject": "Identified non-crop subject (e.g. Person, Automobile, Room, etc.)",
+  "diseaseName": "Unknown / Non-Crop Image",
+  "severity": "None",
+  "confidence": 0,
+  "pathogen": "None",
+  "symptoms": "The uploaded photo does not appear to be an agricultural plant leaf or farm soil specimen. Please upload or snap a clear photo of an actual crop leaf or farm soil.",
+  "organicSolution": "None required. Please retake photo focusing on the affected crop foliage.",
+  "chemicalSolution": "None applicable. No agrochemical recommendation for non-crop images.",
+  "sprayAdvisory": "N/A - Re-scan required with an authentic agricultural leaf or soil sample."
+}
+Step 2: If the image IS an agricultural crop (${currentCrop.id || 'crop foliar sample'}) or soil specimen:
+Diagnose the condition, disease, pest damage, or deficiency.
+Respond strictly in valid JSON matching this schema:
+{
+  "isPlantOrSoil": true,
+  "crop": "${currentCrop.id || 'cotton'}",
+  "diseaseName": "Authentic Disease Name or Healthy Foliar Tissue",
+  "severity": "Low | Medium | High | Critical",
+  "confidence": 92,
+  "pathogen": "Specific biological pathogen name or Nutrient deficiency",
+  "symptoms": "Detailed foliar symptoms observed in ${langName}",
+  "organicSolution": "Authentic ICAR verified organic bio-formulation remedy in ${langName}",
+  "chemicalSolution": "Approved CIB&RC chemical brand name with active ingredient and dosage in ml/L or g/L in ${langName}",
+  "sprayAdvisory": "Safe application window and weather safety in ${langName}"
+}`;
+
+    for (const gKey of groqKeys) {
+      try {
+        const gRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + gKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'qwen/qwen3.8-27b',
+            messages: [
+              { role: 'system', content: groqSystemPrompt },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: `Analyze this agricultural ${isSoil ? 'soil specimen' : (currentCrop.id || 'crop foliar sample')}. Language: ${langName}.` },
+                  { type: 'image_url', image_url: { url: uploadedScanImageData } }
+                ]
+              }
+            ],
+            response_format: { type: 'json_object' }
+          })
+        });
+        if (gRes.ok) {
+          const gData = await gRes.json();
+          const rawContent = gData.choices?.[0]?.message?.content;
+          if (rawContent) {
+            aiPrediction = JSON.parse(rawContent.trim());
+            isAiLive = true;
+            break;
+          }
+        }
+      } catch(err) {
+        console.warn('Direct Groq Vision inference error:', err);
+      }
+    }
+  }
+
+  // 3. Fallback Gemini Vision API if client key provided
   if (!isAiLive && uploadedScanImageData && geminiApiKey) {
     try {
       const base64Data = uploadedScanImageData.includes(',') ? uploadedScanImageData.split(',')[1] : uploadedScanImageData;
@@ -40213,7 +40474,7 @@ async function startScannerDiagnostic() {
         body: JSON.stringify({
           contents: [{
             parts: [
-              { text: `You are an expert ICAR agricultural pathologist. Analyze this crop specimen (${currentCrop.id || 'crop foliar sample'}). Diagnose the disease or deficiency, severity (Low, Medium, High, or Critical), confidence score percentage (0-100), biological pathogen, organic bio-formulation remedy, precise chemical tank mix dosage in ml/L or g/L, and safety advisory. Language: ${currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English')}. Output strictly as valid JSON with keys: diseaseName, severity, confidence, pathogen, organicSolution, chemicalSolution, sprayAdvisory, symptoms.` },
+              { text: `You are an expert ICAR agricultural pathologist. First verify if the image is a genuine plant leaf or soil. If not, set isPlantOrSoil: false. Otherwise diagnose disease or deficiency, severity, confidence (0-100), biological pathogen, organic bio-formulation, chemical tank mix dosage in ml/L or g/L, and advisory. Language: ${currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English')}. Output strictly valid JSON with keys: isPlantOrSoil, detectedSubject, diseaseName, severity, confidence, pathogen, organicSolution, chemicalSolution, sprayAdvisory, symptoms.` },
               { inline_data: { mime_type: "image/jpeg", data: base64Data } }
             ]
           }],
@@ -40231,17 +40492,6 @@ async function startScannerDiagnostic() {
     } catch(e) {
       console.warn('Gemini Vision inference error, falling back to botanical pathology DB:', e);
     }
-  } else if (!geminiApiKey) {
-    // If no key configured, query Groq text advisory or use ICAR database with honest notice
-    try {
-      const aiPrompt = `Diagnose ${isSoil ? 'soil nutrient deficiency' : 'crop foliar disease'} on ${currentCrop.id || 'cotton'}. Provide: 1. Symptoms, 2. Organic bio-formulation, 3. Chemical tank mix dosage (ml/L or g/L). Language: ${currentLang === 'te' ? 'Telugu' : (currentLang === 'hi' ? 'Hindi' : 'English')}.`;
-      const aiResp = await callGroqAI(aiPrompt);
-      if (aiResp && aiResp.length > 30) {
-        aiSymptoms = aiResp;
-      }
-    } catch(e) {
-      console.warn('Real AI diagnosis fallback:', e);
-    }
   }
 
   const diagnosis = defaultDiag;
@@ -40255,6 +40505,61 @@ async function startScannerDiagnostic() {
 
     const diagBox = document.getElementById('scan-diag-box');
     const resultContent = document.getElementById('scan-result-content');
+
+    // ── CHECK IF IMAGE WAS NON-PLANT / UNKNOWN SUBJECT ──
+    const isUnknownOrNonCrop = aiPrediction && (aiPrediction.isPlantOrSoil === false || String(aiPrediction.diseaseName || '').toLowerCase().includes('unknown') || String(aiPrediction.diseaseName || '').toLowerCase().includes('non-crop'));
+
+    if (isUnknownOrNonCrop) {
+      if (resultContent && diagBox) {
+        resultContent.innerHTML = `
+          <div class="scan-result-card" style="background:#FFFFFF;border-radius:20px;border:2px solid #EF4444;box-shadow:0 8px 30px rgba(239,68,68,0.18);overflow:hidden;">
+            <div style="background:linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);color:#FFFFFF;padding:16px;display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div style="font-size:10.5px;font-weight:800;letter-spacing:0.06em;color:#FECACA;text-transform:uppercase;display:flex;align-items:center;gap:4px;">
+                  <span style="width:7px;height:7px;border-radius:50%;background:#F87171;box-shadow:0 0 6px #F87171;"></span>
+                  NuKropAI Vision Engine · Authenticity Check
+                </div>
+                <div style="font-size:17px;font-weight:900;margin-top:2px;">⚠️ ${TL('Invalid / Non-Agricultural Image', 'వ్యవసాయ పంట లేదా నేల చిత్రం కాదు', 'अमान्य / गैर-कृषि तस्वीर')}</div>
+                <div style="font-size:11.5px;color:#FEE2E2;margin-top:3px;font-weight:700;">${TL('Detected Subject', 'గుర్తించబడినది', 'पहचाना गया')}: ${aiPrediction.detectedSubject || 'Non-crop object'}</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.22);padding:6px 12px;border-radius:14px;backdrop-filter:blur(4px);text-align:center;">
+                <div style="font-size:9px;font-weight:800;color:#FEE2E2;">STATUS</div>
+                <div style="font-size:13px;font-weight:900;color:#FFFFFF;">REJECTED</div>
+              </div>
+            </div>
+
+            ${uploadedScanImageData ? `
+              <div style="padding:14px 16px 0;text-align:center;">
+                <img src="${uploadedScanImageData}" style="max-height:160px;width:100%;object-fit:cover;border-radius:12px;border:1.5px solid #FCA5A5;">
+              </div>
+            ` : ''}
+
+            <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+              <div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:14px;padding:14px;">
+                <div style="font-size:12px;font-weight:900;color:#991B1B;margin-bottom:6px;">⚠️ ${TL('Authentication Notice', 'ప్రామాణికత నివేదిక', 'सत्यापन सूचना')}</div>
+                <div style="font-size:12px;color:#7F1D1D;line-height:1.5;font-weight:600;">
+                  ${aiPrediction.symptoms || TL('The uploaded photo does not contain an agricultural crop leaf, plant stem, or farm soil specimen. NuKropAI does not generate artificial or hallucinated disease prescriptions for non-agricultural objects.', 'ఈ చిత్రం వ్యవసాయ పంట ఆకు లేదా నేల నమూనా కాదు. పంటలు కాని వస్తువులకు న్యుక్రాప్ AI తప్పుడు రసాయన మందులను సూచించదు.', 'अपलोड की गई तस्वीर में कोई कृषि फसल, पत्ता या मिट्टी नहीं है। गैर-कृषि वस्तुओं के लिए कोई रासायनिक कीटनाशक सुझाव नहीं दिया जाता।')}
+                </div>
+              </div>
+
+              <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px;">
+                <div style="font-size:11.5px;font-weight:800;color:#0F172A;">💡 ${TL('How to get an accurate scan:', 'ఖచ్చితమైన స్కాన్ ఎలా చేయాలి:', 'सटीक स्कैन कैसे करें:')}</div>
+                <div style="font-size:11px;color:#475569;font-weight:600;">• ${TL('Hold camera 10–15 cm away from the affected crop leaf or pest', 'బాధిత ఆకు నుండి 10–15 సెం.మీ దూరంలో కెమెరా ఉంచండి', 'संक्रमित पत्ते या कीट से 10–15 सेमी दूर कैमरा रखें')}</div>
+                <div style="font-size:11px;color:#475569;font-weight:600;">• ${TL('Ensure good natural sunlight without heavy shadows', 'నీడలు లేకుండా మంచి వెలుతురులో ఫోటో తీయండి', 'बिना छाया के अच्छी रोशनी में फोटो लें')}</div>
+                <div style="font-size:11px;color:#475569;font-weight:600;">• ${TL('Focus sharply on disease spots, wilting, or foliar pests', 'తెగులు మచ్చలు లేదా పురుగుల పై కెమెరా ఫోకస్ చేయండి', 'रोग के धब्बों या कीड़ों पर कैमरा फोकस करें')}</div>
+              </div>
+
+              <button type="button" onclick="clearAndRetakeScan()" style="width:100%;background:linear-gradient(135deg, #15803D 0%, #16A34A 100%);color:#FFFFFF;border:none;border-radius:14px;padding:13px;font-size:13.5px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(21,128,61,0.3);margin-top:4px;">
+                <span>📷</span> <span>${TL('Retake Clear Photo of Crop Leaf or Soil', 'స్పష్టమైన పంట ఆకు ఫోటో మళ్లీ తీయండి', 'फसल पत्ते या मिट्टी की स्पष्ट तस्वीर दोबारा लें')}</span>
+              </button>
+            </div>
+          </div>
+        `;
+        diagBox.style.display = 'block';
+        diagBox.scrollIntoView({ behavior: 'smooth' });
+      }
+      return;
+    }
 
     const newScanId = 'SCN-' + Math.floor(10000 + Math.random() * 90000);
     const now = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -40280,7 +40585,7 @@ async function startScannerDiagnostic() {
       severity: aiPrediction?.severity || diagnosis.severity,
       confidence: aiPrediction?.confidence ? aiPrediction.confidence + '%' : diagnosis.confidence,
       vector: aiPrediction?.pathogen || diagnosis.vector,
-      rootCause: (isAiLive ? '🤖 Gemini Vision AI Analysis: ' : '🌿 ICAR Botanical Pathology Match: ') + finalSymptoms,
+      rootCause: (isAiLive ? '🤖 NuKropAI Vision AI: ' : '🌿 ICAR Botanical Pathology Match: ') + finalSymptoms,
       organicSolution: aiPrediction?.organicSolution || (diagnosis.organicSolution[currentLang] || diagnosis.organicSolution.en),
       chemicalSolution: aiPrediction?.chemicalSolution || (diagnosis.chemicalSolution[currentLang] || diagnosis.chemicalSolution.en),
       sprayAdvisory: aiPrediction?.sprayAdvisory || (diagnosis.sprayAdvisory[currentLang] || diagnosis.sprayAdvisory.en)
@@ -40329,6 +40634,9 @@ async function startScannerDiagnostic() {
     // Sync scan record to Supabase
     syncScanToSupabase(newScanEntry);
 
+    // Dynamic CIB&RC Medicines
+    const dynamicMedicines = getRecommendedCibrcMedicines(cropKey, newScanEntry.diseaseName, isSoil);
+
     // Render Working, Verified Result Card with Real Working Links
     if (resultContent && diagBox) {
       resultContent.innerHTML = `
@@ -40339,7 +40647,7 @@ async function startScannerDiagnostic() {
             <div>
               <div style="font-size:10.5px;font-weight:800;letter-spacing:0.06em;color:#BBF7D0;text-transform:uppercase;display:flex;align-items:center;gap:4px;">
                 <span style="width:6px;height:6px;border-radius:50%;background:#86EFAC;animation:sunGlowPulse 1.2s infinite;"></span>
-                TokenRouter Nemotron AI + ICAR Verified
+                NuKropAI Vision Engine · ICAR Agronomy Pathologist
               </div>
               <div style="font-size:17px;font-weight:900;margin-top:2px;">${newScanEntry.diseaseName}</div>
               <div style="font-size:11px;color:#DCFCE7;margin-top:2px;font-weight:600;">${diagnosis.pathogen}</div>
@@ -40397,27 +40705,17 @@ async function startScannerDiagnostic() {
               </div>
               
               <div style="display:flex;flex-direction:column;gap:10px;">
-                <!-- Product 1 -->
-                <div style="border:1px solid #E2ECE2;border-radius:12px;padding:10px;background:#F8FAF8;display:flex;align-items:center;justify-content:space-between;">
-                  <div>
-                    <div style="font-size:12px;font-weight:900;color:#0F172A;">Coragen 18.5% SC (Chlorantraniliprole)</div>
-                    <div style="font-size:12px;color:#64748B;margin-top:4px;font-weight:500;">FMC India · ₹1,850 / 150ml · Dose: 60 ml/Acre</div>
+                ${dynamicMedicines.map(m => `
+                  <div style="border:1px solid #E2ECE2;border-radius:12px;padding:10px;background:#F8FAF8;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                      <div style="font-size:12px;font-weight:900;color:#0F172A;">${m.name}</div>
+                      <div style="font-size:12px;color:#64748B;margin-top:4px;font-weight:500;">${m.desc}</div>
+                    </div>
+                    <button type="button" onclick="openScreen('biorx')" style="background:#15803D;color:#FFFFFF;border:none;border-radius:10px;padding:7px 12px;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(21,128,61,0.25);">
+                      Buy Now
+                    </button>
                   </div>
-                  <button type="button" onclick="openScreen('biorx')" style="background:#15803D;color:#FFFFFF;border:none;border-radius:10px;padding:7px 12px;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(21,128,61,0.25);">
-                    Buy Now
-                  </button>
-                </div>
-
-                <!-- Product 2 -->
-                <div style="border:1px solid #E2ECE2;border-radius:12px;padding:10px;background:#F8FAF8;display:flex;align-items:center;justify-content:space-between;">
-                  <div>
-                    <div style="font-size:12px;font-weight:900;color:#0F172A;">NeemAzal-T/S 10,000 ppm (Bio-Insecticide)</div>
-                    <div style="font-size:12px;color:#64748B;margin-top:4px;font-weight:500;">Parry Bio · ₹450 / 500ml · Dose: 400 ml/Acre</div>
-                  </div>
-                  <button type="button" onclick="openScreen('biorx')" style="background:#15803D;color:#FFFFFF;border:none;border-radius:10px;padding:7px 12px;font-size:11px;font-weight:900;cursor:pointer;flex-shrink:0;box-shadow:0 2px 6px rgba(21,128,61,0.25);">
-                    Buy Now
-                  </button>
-                </div>
+                `).join('')}
               </div>
             </div>
 
@@ -41862,11 +42160,25 @@ function nk_initUserLiveGpsLocation(callback) {
         if (data && data.address) {
           const a = data.address;
           const villageOrSub = a.village || a.suburb || a.neighbourhood || a.town || a.city || a.county || 'My Farm';
-          const districtOrState = a.state_district || a.county || a.state || 'Telangana';
+          const liveState = a.state || 'Telangana';
+          const districtOrState = a.state_district || a.county || liveState;
           currentGramhaulFarmAddress = `${villageOrSub}, ${districtOrState}`;
           currentGramhaulFarmLandmark = a.road || a.amenity || `GPS (${lat.toFixed(4)}°, ${lon.toFixed(4)}°)`;
           localStorage.setItem('user_live_address', currentGramhaulFarmAddress);
           localStorage.setItem('user_live_landmark', currentGramhaulFarmLandmark);
+          localStorage.setItem('user_live_state', liveState);
+          localStorage.setItem('user_live_district', districtOrState);
+
+          if (typeof mandiSearchState !== 'undefined') {
+            mandiSearchState = liveState;
+            if (typeof window !== 'undefined') window.mandiSearchState = liveState;
+          }
+          if (typeof refreshMandiRatesLive === 'function') {
+            try { refreshMandiRatesLive(); } catch(e) {}
+          }
+          if (typeof fetchRealLocationAndWeather === 'function') {
+            try { fetchRealLocationAndWeather(); } catch(e) {}
+          }
         }
       }
     } catch(e) {

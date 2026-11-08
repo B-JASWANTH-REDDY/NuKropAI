@@ -22904,9 +22904,7 @@ function closeInstagramStoryModal() {
     modal.style.display = 'none';
     modal.classList.remove('active');
   }
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
+  nuKropStopSpeaking();
   const bars = document.querySelectorAll('#isv-soundwave .soundwave-bar');
   bars.forEach(b => b.classList.remove('playing'));
   const playIcon = document.getElementById('isv-play-btn');
@@ -30857,20 +30855,6 @@ const SPEECH_LANG_MAP = {
 
 let activeSpeechUtterance = null;
 let currentSpeakingBtn = null;
-
-function stopSpeaking() {
-  if (typeof window !== 'undefined' && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
-  if (currentSpeakingBtn) {
-    currentSpeakingBtn.dataset.speaking = 'false';
-    currentSpeakingBtn.innerHTML = '<span>🔊</span> ' + TL('Listen', 'వినండి', 'सुनें');
-    currentSpeakingBtn.style.background = '#F0FDF4';
-    currentSpeakingBtn.style.color = '#15803D';
-    currentSpeakingBtn.style.borderColor = '#86EFAC';
-    currentSpeakingBtn = null;
-  }
-}
 
 function speakAiSpeech(text, btnElement) {
   return nuKropSpeak(text, typeof currentLang !== 'undefined' ? currentLang : 'te', btnElement);

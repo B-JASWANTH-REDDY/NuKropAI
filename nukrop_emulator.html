@@ -20729,12 +20729,15 @@ let priceTrendTimescale = 15;
 let cropModalMode = 'home';
 
 function autoDetectMandiLocation() {
+  if (typeof triggerRealGpsMandiDetection === 'function') {
+    return triggerRealGpsMandiDetection();
+  }
   const stateEl = document.getElementById('mandi-state-inp');
   const mktEl = document.getElementById('mandi-mkt-inp');
+  const savedState = localStorage.getItem('user_live_state');
   const detected = liveWeather.locationName.en || 'Warangal, Telangana';
   const parts = detected.split(',').map(s=>s.trim());
-  const city = parts[0] || 'Warangal';
-  const st = parts[1] || 'Telangana';
+  const st = savedState || parts[1] || 'Telangana';
 
   if (stateEl) stateEl.value = st;
   if (mktEl) mktEl.value = '';
@@ -20744,7 +20747,9 @@ function autoDetectMandiLocation() {
   mandiSelectedPopular = 'all';
 
   executeMandiSearch();
-  alert(currentLang==='te'?`📍 రాష్ట్రం గుర్తించబడింది: ${st}`:(currentLang==='hi'?`📍 राज्य खोजा गया: ${st}`:`📍 State Auto-Detected: ${st}`));
+  if (typeof showLuxuryToast === 'function') {
+    showLuxuryToast(currentLang==='te'?`📍 రాష్ట్రం గుర్తించబడింది: ${st}`:(currentLang==='hi'?`📍 राज्य खोजा गया: ${st}`:`📍 State Auto-Detected: ${st}`), 'success');
+  }
 }
 
 
@@ -23110,7 +23115,15 @@ function publishUserStory() {
 }
 
 function renderCommunityStoriesBarInnerHtml() {
+  if (typeof rehydrateCommunityStories === 'function') rehydrateCommunityStories();
   const currentUid = typeof getCurrentUserId === 'function' ? getCurrentUserId() : 'usr_default';
+  // Strict sanitization: Only authentic user stories (data URIs or blobs) created by real users
+  COMMUNITY_STORIES_CATALOG = (COMMUNITY_STORIES_CATALOG || []).filter(s => {
+    if (!s || !s.mediaUrl) return false;
+    const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
+    if (/jacku|test|dummy|fake|sample/i.test(aName)) return false;
+    return s.mediaUrl.startsWith('data:image/') || s.mediaUrl.startsWith('blob:');
+  });
   const hasUserStory = COMMUNITY_STORIES_CATALOG.some(s => s.isUserStory || (s.user_id && s.user_id === currentUid));
   const rawSavedAvatar = localStorage.getItem('nukrop_user_avatar');
   const userAvatar = (rawSavedAvatar && !rawSavedAvatar.includes('images.unsplash.com/photo-1507003211169-0a1dd7228f2d')) ? rawSavedAvatar : null;
@@ -24440,16 +24453,18 @@ function generateCommunityFeedHtml(posts) {
     return true;
   });
 
-  // Strict deduplication by normalized content signature (author + title + content)
+  // Strict deduplication by normalized content signature (author + title)
   const seenSignatures = new Set();
   const dedupedPosts = [];
   for (const p of activePosts) {
-    const authorStr = ((p.author && (p.author.en || p.author[currentLang])) || p.author_name || '').trim().toLowerCase();
-    const titleStr = ((p.title && (p.title.en || p.title[currentLang])) || p.title || '').trim().toLowerCase();
-    const contentStr = ((p.text && (p.text.en || p.text[currentLang])) || p.content || '').trim().toLowerCase();
-    const signature = `${authorStr}:::${titleStr}:::${contentStr}`;
-    if (seenSignatures.has(signature)) continue;
+    const authorStr = ((p.author && (p.author.en || (typeof currentLang !== 'undefined' && p.author[currentLang]))) || p.author_name || '').trim().toLowerCase();
+    const titleStr = ((p.title && (p.title.en || (typeof currentLang !== 'undefined' && p.title[currentLang]))) || p.title || '').trim().toLowerCase();
+    const contentStr = ((p.text && (p.text.en || (typeof currentLang !== 'undefined' && p.text[currentLang]))) || p.content || '').trim().toLowerCase();
+    const signature = `${authorStr}:::${titleStr}`;
+    const contentSig = `${titleStr}:::${contentStr.slice(0, 40)}`;
+    if (seenSignatures.has(signature) || (titleStr && seenSignatures.has(contentSig))) continue;
     seenSignatures.add(signature);
+    if (titleStr) seenSignatures.add(contentSig);
     dedupedPosts.push(p);
   }
 
@@ -32594,13 +32609,13 @@ const APP_VIEWS = {
         </svg>
         <span>${t.title}</span>
       </div>
-      <div style="display:flex;gap:6px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;">
         
-        <select id="top-lang-select" onchange="setLanguage(this.value)" style="height:36px;background:#FFFFFF;border:1.5px solid #D6E4D6;border-radius:18px;padding:0 10px;font-size:11px;font-weight:800;color:#1B5E20;outline:none;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.04);display:flex;align-items:center;">
+        <select id="top-lang-select" onchange="setLanguage(this.value)" style="height:36px;box-sizing:border-box;margin:0;background:#FFFFFF url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231B5E20' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E&quot;) no-repeat calc(100% - 10px) center;border:1.5px solid #D6E4D6;border-radius:18px;padding:0 26px 0 12px;font-size:11px;font-weight:800;color:#1B5E20;outline:none;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.04);-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;vertical-align:middle;line-height:34px;">
           ${Object.values(INDIAN_LANGUAGES).map(lang => `<option value="${lang.code}" ${currentLang===lang.code?'selected':''}>${lang.name}</option>`).join('')}
         </select>
 
-        <button onclick="openPriceAlertModal()" style="position:relative;width:36px;height:36px;border-radius:50%;background:#DCFCE7;border:1.5px solid #86EFAC;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(22,163,74,0.18);transition:transform 0.15s cubic-bezier(0.16,1,0.3,1);flex-shrink:0;" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'" title="${TL('Price Alerts & Notifications', 'ధర అలర్ట్‌లు & నోటిఫికేషన్లు', 'भाव अलर्ट व सूचनाएं')}">
+        <button onclick="openPriceAlertModal()" style="box-sizing:border-box;margin:0;position:relative;width:36px;height:36px;border-radius:50%;background:#DCFCE7;border:1.5px solid #86EFAC;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(22,163,74,0.18);transition:transform 0.15s cubic-bezier(0.16,1,0.3,1);flex-shrink:0;vertical-align:middle;" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'" title="${TL('Price Alerts & Notifications', 'ధర అలర్ట్‌లు & నోటిఫికేషన్లు', 'भाव अलर्ट व सूचनाएं')}">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -32678,7 +32693,7 @@ const APP_VIEWS = {
       <span style="background:#F0FDF4;color:#15803D;border:1px solid #DCFCE7;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:900;letter-spacing:0.02em;flex-shrink:0;z-index:2;">
         🌾 ${TL('MARKET', 'మార్కెట్', 'मंडी')}
       </span>
-      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 4px 0 8px;-webkit-mask-image:linear-gradient(to right, black calc(100% - 14px), transparent);mask-image:linear-gradient(to right, black calc(100% - 14px), transparent);">
+      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 4px 0 8px;-webkit-mask-image:linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);mask-image:linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);">
         <div class="news-ticker-track">
           ${renderLiveMandiTickerItemsHtml()}
         </div>
@@ -34859,15 +34874,15 @@ const APP_VIEWS = {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:12px 6px;margin:10px 0 14px;box-shadow:0 2px 6px rgba(0,0,0,0.03);text-align:center;">
         <div style="padding:0 2px;">
           <div id="profile-stat-followers" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowersCount()}</div>
-          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;">${TL('Followers', 'ఫాలోవర్స్', 'फॉलोअर्स')}</div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TL('Followers', 'ఫాలోవర్స్', 'फॉलोअर्स')}</div>
         </div>
         <div style="padding:0 2px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
           <div id="profile-stat-following" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowingCount()}</div>
-          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;">${TL('Following', 'ఫాలోయింగ్', 'फॉलोइंग')}</div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TL('Following', 'ఫాలోయింగ్', 'फॉलोइंग')}</div>
         </div>
         <div style="padding:0 2px;">
           <div id="profile-stat-myposts" style="font-size:16px;font-weight:900;color:#0F172A;">${getMyPostsCount()}</div>
-          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;">${TL('My Posts', 'నా పోస్ట్‌లు', 'मेरी पोस्ट')}</div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TL('My Posts', 'నా పోస్ట్‌లు', 'मेरी पोस्ट')}</div>
         </div>
       </div>
     </div>
@@ -36807,7 +36822,7 @@ function selectGramhaulCrop(cropId, cropName) {
 
 // ── 100% REAL GPS MANDI AUTO-DETECTION ENGINE ──
 
-function autoDetectMandiLocation() {
+function triggerRealGpsMandiDetection() {
   if (!navigator.geolocation) {
     applyFallbackLocation();
     return;
@@ -36821,28 +36836,41 @@ function autoDetectMandiLocation() {
       localStorage.setItem('user_live_lat', String(lat));
       localStorage.setItem('user_live_lon', String(lon));
 
-      let detectedCity = 'Moinabad';
-      let detectedState = 'Telangana';
+      let detectedCity = localStorage.getItem('user_live_city') || 'Moinabad';
+      let detectedState = localStorage.getItem('user_live_state') || 'Telangana';
 
+      // 1. Ultra-fast CORS reverse geocode
       try {
-        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.address) {
-            detectedCity = data.address.county || data.address.city || data.address.town || data.address.village || 'Moinabad';
-            detectedState = data.address.state || 'Telangana';
-            localStorage.setItem('user_live_state', detectedState);
-            localStorage.setItem('user_live_city', detectedCity);
-            currentGramhaulFarmAddress = `${data.address.village || detectedCity} Farm, ${detectedState}`;
-            const farmLbl = document.getElementById('gh-pickup-location-label');
-            if (farmLbl) farmLbl.textContent = currentGramhaulFarmAddress;
+        const bdcResp = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+        if (bdcResp.ok) {
+          const bdcData = await bdcResp.json();
+          if (bdcData && bdcData.principalSubdivision) {
+            detectedState = bdcData.principalSubdivision;
+            detectedCity = bdcData.locality || bdcData.city || detectedCity;
           }
         }
       } catch(e) {
-        console.warn('Reverse geocode fallback:', e);
+        try {
+          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.address) {
+              detectedCity = data.address.county || data.address.city || data.address.town || data.address.village || detectedCity;
+              detectedState = data.address.state || detectedState;
+            }
+          }
+        } catch(err) {
+          console.warn('Reverse geocode notice:', err);
+        }
       }
 
-      // Recalculate distances to all mandis
+      localStorage.setItem('user_live_state', detectedState);
+      localStorage.setItem('user_live_city', detectedCity);
+      currentGramhaulFarmAddress = `${detectedCity} Farm, ${detectedState}`;
+      const farmLbl = document.getElementById('gh-pickup-location-label');
+      if (farmLbl) farmLbl.textContent = currentGramhaulFarmAddress;
+
+      // Recalculate distances to all mandis in real state
       let nearestMandiName = 'Moinabad APMC Yard';
       if (typeof REAL_APMC_MANDIS !== 'undefined' && Array.isArray(REAL_APMC_MANDIS) && REAL_APMC_MANDIS.length > 0) {
         REAL_APMC_MANDIS.forEach(m => {
@@ -36881,15 +36909,15 @@ function autoDetectMandiLocation() {
       }
     },
     (err) => {
-      console.warn('GPS Error, using Warangal APMC geofence:', err);
+      console.warn('GPS Error, using state geofence:', err);
       applyFallbackLocation();
     },
     { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
   );
 
   function applyFallbackLocation() {
-    const detectedCity = 'Warangal';
-    const detectedState = 'Telangana';
+    const detectedState = localStorage.getItem('user_live_state') || 'Telangana';
+    const detectedCity = localStorage.getItem('user_live_city') || 'Warangal';
     const stateEl = document.getElementById('mandi-state-inp');
     const mktEl = document.getElementById('mandi-mkt-inp');
     if (stateEl) stateEl.value = detectedState;
@@ -36913,6 +36941,7 @@ function autoDetectMandiLocation() {
     }
   }
 }
+window.triggerRealGpsMandiDetection = triggerRealGpsMandiDetection;
 
 
 function driverCallFarmer(phone, name) {
@@ -40952,7 +40981,7 @@ function renderLiveMandiTickerItemsHtml() {
     return `<span class="ticker-rate-badge"><b style="color:#0F172A;font-weight:800;">${mName}</b> · <span>${cName}</span> <b style="color:#15803D;font-weight:900;">₹${Number(pr).toLocaleString('en-IN')}</b> <span style="font-size:10px;color:#64748B;">${unit}</span></span>`;
   });
 
-  const fullStr = htmlList.join('<span style="color:#CBD5E1;font-size:10px;margin:0 4px;">•</span>');
+  const fullStr = '<span style="display:inline-block;width:14px;"></span>' + htmlList.join('<span style="color:#CBD5E1;font-size:10px;margin:0 4px;">•</span>');
   // Duplicate once for seamless infinite loop with translateX(-50%)
   return fullStr + '<span style="color:#CBD5E1;font-size:10px;margin:0 4px;">•</span>' + fullStr;
 }

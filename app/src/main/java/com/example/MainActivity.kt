@@ -22,6 +22,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationCompat
@@ -256,6 +257,26 @@ class MainActivity : ComponentActivity() {
                     startActivity(intent)
                 } catch (e: Exception) {
                     android.util.Log.e("NuKropBridge", "External URL error: ${e.message}")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun toggleNativeComposeMode(enable: Boolean) {
+            runOnUiThread {
+                try {
+                    getSharedPreferences("nukrop_engine_mode", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("pure_native_compose", enable)
+                        .apply()
+                    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                    launchIntent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (launchIntent != null) {
+                        startActivity(launchIntent)
+                        finish()
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropBridge", "Compose toggle error: ${e.message}")
                 }
             }
         }
@@ -662,6 +683,17 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode =
                 android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        // ── DUAL-ENGINE ARCHITECTURE: PURE NATIVE COMPOSE OR PRODUCTION HYBRID ──
+        val usePureNativeCompose = intent?.getBooleanExtra("USE_PURE_NATIVE_COMPOSE", false) ?: false ||
+                getSharedPreferences("nukrop_engine_mode", Context.MODE_PRIVATE).getBoolean("pure_native_compose", false)
+
+        if (usePureNativeCompose) {
+            setContent {
+                NuKropNativeApp()
+            }
+            return
         }
 
         // Create full-screen hardware-accelerated WebView

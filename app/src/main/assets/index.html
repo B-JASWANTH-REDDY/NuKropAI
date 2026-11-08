@@ -5580,32 +5580,12 @@ function playBioRxVoiceReadout() {
   if (!selectedBioRxRecipe) return;
   const textToRead = (selectedBioRxRecipe.speechText && (selectedBioRxRecipe.speechText[currentLang] || selectedBioRxRecipe.speechText.en)) || (selectedBioRxRecipe.target && (selectedBioRxRecipe.target[currentLang] || selectedBioRxRecipe.target.en)) || 'Vedic Organic Formulation';
 
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    currentUtterance = new SpeechSynthesisUtterance(textToRead);
-    currentUtterance.lang = TL('en-IN', 'te-IN', 'hi-IN');
-    currentUtterance.rate = 0.92;
-
-    const playBtn = document.getElementById('bx-voice-play-btn');
-    if (playBtn) playBtn.textContent = '🔊 ' + (TL('Playing...', 'వింటున్నారు...', 'चल रहा है...'));
-
-    currentUtterance.onend = function() {
-      if (playBtn) playBtn.textContent = '🔊 ' + (TL('Listen', 'వినండి', 'सुनें'));
-    };
-    currentUtterance.onerror = function() {
-      if (playBtn) playBtn.textContent = '🔊 ' + (TL('Listen', 'వినండి', 'सुनें'));
-    };
-
-    window.speechSynthesis.speak(currentUtterance);
-  } else {
-    alert(textToRead);
-  }
+  const playBtn = document.getElementById('bx-voice-play-btn');
+  nuKropSpeak(textToRead, currentLang || 'te', playBtn);
 }
 
 function stopBioRxVoiceReadout() {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
+  nuKropStopSpeaking();
   const playBtn = document.getElementById('bx-voice-play-btn');
   if (playBtn) playBtn.textContent = '🔊 ' + (TL('Listen', 'వినండి', 'सुनें'));
 }
@@ -23033,35 +23013,29 @@ function playCurrentStoryVoice() {
   const s = COMMUNITY_STORIES_CATALOG[activeInstagramStoryIdx];
   if (!s) return;
   const txt = (s.audioText && (s.audioText[currentLang] || s.audioText.en)) || (s.title && (s.title[currentLang] || s.title.en)) || '';
+  if (!txt) return;
 
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(txt);
-    u.lang = currentLang === 'te' ? 'te-IN' : (currentLang === 'hi' ? 'hi-IN' : (currentLang === 'ta' ? 'ta-IN' : 'en-IN'));
-    u.rate = 0.95;
+  const playBtn = document.getElementById('isv-play-btn');
+  const sub = document.getElementById('isv-audio-subtext');
+  const bars = document.querySelectorAll('#isv-soundwave .soundwave-bar');
 
-    const setSoundwaveState = (playing) => {
-      const bars = document.querySelectorAll('#isv-soundwave .soundwave-bar');
-      bars.forEach(b => playing ? b.classList.add('playing') : b.classList.remove('playing'));
-      const playBtn = document.getElementById('isv-play-btn');
-      if (playBtn) {
-        playBtn.innerHTML = playing ? 
-          `<svg width="16" height="16" viewBox="0 0 24 24" fill="#0F172A"><rect x="6" y="4" width="4" height="16" rx="1.5"></rect><rect x="14" y="4" width="4" height="16" rx="1.5"></rect></svg>` : 
-          `<svg id="isv-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="#0F172A"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>`;
-      }
-      const sub = document.getElementById('isv-audio-subtext');
-      if (sub) sub.textContent = playing ? 'Playing expert advisory audio...' : 'Tap to listen expert audio advice';
-    };
-
-    u.onstart = () => setSoundwaveState(true);
-    u.onend = () => setSoundwaveState(false);
-    u.onerror = () => setSoundwaveState(false);
-
-    window.speechSynthesis.speak(u);
-    if (typeof showLuxuryToast === 'function') {
-      showLuxuryToast('🎙️ Playing Voice Advisory Note...', 'info');
+  if (isAppSpeaking) {
+    nuKropStopSpeaking();
+    bars.forEach(b => b.classList.remove('playing'));
+    if (playBtn) {
+      playBtn.innerHTML = `<svg id="isv-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="#0F172A"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>`;
     }
+    if (sub) sub.textContent = 'Tap to listen expert audio advice';
+    return;
   }
+
+  bars.forEach(b => b.classList.add('playing'));
+  if (playBtn) {
+    playBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="#0F172A"><rect x="6" y="4" width="4" height="16" rx="1.5"></rect><rect x="14" y="4" width="4" height="16" rx="1.5"></rect></svg>`;
+  }
+  if (sub) sub.textContent = 'Playing expert advisory audio...';
+
+  nuKropSpeak(txt, currentLang || 'te');
 }
 
 function sendStoryReply() {
@@ -23880,21 +23854,7 @@ function playCommunityAudio(postIdOrText) {
     }
   }
   if (!textToSpeak) return;
-
-  if ('speechSynthesis' in window) {
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(textToSpeak);
-      u.lang = currentLang === 'te' ? 'te-IN' : (currentLang === 'hi' ? 'hi-IN' : (currentLang === 'ta' ? 'ta-IN' : 'en-IN'));
-      u.rate = 0.95;
-      window.speechSynthesis.speak(u);
-      if (typeof showLuxuryToast === 'function') {
-        showLuxuryToast(currentLang === 'te' ? '🔊 ఆడియో విశ్లేషణ చదవబడుతోంది...' : (currentLang === 'hi' ? '🔊 ऑडियो व्याख्या सुनाई जा रही है...' : '🔊 Playing Voice Note...'), 'info');
-      }
-    } catch(e) {
-      console.warn('Speech synthesis error:', e);
-    }
-  }
+  nuKropSpeak(textToSpeak, currentLang || 'te');
 }
 
 function shareCommunityPost(postId, title) {
@@ -41442,11 +41402,8 @@ async function sendChatMsg() {
 
 
 function playVoiceAudio(text) {
-  if ('speechSynthesis' in window) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
+  if (!text) return;
+  nuKropSpeak(text, typeof currentLang !== 'undefined' ? currentLang : 'te');
 }
 
 // Initial Boot & Fetch Real Weather (Strictly respects user's selected language across sessions)

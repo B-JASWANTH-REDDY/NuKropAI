@@ -2825,6 +2825,18 @@ button[onclick*="openPriceAlertModal"]:hover svg {
 
 <script>
 
+/* ═════════════════ CRASH-PROOF TELEMETRY & GLOBAL ERROR SHIELD ═════════════════ */
+if (typeof window !== 'undefined') {
+  window.onerror = function(message, source, lineno, colno, error) {
+    console.warn('[NuKrop AI Shield Handled Error]:', message, 'at', lineno, ':', colno);
+    return true; // Prevents crashing Android WebView or showing blank screens
+  };
+  window.onunhandledrejection = function(event) {
+    console.warn('[NuKrop AI Shield Handled Promise Rejection]:', event && event.reason);
+    if (event && event.preventDefault) event.preventDefault();
+  };
+}
+
 /* ═════════════════ MODERN FLOATING SNACKBAR NOTIFICATION SYSTEM ═════════════════ */
 function showLuxuryToast(message, type = 'info', duration = 3000) {
   if (!message) return;
@@ -3162,18 +3174,54 @@ function saveUserAccountProfile(accountKey, extraData = {}) {
     const raw = localStorage.getItem('nukrop_account_profiles') || '{}';
     const dict = JSON.parse(raw);
     const existing = dict[accountKey] || {};
+
+    let activeCrops = [];
+    if (typeof myActiveCrops !== 'undefined' && Array.isArray(myActiveCrops) && myActiveCrops.length > 0) {
+      activeCrops = myActiveCrops;
+    } else {
+      try {
+        const storedCrops = JSON.parse(localStorage.getItem('nukrop_user_active_crops') || 'null');
+        if (Array.isArray(storedCrops)) activeCrops = storedCrops;
+      } catch(e) {}
+    }
+    if (activeCrops.length === 0 && existing.activeCrops) {
+      activeCrops = existing.activeCrops;
+    }
+
+    let farmKhata = [];
+    try {
+      const storedKhata = JSON.parse(localStorage.getItem('nukrop_farm_khata_entries') || 'null');
+      if (Array.isArray(storedKhata)) farmKhata = storedKhata;
+      else if (existing.farmKhata) farmKhata = existing.farmKhata;
+    } catch(e) {}
+
+    let savedScans = [];
+    try {
+      const storedScans = JSON.parse(localStorage.getItem('nukrop_saved_scans') || 'null');
+      if (Array.isArray(storedScans)) savedScans = storedScans;
+      else if (existing.savedScans) savedScans = existing.savedScans;
+    } catch(e) {}
+
     dict[accountKey] = Object.assign({}, existing, {
       accountKey: accountKey,
       lastLogin: new Date().toISOString(),
-      farmerProfile: (typeof farmerProfile !== 'undefined' && farmerProfile) ? farmerProfile : existing.farmerProfile,
+      farmerProfile: (typeof farmerProfile !== 'undefined' && farmerProfile) ? JSON.parse(JSON.stringify(farmerProfile)) : (existing.farmerProfile || null),
+      activeCrops: activeCrops,
+      farmKhata: farmKhata,
+      savedScans: savedScans,
       selectedCrops: (typeof plantixFlowState !== 'undefined' && plantixFlowState.selectedCrops) ? plantixFlowState.selectedCrops : (existing.selectedCrops || []),
       userRole: localStorage.getItem('nukrop_user_role') || existing.userRole || 'farmer',
-      userName: localStorage.getItem('nukrop_user_name') || existing.userName || '',
+      userName: localStorage.getItem('nukrop_user_name') || localStorage.getItem('nukrop_farmer_name') || existing.userName || '',
       phone: localStorage.getItem('nukrop_user_phone') || existing.phone || '',
       email: localStorage.getItem('nukrop_user_email') || existing.email || '',
+      farmerVillage: localStorage.getItem('nukrop_farmer_village') || existing.farmerVillage || '',
+      liveState: localStorage.getItem('user_live_state') || existing.liveState || '',
+      liveDistrict: localStorage.getItem('user_live_district') || existing.liveDistrict || '',
       driverPlate: localStorage.getItem('nukrop_driver_plate') || existing.driverPlate || '',
-      driverVehicle: localStorage.getItem('nukrop_driver_vehicle') || existing.driverVehicle || ''
+      driverVehicle: localStorage.getItem('nukrop_driver_vehicle') || existing.driverVehicle || '',
+      rememberedPassword: localStorage.getItem('nukrop_remembered_password') || existing.rememberedPassword || ''
     }, extraData);
+
     localStorage.setItem('nukrop_account_profiles', JSON.stringify(dict));
   } catch(e) {
     console.warn('Account profile save notice:', e);
@@ -3192,15 +3240,44 @@ function restoreUserAccountProfile(accountKey) {
       Object.assign(farmerProfile, data.farmerProfile);
       localStorage.setItem('nukrop_farmer_profile_data', JSON.stringify(farmerProfile));
     }
+    if (data.activeCrops && Array.isArray(data.activeCrops) && data.activeCrops.length > 0) {
+      if (typeof myActiveCrops !== 'undefined') {
+        myActiveCrops = data.activeCrops;
+      }
+      localStorage.setItem('nukrop_user_active_crops', JSON.stringify(data.activeCrops));
+    }
     if (data.selectedCrops && Array.isArray(data.selectedCrops) && typeof plantixFlowState !== 'undefined') {
       plantixFlowState.selectedCrops = data.selectedCrops;
     }
+    if (data.farmKhata && Array.isArray(data.farmKhata)) {
+      localStorage.setItem('nukrop_farm_khata_entries', JSON.stringify(data.farmKhata));
+      if (typeof farmKhataEntries !== 'undefined') {
+        farmKhataEntries = data.farmKhata;
+      }
+    }
+    if (data.savedScans && Array.isArray(data.savedScans)) {
+      localStorage.setItem('nukrop_saved_scans', JSON.stringify(data.savedScans));
+      if (typeof savedScansHistory !== 'undefined') {
+        savedScansHistory = data.savedScans;
+      }
+    }
     if (data.userRole) localStorage.setItem('nukrop_user_role', data.userRole);
-    if (data.userName) localStorage.setItem('nukrop_user_name', data.userName);
+    if (data.userName) {
+      localStorage.setItem('nukrop_user_name', data.userName);
+      localStorage.setItem('nukrop_farmer_name', data.userName);
+      localStorage.setItem('nukrop_remembered_name', data.userName);
+    }
     if (data.phone) localStorage.setItem('nukrop_user_phone', data.phone);
-    if (data.email) localStorage.setItem('nukrop_user_email', data.email);
+    if (data.email) {
+      localStorage.setItem('nukrop_user_email', data.email);
+      localStorage.setItem('nukrop_remembered_email', data.email);
+    }
+    if (data.farmerVillage) localStorage.setItem('nukrop_farmer_village', data.farmerVillage);
+    if (data.liveState) localStorage.setItem('user_live_state', data.liveState);
+    if (data.liveDistrict) localStorage.setItem('user_live_district', data.liveDistrict);
     if (data.driverPlate) localStorage.setItem('nukrop_driver_plate', data.driverPlate);
     if (data.driverVehicle) localStorage.setItem('nukrop_driver_vehicle', data.driverVehicle);
+    if (data.rememberedPassword) localStorage.setItem('nukrop_remembered_password', data.rememberedPassword);
     return true;
   } catch(e) {
     console.warn('Account profile restore notice:', e);
@@ -3208,8 +3285,65 @@ function restoreUserAccountProfile(accountKey) {
   }
 }
 
+function rehydrateFarmerProfileFromStorage() {
+  try {
+    const email = localStorage.getItem('nukrop_user_email') || '';
+    const name = localStorage.getItem('nukrop_user_name') || localStorage.getItem('nukrop_farmer_name') || 'Farmer';
+    const phone = localStorage.getItem('nukrop_user_phone') || '';
+    const village = localStorage.getItem('nukrop_farmer_village') || '';
+    const state = localStorage.getItem('user_live_state') || 'Telangana';
+    const district = localStorage.getItem('user_live_district') || '';
+
+    if (email && typeof restoreUserAccountProfile === 'function') {
+      restoreUserAccountProfile(email);
+    } else if (phone && typeof restoreUserAccountProfile === 'function') {
+      restoreUserAccountProfile(phone);
+    }
+
+    const savedRaw = localStorage.getItem('nukrop_farmer_profile_data');
+    if (savedRaw) {
+      const parsed = JSON.parse(savedRaw);
+      if (typeof farmerProfile !== 'undefined') {
+        Object.assign(farmerProfile, parsed);
+      }
+    }
+
+    if (typeof farmerProfile !== 'undefined') {
+      if (email) farmerProfile.email = email;
+      if (name && name !== 'Farmer') {
+        farmerProfile.name = { en: name, te: name, hi: name, ta: name, kn: name, ml: name, mr: name, bn: name, gu: name, pa: name, or: name };
+      }
+      if (phone) farmerProfile.phone = phone;
+      if (village && (!farmerProfile.village || !farmerProfile.village.en)) {
+        farmerProfile.village = { en: village, te: village, hi: village, ta: village };
+      }
+      if (state) farmerProfile.state = state;
+      if (district) farmerProfile.district = district;
+      localStorage.setItem('nukrop_farmer_profile_data', JSON.stringify(farmerProfile));
+    }
+
+    const savedCropsRaw = localStorage.getItem('nukrop_user_active_crops');
+    if (savedCropsRaw) {
+      try {
+        const crops = JSON.parse(savedCropsRaw);
+        if (Array.isArray(crops) && crops.length > 0 && typeof myActiveCrops !== 'undefined') {
+          myActiveCrops = crops;
+        }
+      } catch(ce) {}
+    }
+
+    const greetingEl = document.getElementById('user-greeting-name');
+    if (greetingEl && name && name !== 'Farmer') {
+      greetingEl.textContent = name;
+    }
+  } catch(e) {
+    console.warn('rehydrateFarmerProfileFromStorage notice:', e);
+  }
+}
+
 window.saveUserAccountProfile = saveUserAccountProfile;
 window.restoreUserAccountProfile = restoreUserAccountProfile;
+window.rehydrateFarmerProfileFromStorage = rehydrateFarmerProfileFromStorage;
 
 /* ═════════════════ STALE-WHILE-REVALIDATE (SWR) DATA ENGINE ═════════════════ */
 const NuKropSWR = {
@@ -22744,8 +22878,19 @@ let userAttachedMedia = { photos: [], videos: [], voiceNote: null };
 // ── AUTHENTIC KISAN COMMUNITY STORIES CATALOG ──
 let COMMUNITY_STORIES_CATALOG = (function() {
   try {
-    const saved = JSON.parse(localStorage.getItem('nukrop_community_stories') || '[]');
-    if (Array.isArray(saved) && saved.length > 0) return saved;
+    const raw = localStorage.getItem('nukrop_community_stories');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(s => {
+          if (!s || !s.mediaUrl) return false;
+          const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
+          if (/jacku|test|dummy|fake|sample/i.test(aName)) return false;
+          if (s.avatarUrl && (s.avatarUrl.includes('unsplash') || s.avatarUrl.includes('placeholder'))) s.avatarUrl = null;
+          return s.mediaUrl.startsWith('data:image/') || s.mediaUrl.startsWith('blob:');
+        });
+      }
+    }
   } catch(e) {}
   return [];
 })();
@@ -22985,7 +23130,7 @@ function renderCommunityStoriesBarInnerHtml() {
 
   html += COMMUNITY_STORIES_CATALOG.map((s, idx) => {
     const authorName = (typeof s.author === 'object' ? (s.author[currentLang] || s.author.en) : s.author) || 'Farmer';
-    const isAuthenticPhoto = s.avatarUrl && !s.avatarUrl.includes('unsplash') && !s.avatarUrl.includes('placeholder');
+    const isAuthenticPhoto = s.avatarUrl && !s.avatarUrl.includes('unsplash') && !s.avatarUrl.includes('placeholder') && (s.avatarUrl.startsWith('data:image/') || s.avatarUrl.startsWith('blob:'));
     return `
       <div onclick="openInstagramStoryModal(${idx})" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:66px;text-align:center;">
         <div class="story-avatar-ring unviewed">
@@ -24335,7 +24480,7 @@ function generateCommunityFeedHtml(posts) {
     const timeAgoStr = (p.timeAgo && (p.timeAgo[currentLang] || p.timeAgo.en)) || (p.created_at ? (() => { const d = new Date(p.created_at); const mins = Math.floor((Date.now() - d)/60000); return mins < 60 ? mins + 'm ago' : Math.floor(mins/60) + 'h ago'; })() : 'Recently');
     const postComments = Array.isArray(p.comments) ? p.comments : [];
     const postLikes = p.likes || p.likes_count || 0;
-    const isPostAuthAvatar = p.avatarUrl && !p.avatarUrl.includes('unsplash') && !p.avatarUrl.includes('placeholder');
+    const isPostAuthAvatar = p.avatarUrl && !p.avatarUrl.includes('unsplash') && !p.avatarUrl.includes('placeholder') && (p.avatarUrl.startsWith('data:image/') || p.avatarUrl.startsWith('blob:'));
 
     return `
       <div class="m3-card" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:20px;padding:16px 14px 14px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.04);position:relative;overflow:hidden;">
@@ -24745,8 +24890,16 @@ function saveFarmerProfile() {
 
   closeEditProfileModal();
   try { localStorage.setItem('nukrop_farmer_profile_data', JSON.stringify(farmerProfile)); } catch(e){}
+  const activeKey = localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_user_phone');
+  if (activeKey && typeof saveUserAccountProfile === 'function') {
+    saveUserAccountProfile(activeKey, { farmerProfile });
+  }
   openScreen('profile', document.getElementById('tab-profile'));
-  alert(currentLang === 'te' ? '✅ రైతు ప్రొఫైల్ వివరాలు విజయవంతంగా భద్రపరచబడ్డాయి!' : (currentLang === 'hi' ? '✅ किसान प्रोफाइल सफलतापूर्वक अपडेट की गई!' : '✅ Farmer Profile updated successfully!'));
+  if (typeof showLuxuryToast === 'function') {
+    showLuxuryToast(currentLang === 'te' ? '✅ రైతు ప్రొఫైల్ వివరాలు భద్రపరచబడ్డాయి!' : (currentLang === 'hi' ? '✅ किसान प्रोफाइल अपडेट की गई!' : '✅ Farmer Profile updated successfully!'), 'success');
+  } else {
+    alert(currentLang === 'te' ? '✅ రైతు ప్రొఫైల్ వివరాలు విజయవంతంగా భద్రపరచబడ్డాయి!' : (currentLang === 'hi' ? '✅ किसान प्रोफाइल सफलतापूर्वक अपडेट की गई!' : '✅ Farmer Profile updated successfully!'));
+  }
 }
 
 function toggleProfileSetting(key) {
@@ -24838,6 +24991,13 @@ function executeSignOutToLogin(preferredRole = null) {
   if (modal) modal.remove();
   const modal2 = document.getElementById('nukrop-logout-confirm-modal');
   if (modal2) modal2.remove();
+
+  try {
+    const curKey = localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_user_phone');
+    if (curKey && typeof saveUserAccountProfile === 'function') {
+      saveUserAccountProfile(curKey);
+    }
+  } catch(e) {}
 
   try {
     localStorage.removeItem('nukrop_active_session');
@@ -29589,9 +29749,20 @@ async function handleFormAuthSubmit() {
       return;
     }
 
+    if (typeof restoreUserAccountProfile === 'function') {
+      restoreUserAccountProfile(email);
+    }
+
     localStorage.setItem('nukrop_auth_method', isSignUp ? 'supabase_signup' : 'supabase_signin');
     localStorage.setItem('nukrop_user_email', email);
-    localStorage.setItem('nukrop_user_name', name);
+    localStorage.setItem('nukrop_remembered_email', email);
+    if (name && name !== 'Farmer') {
+      localStorage.setItem('nukrop_user_name', name);
+      localStorage.setItem('nukrop_remembered_name', name);
+    }
+    if (password) {
+      localStorage.setItem('nukrop_remembered_password', password);
+    }
     localStorage.setItem('nukrop_supabase_uid', userId);
     localStorage.setItem('nukrop_user_uuid', userId);
     if (token) localStorage.setItem('nukrop_supabase_token', token);
@@ -29606,6 +29777,10 @@ async function handleFormAuthSubmit() {
     } else {
       localStorage.setItem('nukrop_farmer_id', userId);
       localStorage.setItem('nukrop_farmer_name', name);
+    }
+
+    if (typeof saveUserAccountProfile === 'function') {
+      saveUserAccountProfile(email, { name, email, userRole });
     }
 
     if (typeof rehydrateFarmerProfileFromStorage === 'function') {
@@ -32500,10 +32675,10 @@ const APP_VIEWS = {
 
     <!-- Continuous Smooth Live Mandi Rates Ticker Marquee -->
     <div id="home-live-mandi-ticker-strip" style="margin:0 18px 14px;background:#FFFFFF;border:1.5px solid #E2E8F0;border-radius:14px;padding:8px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 1px 4px rgba(0,0,0,0.02);cursor:pointer;overflow:hidden;position:relative;" onclick="openScreen('market', document.getElementById('tab-market')); syncSideNav('btn-market');">
-      <span style="background:#F0FDF4;color:#15803D;border:1px solid #DCFCE7;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:0.02em;flex-shrink:0;z-index:2;box-shadow:2px 0 6px rgba(255,255,255,0.95);">
+      <span style="background:#F0FDF4;color:#15803D;border:1px solid #DCFCE7;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:900;letter-spacing:0.02em;flex-shrink:0;z-index:2;">
         🌾 ${TL('MARKET', 'మార్కెట్', 'मंडी')}
       </span>
-      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 2px;-webkit-mask-image:linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);mask-image:linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);">
+      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 4px 0 8px;-webkit-mask-image:linear-gradient(to right, black calc(100% - 14px), transparent);mask-image:linear-gradient(to right, black calc(100% - 14px), transparent);">
         <div class="news-ticker-track">
           ${renderLiveMandiTickerItemsHtml()}
         </div>
@@ -34682,17 +34857,17 @@ const APP_VIEWS = {
     <!-- Community Profile Social Stats (Symmetrically Padded & Responsive) -->
     <div id="comm-feed-container-parent" style="padding:0 18px;">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:12px 6px;margin:10px 0 14px;box-shadow:0 2px 6px rgba(0,0,0,0.03);text-align:center;">
-        <div style="padding:0 4px;">
+        <div style="padding:0 2px;">
           <div id="profile-stat-followers" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowersCount()}</div>
-          <div style="font-size:10.5px;font-weight:700;color:#64748B;white-space:nowrap;">${TL('Followers', 'ఫాలోవర్స్', 'फॉलोअर्स')}</div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;">${TL('Followers', 'ఫాలోవర్స్', 'फॉलोअर्स')}</div>
         </div>
-        <div style="padding:0 4px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
+        <div style="padding:0 2px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
           <div id="profile-stat-following" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowingCount()}</div>
-          <div style="font-size:10.5px;font-weight:700;color:#64748B;white-space:nowrap;">${TL('Following', 'ఫాలోయింగ్', 'फॉलोइंग')}</div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;">${TL('Following', 'ఫాలోయింగ్', 'फॉलोइंग')}</div>
         </div>
-        <div style="padding:0 4px;">
+        <div style="padding:0 2px;">
           <div id="profile-stat-myposts" style="font-size:16px;font-weight:900;color:#0F172A;">${getMyPostsCount()}</div>
-          <div style="font-size:10.5px;font-weight:700;color:#64748B;white-space:nowrap;">${TL('My Posts', 'నా పోస్ట్‌లు', 'मेरी पोस्ट')}</div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;letter-spacing:-0.2px;white-space:nowrap;">${TL('My Posts', 'నా పోస్ట్‌లు', 'मेरी पोस्ट')}</div>
         </div>
       </div>
     </div>
@@ -41245,8 +41420,13 @@ function openScreen(screenKey, tabElement) {
     container.classList.remove('screen-fade');
     void container.offsetWidth;
     container.classList.add('screen-fade');
-    const viewFn = APP_VIEWS[screenKey] || APP_VIEWS.home;
-    container.innerHTML = viewFn();
+    try {
+      const viewFn = APP_VIEWS[screenKey] || APP_VIEWS.home;
+      container.innerHTML = viewFn();
+    } catch(renderErr) {
+      console.error('[NuKrop View Render Error]', screenKey, renderErr);
+      container.innerHTML = '<div style="padding:40px 20px;text-align:center;"><div style="font-size:32px;margin-bottom:12px;">🌾</div><div style="font-size:16px;font-weight:900;color:#0F172A;margin-bottom:6px;">' + (TL('Section Refreshing', 'పునరుద్ధరించబడుతోంది', 'अनुभाग पुनः लोड हो रहा है')) + '</div><div style="font-size:12px;color:#64748B;margin-bottom:16px;">' + (TL('Tap below to return to your dashboard.', 'డాష్‌బోర్డుకు తిరిగి వెళ్ళండి.', 'डैशबोर्ड पर लौटें।')) + '</div><button onclick="openScreen(\'home\', document.getElementById(\'tab-home\'))" style="background:#15803D;color:#FFFFFF;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer;">' + (TL('Return Home', 'హోమ్‌కి వెళ్లండి', 'होम पर जाएं')) + '</button></div>';
+    }
     setTimeout(applyCustomCropDropdowns, 0);
   }
 
@@ -41896,6 +42076,11 @@ function bootApp() {
 function bootAppExperience() {
   if (_appBooted) return;
   _appBooted = true;
+  try {
+    if (typeof rehydrateFarmerProfileFromStorage === 'function') {
+      rehydrateFarmerProfileFromStorage();
+    }
+  } catch(e) {}
   const savedLang = (typeof localStorage !== 'undefined' && (localStorage.getItem('nukrop_user_lang') || localStorage.getItem('nukrop_language'))) || 'en';
   setLanguage(savedLang);
   fetchRealLocationAndWeather();

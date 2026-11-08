@@ -34,6 +34,8 @@ import com.example.widget.WeatherWidgetProvider
 import com.example.widget.MandiWidgetProvider
 import com.example.widget.WidgetUpdateWorker
 import org.json.JSONObject
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import java.io.File
 import java.io.IOException
 
@@ -68,8 +70,45 @@ class MainActivity : ComponentActivity() {
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private lateinit var rootContainer: android.widget.FrameLayout
     private val CHANNEL_ID = "nukrop_farmer_alerts"
+    private var textToSpeech: TextToSpeech? = null
+    private var isTtsReady = false
 
     inner class WebAppInterface {
+        @JavascriptInterface
+        fun speakText(text: String, lang: String): Boolean {
+            if (!isTtsReady || textToSpeech == null) return false
+            runOnUiThread {
+                try {
+                    val locale = when (lang.lowercase()) {
+                        "te", "te-in" -> Locale("te", "IN")
+                        "hi", "hi-in" -> Locale("hi", "IN")
+                        "ta", "ta-in" -> Locale("ta", "IN")
+                        "kn", "kn-in" -> Locale("kn", "IN")
+                        "mr", "mr-in" -> Locale("mr", "IN")
+                        else -> Locale("en", "IN")
+                    }
+                    configureBestFemaleIndianVoice(textToSpeech, locale)
+                    textToSpeech?.stop()
+                    textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nukrop_utterance_${System.currentTimeMillis()}")
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropTTS", "speakText error: ${e.message}")
+                }
+            }
+            return true
+        }
+
+        @JavascriptInterface
+        fun stopSpeaking(): Boolean {
+            runOnUiThread {
+                try {
+                    textToSpeech?.stop()
+                } catch (e: Exception) {
+                    android.util.Log.e("NuKropTTS", "stopSpeaking error: ${e.message}")
+                }
+            }
+            return true
+        }
+
         @JavascriptInterface
         fun requestDeviceLocation() {
             runOnUiThread {
@@ -450,6 +489,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun configureBestFemaleIndianVoice(tts: TextToSpeech?, locale: Locale = Locale("en", "IN")) {
+        try {
+            tts?.language = locale
+            val voices = tts?.voices ?: return
+            val targetLang = locale.language
+            val indianVoices = voices.filter { v ->
+                v.locale.country.equals("IN", ignoreCase = true) ||
+                v.locale.language.equals(targetLang, ignoreCase = true)
+            }
+            val femaleVoice = indianVoices.firstOrNull { v ->
+                val name = v.name.lowercase()
+                name.contains("female") || name.contains("woman") || name.contains("#female") ||
+                name.contains("heera") || name.contains("kavya") || name.contains("kalpana") ||
+                (name.contains("in-") && (name.contains("-a") || name.contains("-c") || name.contains("-d")))
+            } ?: indianVoices.firstOrNull()
+            if (femaleVoice != null) {
+                tts?.voice = femaleVoice
+            }
+            tts?.setPitch(1.12f)
+            tts?.setSpeechRate(0.95f)
+        } catch (e: Exception) {
+            android.util.Log.w("NuKropTTS", "Voice config fallback: ${e.message}")
+        }
+    }
+
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -533,6 +597,18 @@ class MainActivity : ComponentActivity() {
 
         // Create System Notification Channel
         createNotificationChannel()
+
+        // Initialize Native Indian Voice Text-to-Speech Engine
+        try {
+            textToSpeech = TextToSpeech(this) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    isTtsReady = true
+                    configureBestFemaleIndianVoice(textToSpeech)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("NuKropTTS", "TTS initialization notice: ${e.message}")
+        }
 
         // Enable true Edge-to-Edge display (immersive transparent status & navigation bars)
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -890,6 +966,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            textToSpeech?.stop()
+            textToSpeech?.shutdown()
+        } catch (e: Exception) {}
         webView.stopLoading()
         webView.clearHistory()
         webView.removeAllViews()

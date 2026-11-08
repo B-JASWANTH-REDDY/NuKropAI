@@ -491,9 +491,19 @@ class MainActivity : ComponentActivity() {
 
     private fun configureBestFemaleIndianVoice(tts: TextToSpeech?, locale: Locale = Locale("en", "IN")) {
         try {
-            tts?.language = locale
+            val langAvailable = tts?.isLanguageAvailable(locale) ?: TextToSpeech.LANG_NOT_SUPPORTED
+            val effectiveLocale = if (langAvailable >= TextToSpeech.LANG_AVAILABLE) {
+                locale
+            } else {
+                if ((tts?.isLanguageAvailable(Locale("hi", "IN")) ?: -1) >= TextToSpeech.LANG_AVAILABLE) {
+                    Locale("hi", "IN")
+                } else {
+                    Locale("en", "IN")
+                }
+            }
+            tts?.language = effectiveLocale
             val voices = tts?.voices ?: return
-            val targetLang = locale.language
+            val targetLang = effectiveLocale.language
             val indianVoices = voices.filter { v ->
                 v.locale.country.equals("IN", ignoreCase = true) ||
                 v.locale.language.equals(targetLang, ignoreCase = true)

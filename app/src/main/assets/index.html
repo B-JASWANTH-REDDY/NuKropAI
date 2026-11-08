@@ -2980,13 +2980,29 @@ window.showLuxuryToastWithUndo = showLuxuryToastWithUndo;
 /* ═════════════════ UNIVERSAL HIGH QUALITY INDIAN FEMALE VOICE TTS ENGINE ═════════════════ */
 let isAppSpeaking = false;
 let currentSpeakingButton = null;
+let cachedWebSpeechVoices = [];
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.speechSynthesis.getVoices === 'function') {
+  try {
+    cachedWebSpeechVoices = window.speechSynthesis.getVoices() || [];
+    if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+      window.speechSynthesis.onvoiceschanged = () => {
+        try {
+          if (typeof window.speechSynthesis.getVoices === 'function') {
+            cachedWebSpeechVoices = window.speechSynthesis.getVoices() || [];
+          }
+        } catch(e) {}
+      };
+    }
+  } catch(e) {}
+}
 
 function nuKropSpeak(text, langCode, buttonElement) {
   if (!text) return;
   const clean = String(text)
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/[#_*`]/g, '')
-    .replace(/[🌿🐛📊🧪🏛️📍●•⚡💰🌾🚜👥💡🔍🛒🔔]/g, '')
+    .replace(/[🌿🐛📊🧪🏛️📍●•⚡💰🌾🚜👥💡🔍🛒🔔❤️👆]/g, '')
     .replace(/\n+/g, '. ')
     .trim();
 
@@ -3024,40 +3040,79 @@ function nuKropSpeak(text, langCode, buttonElement) {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     try {
       window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(clean);
       const localeMap = {
         'te': 'te-IN', 'hi': 'hi-IN', 'ta': 'ta-IN', 'kn': 'kn-IN',
         'ml': 'ml-IN', 'mr': 'mr-IN', 'gu': 'gu-IN', 'bn': 'bn-IN',
         'pa': 'pa-IN', 'en': 'en-IN'
       };
-      utter.lang = localeMap[targetLang] || 'en-IN';
-      utter.pitch = 1.12;
-      utter.rate = 0.95;
+      const preferredLocale = localeMap[targetLang] || 'en-IN';
 
-      const voices = window.speechSynthesis.getVoices() || [];
-      const indianVoice = voices.find(v => (v.lang === utter.lang || v.lang.includes('IN')) && /female|woman|heera|kavya|kalpana|zira|swara/i.test(v.name))
-        || voices.find(v => v.lang === utter.lang || v.lang.includes('IN'))
+      const voices = (cachedWebSpeechVoices && cachedWebSpeechVoices.length > 0)
+        ? cachedWebSpeechVoices
+        : (typeof window.speechSynthesis.getVoices === 'function' ? (window.speechSynthesis.getVoices() || []) : []);
+
+      // Find best Indian female voice
+      let bestVoice = voices.find(v => (v.lang === preferredLocale || v.lang.includes('IN')) && /female|woman|heera|kavya|kalpana|zira|swara|veena/i.test(v.name))
+        || voices.find(v => v.lang === preferredLocale)
+        || voices.find(v => v.lang.includes('IN'))
         || voices.find(v => /female|woman/i.test(v.name));
-      if (indianVoice) utter.voice = indianVoice;
 
-      utter.onstart = () => {
-        isAppSpeaking = true;
-        currentSpeakingButton = buttonElement;
-        if (buttonElement) {
-          buttonElement.dataset.origHtml = buttonElement.innerHTML;
-          buttonElement.innerHTML = '<span>⏹️</span> ' + (typeof TL === 'function' ? TL('Stop', 'ఆపండి', 'रोकें') : 'Stop');
+      // Break long speech into natural sentence chunks (max 160 chars) so browser synthesis never times out
+      const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+      const chunks = [];
+      let curChunk = '';
+      for (const s of sentences) {
+        if ((curChunk + ' ' + s).length > 160) {
+          if (curChunk) chunks.push(curChunk.trim());
+          curChunk = s;
+        } else {
+          curChunk = curChunk ? (curChunk + ' ' + s) : s;
         }
-      };
+      }
+      if (curChunk) chunks.push(curChunk.trim());
 
-      utter.onend = utter.onerror = () => {
-        isAppSpeaking = false;
-        if (buttonElement && buttonElement.dataset.origHtml) {
-          buttonElement.innerHTML = buttonElement.dataset.origHtml;
+      let chunkIdx = 0;
+      isAppSpeaking = true;
+      currentSpeakingButton = buttonElement;
+      if (buttonElement) {
+        buttonElement.dataset.origHtml = buttonElement.innerHTML;
+        buttonElement.innerHTML = '<span>⏹️</span> ' + (typeof TL === 'function' ? TL('Stop', 'ఆపండి', 'रोकें') : 'Stop');
+      }
+
+      function speakNextChunk() {
+        if (!isAppSpeaking || chunkIdx >= chunks.length) {
+          nuKropStopSpeaking();
+          return;
         }
-        currentSpeakingButton = null;
-      };
+        const utter = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+        utter.lang = preferredLocale;
+        utter.pitch = 1.12;
+        utter.rate = 0.95;
+        if (bestVoice) utter.voice = bestVoice;
 
-      window.speechSynthesis.speak(utter);
+        utter.onend = () => {
+          chunkIdx++;
+          if (chunkIdx < chunks.length && isAppSpeaking) {
+            speakNextChunk();
+          } else {
+            nuKropStopSpeaking();
+          }
+        };
+
+        utter.onerror = (e) => {
+          console.warn('Speech chunk error:', e);
+          chunkIdx++;
+          if (chunkIdx < chunks.length && isAppSpeaking) {
+            speakNextChunk();
+          } else {
+            nuKropStopSpeaking();
+          }
+        };
+
+        window.speechSynthesis.speak(utter);
+      }
+
+      speakNextChunk();
     } catch(err) {
       console.warn('Web SpeechSynthesis fallback notice:', err);
     }
@@ -20170,8 +20225,40 @@ function getFilteredMandiRates() {
     return exactMatches;
   }
 
+  // REAL LIVE STATE-LEVEL FALLBACK:
+  // If the specific mandal/APMC does not trade the selected crop,
+  // automatically expand to all APMC markets within the farmer's live state trading this crop!
+  const effectiveState = stateQ || (mandiQ ? (() => {
+    const foundItem = AGMARKNET_MANDI_CATALOG.find(x => {
+      const mName = ((x.mandi && x.mandi.en) || String(x.mandi || '')).toLowerCase();
+      return mName.includes(mandiQ) || mandiQ.includes(mName);
+    });
+    return foundItem ? ((foundItem.state && foundItem.state.en) || '').toLowerCase() : '';
+  })() : '');
+
+  if (effectiveState && (cropQ || popQ !== 'all')) {
+    const targetCrop = (popQ !== 'all' ? popQ : cropQ).toLowerCase();
+    const stateMatches = AGMARKNET_MANDI_CATALOG.filter(item => {
+      const matchState = ((item.state && (item.state.en + ' ' + (item.state.te || '') + ' ' + (item.state.hi || ''))) || String(item.state || '')).toLowerCase();
+      if (!matchState.includes(effectiveState)) return false;
+      if (popQ !== 'all') return itemMatchesPopular(item, popQ);
+      if (cropQ === 'cotton') return itemMatchesPopular(item, 'cotton');
+      if (cropQ === 'potato') return itemMatchesPopular(item, 'potato');
+      if (cropQ === 'chilli') return itemMatchesPopular(item, 'chilli');
+      if (cropQ === 'wheat') return itemMatchesPopular(item, 'wheat');
+      if (cropQ === 'tomato') return itemMatchesPopular(item, 'tomato');
+      if (cropQ === 'onion') return itemMatchesPopular(item, 'onion');
+      if (cropQ === 'rice') return itemMatchesPopular(item, 'rice');
+      if (cropQ === 'paddy') return itemMatchesPopular(item, 'paddy');
+      return getCropSearchKeywords(item).includes(targetCrop);
+    });
+    if (stateMatches.length > 0) {
+      return stateMatches;
+    }
+  }
+
   // STRICT LOCATION LOCK:
-  // If user has specified a State or Mandi, NEVER show records from other states or mandis!
+  // If user has specified a State or Mandi, NEVER show records from other states!
   if (stateQ || mandiQ) {
     return [];
   }
@@ -20505,14 +20592,14 @@ function autoDetectMandiLocation() {
   const st = parts[1] || 'Telangana';
 
   if (stateEl) stateEl.value = st;
-  if (mktEl) mktEl.value = city;
+  if (mktEl) mktEl.value = '';
 
   mandiSearchState = st;
-  mandiSearchMandi = city;
+  mandiSearchMandi = '';
   mandiSelectedPopular = 'all';
 
   executeMandiSearch();
-  alert(currentLang==='te'?`📍 స్థానం గుర్తించబడింది: ${city}, ${st}`:(currentLang==='hi'?`📍 लोकेशन खोजी गई: ${city}, ${st}`:`📍 Location Auto-Detected: ${city}, ${st}`));
+  alert(currentLang==='te'?`📍 రాష్ట్రం గుర్తించబడింది: ${st}`:(currentLang==='hi'?`📍 राज्य खोजा गया: ${st}`:`📍 State Auto-Detected: ${st}`));
 }
 
 
@@ -22106,7 +22193,8 @@ function getLiveMarketTickerHtml() {
 
 function getMandiDefaults(slug, preferredState = null) {
   const clean = (slug || 'cotton').toLowerCase().trim();
-  const targetState = (preferredState || (typeof mandiSearchState !== 'undefined' && mandiSearchState) || (typeof farmerProfile !== 'undefined' && (farmerProfile.state || 'Telangana')) || 'Telangana').toLowerCase().trim();
+  const liveSavedState = (typeof localStorage !== 'undefined' && localStorage.getItem('user_live_state')) || null;
+  const targetState = (preferredState || liveSavedState || (typeof mandiSearchState !== 'undefined' && mandiSearchState) || (typeof farmerProfile !== 'undefined' && (farmerProfile.state || 'Telangana')) || 'Telangana').toLowerCase().trim();
 
   const isCropMatch = (x) => {
     if (!x) return false;
@@ -22121,14 +22209,32 @@ function getMandiDefaults(slug, preferredState = null) {
     return false;
   };
 
-  // 1. Prioritize finding the requested crop in the user's selected/home location!
+  // 1. Prioritize finding the requested crop in the user's live detected state!
   let found = null;
   if (targetState) {
-    found = AGMARKNET_MANDI_CATALOG.find(x => {
+    const stateMatches = AGMARKNET_MANDI_CATALOG.filter(x => {
       if (!isCropMatch(x)) return false;
       const matchState = (x.state.en + ' ' + (x.state.te || '') + ' ' + (x.state.hi || '')).toLowerCase();
       return matchState.includes(targetState);
     });
+
+    if (stateMatches.length > 0) {
+      // If user has live GPS coordinates, find nearest APMC in the state
+      const sLat = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('user_live_lat')) : NaN;
+      const sLon = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('user_live_lon')) : NaN;
+      if (!isNaN(sLat) && !isNaN(sLon) && typeof REAL_APMC_MANDIS !== 'undefined' && typeof calculateHaversineKm === 'function') {
+        const sorted = [...stateMatches].sort((a, b) => {
+          const mA = REAL_APMC_MANDIS.find(m => ((a.mandi && a.mandi.en) || '').toLowerCase().includes((m.shortName || m.name).toLowerCase()));
+          const mB = REAL_APMC_MANDIS.find(m => ((b.mandi && b.mandi.en) || '').toLowerCase().includes((m.shortName || m.name).toLowerCase()));
+          const distA = (mA && mA.coords) ? calculateHaversineKm(sLat, sLon, mA.coords[0], mA.coords[1]) : 999;
+          const distB = (mB && mB.coords) ? calculateHaversineKm(sLat, sLon, mB.coords[0], mB.coords[1]) : 999;
+          return distA - distB;
+        });
+        found = sorted[0];
+      } else {
+        found = stateMatches[0];
+      }
+    }
   }
 
   // 2. If not found in target state, find any national match
@@ -22647,11 +22753,52 @@ function getCurrentFarmerVillage() {
 
 function rehydrateCommunityStories() {
   try {
+    // Purge any stock Unsplash avatar from user storage
+    const storedUserAvatar = localStorage.getItem('nukrop_user_avatar');
+    if (storedUserAvatar && storedUserAvatar.includes('unsplash.com')) {
+      localStorage.removeItem('nukrop_user_avatar');
+    }
+
+    const rawStories = localStorage.getItem('nukrop_community_stories');
+    if (rawStories) {
+      let parsed = JSON.parse(rawStories);
+      if (Array.isArray(parsed)) {
+        // Strip out fake Jacku7376 story and remove unsplash fallbacks
+        parsed = parsed.filter(s => {
+          if (!s) return false;
+          const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
+          if (aName.toLowerCase().includes('jacku') || aName.toLowerCase().includes('test')) return false;
+          if (s.avatarUrl && s.avatarUrl.includes('unsplash.com')) {
+            s.avatarUrl = null;
+          }
+          if (s.mediaUrl && s.mediaUrl.includes('unsplash.com')) {
+            return false;
+          }
+          return true;
+        });
+        localStorage.setItem('nukrop_community_stories', JSON.stringify(parsed));
+      }
+    }
+
     const userStories = JSON.parse(localStorage.getItem('nukrop_community_stories') || '[]');
     if (Array.isArray(userStories) && userStories.length > 0) {
-      const valid = userStories.filter(u => u && u.id && u.mediaUrl);
+      const valid = userStories.filter(u => u && u.id && u.mediaUrl && !u.mediaUrl.includes('unsplash.com'));
       COMMUNITY_STORIES_CATALOG = [...valid, ...COMMUNITY_STORIES_CATALOG.filter(c => !valid.some(v => v.id === c.id))];
     }
+
+    // Clean initial catalog stories from test entries or unsplash photos
+    COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG.filter(s => {
+      if (!s) return false;
+      const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
+      if (aName.toLowerCase().includes('jacku') || aName.toLowerCase().includes('test')) return false;
+      if (s.avatarUrl && s.avatarUrl.includes('unsplash.com')) {
+        s.avatarUrl = null;
+      }
+      if (s.mediaUrl && s.mediaUrl.includes('unsplash.com')) {
+        return false;
+      }
+      return true;
+    });
   } catch(e) {}
   if (typeof window !== 'undefined') window.COMMUNITY_STORIES_CATALOG = COMMUNITY_STORIES_CATALOG;
 }
@@ -22766,7 +22913,8 @@ function publishUserStory() {
   const farmerName = getCurrentFarmerName();
   const farmerVillage = getCurrentFarmerVillage();
   const uid = getCurrentUserId();
-  const userAvatar = localStorage.getItem('nukrop_user_avatar') || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80';
+  const rawSavedAvatar = localStorage.getItem('nukrop_user_avatar');
+  const userAvatar = (rawSavedAvatar && !rawSavedAvatar.includes('images.unsplash.com/photo-1507003211169-0a1dd7228f2d')) ? rawSavedAvatar : null;
 
   const newStory = {
     id: 'story-usr-' + Date.now(),
@@ -22812,7 +22960,8 @@ function publishUserStory() {
 function renderCommunityStoriesBarInnerHtml() {
   const currentUid = typeof getCurrentUserId === 'function' ? getCurrentUserId() : 'usr_default';
   const hasUserStory = COMMUNITY_STORIES_CATALOG.some(s => s.isUserStory || (s.user_id && s.user_id === currentUid));
-  const userAvatar = localStorage.getItem('nukrop_user_avatar');
+  const rawSavedAvatar = localStorage.getItem('nukrop_user_avatar');
+  const userAvatar = (rawSavedAvatar && !rawSavedAvatar.includes('images.unsplash.com/photo-1507003211169-0a1dd7228f2d')) ? rawSavedAvatar : null;
 
   let html = `
     <!-- Your Story / Upload Button -->
@@ -22829,11 +22978,12 @@ function renderCommunityStoriesBarInnerHtml() {
 
   html += COMMUNITY_STORIES_CATALOG.map((s, idx) => {
     const authorName = (typeof s.author === 'object' ? (s.author[currentLang] || s.author.en) : s.author) || 'Farmer';
+    const isAuthenticPhoto = s.avatarUrl && !s.avatarUrl.includes('unsplash') && !s.avatarUrl.includes('placeholder');
     return `
       <div onclick="openInstagramStoryModal(${idx})" style="display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;width:66px;text-align:center;">
         <div class="story-avatar-ring unviewed">
           <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;border:2px solid #FFFFFF;background:#DCFCE7;">
-            ${s.avatarUrl ? `<img src="${s.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(authorName) : '👤'}</div>`}
+            ${isAuthenticPhoto ? `<img src="${s.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(authorName) : '👤'}</div>`}
           </div>
         </div>
         <span style="font-size:10px;font-weight:800;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px;">
@@ -22972,7 +23122,16 @@ function renderCurrentInstagramStory() {
     `;
   }
   if (titleEl) titleEl.textContent = titleStr;
-  if (avatarImg) avatarImg.src = s.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80';
+  const isAuthAvatar = s.avatarUrl && !s.avatarUrl.includes('unsplash') && !s.avatarUrl.includes('placeholder');
+  if (avatarImg) {
+    if (isAuthAvatar) {
+      avatarImg.src = s.avatarUrl;
+    } else {
+      const inits = typeof getNeutralInitials === 'function' ? getNeutralInitials(authorStr) : '👤';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="100%" height="100%" fill="#DCFCE7"/><text x="50%" y="54%" font-size="24" font-weight="900" fill="#166534" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif">${inits}</text></svg>`;
+      avatarImg.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    }
+  }
 
   // Reset Heart Button State
   const heartBtn = document.getElementById('isv-heart-btn');
@@ -23971,7 +24130,7 @@ async function pushCommunityPostToSupabase(post) {
       user_id: post.user_id || currentUserId,
       author_name: authorName,
       author_village: authorVillage,
-      avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      avatar_url: (localStorage.getItem('nukrop_user_avatar') && !localStorage.getItem('nukrop_user_avatar').includes('unsplash')) ? localStorage.getItem('nukrop_user_avatar') : null,
       crop_id: post.cropId || 'cotton',
       title: typeof post.title === 'object' ? (post.title[currentLang] || post.title.en) : post.title,
       content: typeof post.text === 'object' ? (post.text[currentLang] || post.text.en) : post.text,
@@ -24094,17 +24253,33 @@ function generateCommunityFeedHtml(posts) {
   const isAuthUser = localStorage.getItem('nukrop_user_email') || localStorage.getItem('nukrop_supabase_uid');
   const currentUid = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
 
-  // Remove fake placeholder demo posts (Raju Naidu) and mock test posts
+  // Filter out mock test posts, synthetic test rows, and empty entries
   const activePosts = posts.filter(p => {
     if (!p) return false;
     if (p.id === 'post-1' && !p.isFromSupabase && (!currentUid || p.user_id !== currentUid)) return false;
     if (typeof p.id === 'string' && (p.id.startsWith('mock-') || p.id.startsWith('demo-'))) return false;
+    const tLower = String((p.title && (p.title.en || p.title)) || '').toLowerCase();
+    const cLower = String((p.content || (p.text && (p.text.en || p.text))) || '').toLowerCase();
+    if (tLower.includes('test post') || cLower.includes('test post') || tLower.includes('test like')) return false;
     return true;
   });
 
+  // Strict deduplication by normalized content signature (author + title + content)
+  const seenSignatures = new Set();
+  const dedupedPosts = [];
+  for (const p of activePosts) {
+    const authorStr = ((p.author && (p.author.en || p.author[currentLang])) || p.author_name || '').trim().toLowerCase();
+    const titleStr = ((p.title && (p.title.en || p.title[currentLang])) || p.title || '').trim().toLowerCase();
+    const contentStr = ((p.text && (p.text.en || p.text[currentLang])) || p.content || '').trim().toLowerCase();
+    const signature = `${authorStr}:::${titleStr}:::${contentStr}`;
+    if (seenSignatures.has(signature)) continue;
+    seenSignatures.add(signature);
+    dedupedPosts.push(p);
+  }
+
   const filtered = filter === 'all'
-    ? activePosts
-    : activePosts.filter(p => (p.cropId === filter || p.crop === filter || p.crop_id === filter));
+    ? dedupedPosts
+    : dedupedPosts.filter(p => (p.cropId === filter || p.crop === filter || p.crop_id === filter));
 
   if (filtered.length === 0) {
     return `
@@ -24129,6 +24304,7 @@ function generateCommunityFeedHtml(posts) {
     const timeAgoStr = (p.timeAgo && (p.timeAgo[currentLang] || p.timeAgo.en)) || (p.created_at ? (() => { const d = new Date(p.created_at); const mins = Math.floor((Date.now() - d)/60000); return mins < 60 ? mins + 'm ago' : Math.floor(mins/60) + 'h ago'; })() : 'Recently');
     const postComments = Array.isArray(p.comments) ? p.comments : [];
     const postLikes = p.likes || p.likes_count || 0;
+    const isPostAuthAvatar = p.avatarUrl && !p.avatarUrl.includes('unsplash') && !p.avatarUrl.includes('placeholder');
 
     return `
       <div class="m3-card" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:20px;padding:16px 14px 14px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,0.04);position:relative;overflow:hidden;">
@@ -24138,7 +24314,7 @@ function generateCommunityFeedHtml(posts) {
           <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
             <div class="story-avatar-ring unviewed" style="padding:2px;">
               <div style="width:40px;height:40px;border-radius:50%;overflow:hidden;border:1.5px solid #FFFFFF;background:#DCFCE7;">
-                ${p.avatarUrl ? `<img src="${p.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(authorName) : '👤'}</div>`}
+                ${isPostAuthAvatar ? `<img src="${p.avatarUrl}" alt="${authorName}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;background:#DCFCE7;color:#166534;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;border-radius:50%;">${typeof getNeutralInitials === 'function' ? getNeutralInitials(authorName) : '👤'}</div>`}
               </div>
             </div>
             <div style="min-width:0;flex:1;">
@@ -24351,16 +24527,30 @@ function renderCommunityFeedDom() {
 window.renderCommunityFeedDom = renderCommunityFeedDom;
 window.removeAttachedMedia = removeAttachedMedia;
 
-// Update real community active count from Supabase
+// Update real community active count from deduplicated active feed
+function getActiveCommunityPostsCount() {
+  const posts = (typeof COMMUNITY_POSTS_CATALOG !== 'undefined' && Array.isArray(COMMUNITY_POSTS_CATALOG)) ? COMMUNITY_POSTS_CATALOG : [];
+  const seen = new Set();
+  let count = 0;
+  for (const p of posts) {
+    if (!p) continue;
+    const tLower = String((p.title && (p.title.en || p.title)) || '').toLowerCase();
+    const cLower = String((p.content || (p.text && (p.text.en || p.text))) || '').toLowerCase();
+    if (tLower.includes('test post') || cLower.includes('test post') || tLower.includes('test like')) continue;
+    const authorStr = ((p.author && (p.author.en || (typeof currentLang !== 'undefined' && p.author[currentLang]))) || p.author_name || '').trim().toLowerCase();
+    const signature = `${authorStr}:::${tLower}:::${cLower}`;
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    count++;
+  }
+  return count;
+}
+
 async function updateCommunityActiveCount() {
   try {
-    if (typeof sbClient === 'undefined' || !sbClient) return;
-    const { count, error } = await sbClient
-      .from('community_posts')
-      .select('id', { count: 'exact', head: true });
-    if (error || count === null) return;
     const el = document.getElementById('community-active-count');
     if (!el) return;
+    const count = getActiveCommunityPostsCount();
     const display = count > 1000 ? (count / 1000).toFixed(1) + 'k' : count.toString();
     el.textContent = TL(display + ' Posts Active', display + ' పోస్టులు యాక్టివ్', display + ' पोस्ट सक्रिय');
   } catch (e) {}
@@ -32208,7 +32398,7 @@ const APP_VIEWS = {
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             <circle cx="12" cy="3" r="1" fill="#15803D"/>
           </svg>
-          ${(()=>{ const uc = APP_NOTIFICATIONS.filter(n=>!n.read).length; return uc > 0 ? `<span id="notif-bell-badge" style="position:absolute;top:-2px;right:-2px;background:#DC2626;color:#FFFFFF;border:2px solid #FFFFFF;border-radius:10px;min-width:17px;height:17px;font-size:9.5px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;box-shadow:0 2px 6px rgba(220,38,38,0.5);">${uc}</span>` : ''; })()}
+          ${(()=>{ const uc = APP_NOTIFICATIONS.filter(n=>!n.read).length; return uc > 0 ? `<span id="notif-bell-badge" style="position:absolute;top:-3px;right:-3px;background:#DC2626;color:#FFFFFF;border:2px solid #FFFFFF;border-radius:9px;min-width:18px;height:18px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;box-shadow:0 2px 6px rgba(220,38,38,0.45);pointer-events:none;">${uc}</span>` : ''; })()}
         </button>
       </div>
     </div>
@@ -32243,11 +32433,12 @@ const APP_VIEWS = {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             </div>
             <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:6px;min-width:0;">
-                <div style="font-size:13.5px;font-weight:800;color:#0F172A;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.liveMandiTitle} · ${cropName}</div>
-                <button id="home-mandi-refresh-btn" onclick="event.stopPropagation();refreshMandiRatesLive();" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0;color:#64748B;line-height:1;flex-shrink:0;" title="Refresh live rate"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></button>
+              <div style="display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;">
+                <span style="font-size:13.5px;font-weight:900;color:#0F172A;line-height:1.2;">${t.liveMandiTitle}</span>
+                <span style="background:#F0FDF4;color:#16A34A;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;border:1px solid #BBF7D0;white-space:nowrap;">🌾 ${cropName}</span>
+                <button id="home-mandi-refresh-btn" onclick="event.stopPropagation();refreshMandiRatesLive();" style="background:none;border:none;cursor:pointer;font-size:11px;padding:2px;color:#64748B;line-height:1;display:inline-flex;align-items:center;" title="Refresh live rate"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></button>
               </div>
-              <div style="font-size:12px;color:#64748B;margin-top:2px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${mandiName}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:3px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${mandiName}</div>
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:6px;display:flex;flex-direction:column;align-items:flex-end;">
@@ -32258,11 +32449,13 @@ const APP_VIEWS = {
 
         <!-- Quick 1-Tap Price Trend & Price Alert Buttons -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid #F1F5F9;padding-top:10px;">
-          <button onclick="event.stopPropagation();openPriceTrendModal('${mandiInfo.mandiId}')" style="background:#F8FAFC;color:#334155;border:1px solid #E2E8F0;border-radius:10px;padding:7px 0;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>${TL('Price Trend', 'ధరల చార్ట్', 'Price Trend')}
+          <button onclick="event.stopPropagation();openPriceTrendModal('${mandiInfo.mandiId}')" style="background:#F8FAFC;color:#1E293B;border:1px solid #E2E8F0;border-radius:10px;padding:8px 6px;font-size:11.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            <span>${TL('Price Trend', 'ధరల చార్ట్', 'Price Trend')}</span>
           </button>
-          <button onclick="event.stopPropagation();openPriceAlertModal('${mandiInfo.mandiId}')" style="background:#F8FAFC;color:#334155;border:1px solid #E2E8F0;border-radius:10px;padding:7px 0;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>${TL('Set Price Alert', 'అలర్ట్ సెట్', 'Set Price Alert')}
+          <button onclick="event.stopPropagation();openPriceAlertModal('${mandiInfo.mandiId}')" style="background:#F8FAFC;color:#1E293B;border:1px solid #E2E8F0;border-radius:10px;padding:8px 6px;font-size:11.5px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span>${TL('Set Price Alert', 'అలర్ట్ సెట్', 'Set Price Alert')}</span>
           </button>
         </div>
       </div>
@@ -32273,7 +32466,7 @@ const APP_VIEWS = {
       <span style="background:#F0FDF4;color:#15803D;border:1px solid #DCFCE7;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:0.02em;flex-shrink:0;z-index:2;box-shadow:2px 0 6px rgba(255,255,255,0.95);">
         🌾 ${TL('MARKET', 'మార్కెట్', 'मंडी')}
       </span>
-      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;mask-image:linear-gradient(to right, transparent, black 8px, black 95%, transparent);-webkit-mask-image:linear-gradient(to right, transparent, black 8px, black 95%, transparent);">
+      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 2px;">
         <div class="news-ticker-track">
           ${renderLiveMandiTickerItemsHtml()}
         </div>
@@ -34441,34 +34634,36 @@ const APP_VIEWS = {
     </div>
 
     <!-- Category Pill Filters Carousel -->
-    <div style="display:flex;gap:8px;padding:10px 18px 8px;overflow-x:auto;align-items:center;background:#FAFAFA;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+    <div style="display:flex;gap:8px;padding:10px 18px 10px;overflow-x:auto;align-items:center;background:#FAFAFA;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
       ${categories.map(c => `
-        <button onclick="setCommunityFilter('${c.id}')" style="background:${currentCommunityFilter===c.id?'#0F172A':'#FFFFFF'};color:${currentCommunityFilter===c.id?'#FFFFFF':'#475569'};border:1px solid ${currentCommunityFilter===c.id?'#0F172A':'#E2E8F0'};border-radius:20px;padding:6px 14px;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer;box-shadow:${currentCommunityFilter===c.id?'0 2px 6px rgba(15,23,42,0.15)':'0 1px 2px rgba(0,0,0,0.02)'};flex-shrink:0;">
+        <button onclick="setCommunityFilter('${c.id}')" style="background:${currentCommunityFilter===c.id?'#0F172A':'#FFFFFF'};color:${currentCommunityFilter===c.id?'#FFFFFF':'#475569'};border:1px solid ${currentCommunityFilter===c.id?'#0F172A':'#E2E8F0'};border-radius:20px;padding:7px 16px;font-size:11.5px;font-weight:800;white-space:nowrap;cursor:pointer;box-shadow:${currentCommunityFilter===c.id?'0 2px 6px rgba(15,23,42,0.15)':'0 1px 2px rgba(0,0,0,0.02)'};flex-shrink:0;">
           ${c.name[currentLang] || c.name.en}
         </button>
       `).join('')}
     </div>
 
-    <!-- Community Posts Feed Container -->
-    <div id="comm-feed-container-parent">
-        <!-- Community Profile Social Stats -->
-        <div style="display:flex;justify-content:space-around;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:12px 6px;margin:10px 0 14px;box-shadow:0 2px 6px rgba(0,0,0,0.03);">
-          <div style="text-align:center;">
-            <div id="profile-stat-followers" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowersCount()}</div>
-            <div style="font-size:10px;font-weight:700;color:#64748B;">Followers</div>
-          </div>
-          <div style="width:1px;background:#E2E8F0;"></div>
-          <div style="text-align:center;">
-            <div id="profile-stat-following" style="font-size:16px;font-weight:900;color:#0F172A;">0</div>
-            <div style="font-size:10px;font-weight:700;color:#64748B;">Following</div>
-          </div>
-          <div style="width:1px;background:#E2E8F0;"></div>
-          <div style="text-align:center;">
-            <div id="profile-stat-myposts" style="font-size:16px;font-weight:900;color:#0F172A;">0</div>
-            <div style="font-size:10px;font-weight:700;color:#64748B;">My Posts</div>
-          </div>
+    <!-- Community Profile Social Stats (Symmetrically Padded & Responsive) -->
+    <div id="comm-feed-container-parent" style="padding:0 18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;padding:12px 10px;margin:10px 0 14px;box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+        <div style="flex:1;min-width:0;text-align:center;">
+          <div id="profile-stat-followers" style="font-size:16px;font-weight:900;color:#0F172A;">${getFollowersCount()}</div>
+          <div style="font-size:11px;font-weight:700;color:#64748B;white-space:nowrap;">Followers</div>
         </div>
-</div><div id="comm-feed-container" style="padding:10px 18px 90px;background:#F8FAF8;min-height:75vh;">
+        <div style="width:1px;height:24px;background:#E2E8F0;"></div>
+        <div style="flex:1;min-width:0;text-align:center;">
+          <div id="profile-stat-following" style="font-size:16px;font-weight:900;color:#0F172A;">0</div>
+          <div style="font-size:11px;font-weight:700;color:#64748B;white-space:nowrap;">Following</div>
+        </div>
+        <div style="width:1px;height:24px;background:#E2E8F0;"></div>
+        <div style="flex:1;min-width:0;text-align:center;">
+          <div id="profile-stat-myposts" style="font-size:16px;font-weight:900;color:#0F172A;">0</div>
+          <div style="font-size:11px;font-weight:700;color:#64748B;white-space:nowrap;">My Posts</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Community Posts Feed Container with Full Bottom Dock Clearance -->
+    <div id="comm-feed-container" style="padding:10px 18px calc(var(--sab, 24px) + 110px);background:#F8FAF8;min-height:85vh;">
       ${generateCommunityFeedHtml(COMMUNITY_POSTS_CATALOG)}
     </div>
     `;
@@ -36426,6 +36621,8 @@ function autoDetectMandiLocation() {
           if (data && data.address) {
             detectedCity = data.address.county || data.address.city || data.address.town || data.address.village || 'Moinabad';
             detectedState = data.address.state || 'Telangana';
+            localStorage.setItem('user_live_state', detectedState);
+            localStorage.setItem('user_live_city', detectedCity);
             currentGramhaulFarmAddress = `${data.address.village || detectedCity} Farm, ${detectedState}`;
             const farmLbl = document.getElementById('gh-pickup-location-label');
             if (farmLbl) farmLbl.textContent = currentGramhaulFarmAddress;
@@ -36453,14 +36650,14 @@ function autoDetectMandiLocation() {
       const stateEl = document.getElementById('mandi-state-inp');
       const mktEl = document.getElementById('mandi-mkt-inp');
       if (stateEl) stateEl.value = detectedState;
-      if (mktEl) mktEl.value = nearestMandiName;
+      if (mktEl) mktEl.value = '';
 
       mandiSearchState = detectedState;
-      mandiSearchMandi = nearestMandiName;
+      mandiSearchMandi = '';
       mandiSelectedPopular = 'all';
       if (typeof window !== 'undefined') {
         window.mandiSearchState = detectedState;
-        window.mandiSearchMandi = nearestMandiName;
+        window.mandiSearchMandi = '';
         window.mandiSelectedPopular = 'all';
       }
 
@@ -36470,7 +36667,7 @@ function autoDetectMandiLocation() {
 
       if (typeof showLuxuryToast === 'function') {
         const distTag = REAL_APMC_MANDIS && REAL_APMC_MANDIS[0] ? ` (${REAL_APMC_MANDIS[0].distKm} km)` : '';
-        showLuxuryToast(`📍 GPS Locked: ${nearestMandiName}${distTag}`, 'success');
+        showLuxuryToast(`📍 GPS Locked: ${detectedState} · Nearest APMC: ${nearestMandiName}${distTag}`, 'success');
       }
     },
     (err) => {
@@ -36486,14 +36683,14 @@ function autoDetectMandiLocation() {
     const stateEl = document.getElementById('mandi-state-inp');
     const mktEl = document.getElementById('mandi-mkt-inp');
     if (stateEl) stateEl.value = detectedState;
-    if (mktEl) mktEl.value = detectedCity;
+    if (mktEl) mktEl.value = '';
 
     mandiSearchState = detectedState;
-    mandiSearchMandi = detectedCity;
+    mandiSearchMandi = '';
     mandiSelectedPopular = 'all';
     if (typeof window !== 'undefined') {
       window.mandiSearchState = detectedState;
-      window.mandiSearchMandi = detectedCity;
+      window.mandiSearchMandi = '';
       window.mandiSelectedPopular = 'all';
     }
 
@@ -36502,7 +36699,7 @@ function autoDetectMandiLocation() {
     }
 
     if (typeof showLuxuryToast === 'function') {
-      showLuxuryToast(`📍 GPS Geofenced to Warangal APMC Region (4.8 km)`, 'success');
+      showLuxuryToast(`📍 GPS Geofenced to Telangana State Mandis`, 'success');
     }
   }
 }
@@ -41563,15 +41760,24 @@ window.finishLoginAndEnterDashboard = function(role) {
 };
 
 const REAL_APMC_MANDIS = [
-  { id: 'gudimalkapur', name: 'Gudimalkapur Vegetable & Flower APMC Yard', shortName: 'Gudimalkapur APMC', city: 'Hyderabad', distKm: 7.2, coords: [17.3820, 78.4350], crops: 'Vegetables, Chilli, Flowers', tag: 'Nearest · 7.2 km' },
-  { id: 'bowenpally', name: 'Bowenpally Wholesale Commercial APMC Yard', shortName: 'Bowenpally Wholesale APMC', city: 'Secunderabad', distKm: 9.8, coords: [17.4764, 78.4892], crops: 'Onion, Tomato, Vegetables, Grain', tag: 'Major Terminal · 9.8 km' },
-  { id: 'moinabad', name: 'Moinabad Regional APMC Market', shortName: 'Moinabad APMC Yard', city: 'Ranga Reddy', distKm: 24.5, coords: [17.3240, 78.2750], crops: 'Vegetables, Fruits, Maize', tag: '24.5 km' },
-  { id: 'batasingaram', name: 'Batasingaram Logistic Fruit & Grain APMC', shortName: 'Batasingaram APMC', city: 'Ranga Reddy', distKm: 28.0, coords: [17.2910, 78.7120], crops: 'Fruits, Sweet Lime, Paddy', tag: '28 km' },
-  { id: 'shadnagar', name: 'Shadnagar Commercial APMC Yard', shortName: 'Shadnagar APMC Yard', city: 'Ranga Reddy', distKm: 48.0, coords: [17.0700, 78.2050], crops: 'Cotton, Maize, Groundnut', tag: '48 km' },
-  { id: 'jangaon', name: 'Jangaon Grain & Cotton Market Yard', shortName: 'Jangaon APMC Yard', city: 'Jangaon', distKm: 85.0, coords: [17.7214, 79.1607], crops: 'Paddy, Cotton, Pulses', tag: '85 km' },
-  { id: 'enumamula', name: 'Warangal Enamamula APMC Yard (Gate 3)', shortName: 'Warangal Enamamula APMC', city: 'Warangal', distKm: 142.0, coords: [17.9945, 79.5892], crops: 'Cotton, Chilli, Maize', tag: 'Hub · 142 km' },
-  { id: 'khammam', name: 'Khammam Spices APMC Mandi (Gate 1)', shortName: 'Khammam Spices Mandi', city: 'Khammam', distKm: 185.0, coords: [17.2472, 80.1514], crops: 'Teja Chilli, Cotton', tag: 'Spice Hub · 185 km' },
-  { id: 'nizamabad', name: 'Nizamabad Turmeric & Spices Mandi', shortName: 'Nizamabad Turmeric Mandi', city: 'Nizamabad', distKm: 165.0, coords: [18.6725, 78.0941], crops: 'Turmeric, Maize, Soya', tag: '165 km' }
+  // Telangana APMC Yards
+  { id: 'gudimalkapur', name: 'Gudimalkapur Vegetable & Flower APMC Yard', shortName: 'Gudimalkapur APMC', city: 'Hyderabad', state: 'Telangana', distKm: 7.2, coords: [17.3820, 78.4350], crops: 'Vegetables, Chilli, Flowers', tag: 'Nearest · 7.2 km' },
+  { id: 'bowenpally', name: 'Bowenpally Wholesale Commercial APMC Yard', shortName: 'Bowenpally Wholesale APMC', city: 'Secunderabad', state: 'Telangana', distKm: 9.8, coords: [17.4764, 78.4892], crops: 'Onion, Tomato, Vegetables, Grain', tag: 'Major Terminal · 9.8 km' },
+  { id: 'moinabad', name: 'Moinabad Regional APMC Market', shortName: 'Moinabad APMC Yard', city: 'Ranga Reddy', state: 'Telangana', distKm: 24.5, coords: [17.3240, 78.2750], crops: 'Vegetables, Fruits, Maize', tag: '24.5 km' },
+  { id: 'batasingaram', name: 'Batasingaram Logistic Fruit & Grain APMC', shortName: 'Batasingaram APMC', city: 'Ranga Reddy', state: 'Telangana', distKm: 28.0, coords: [17.2910, 78.7120], crops: 'Fruits, Sweet Lime, Paddy', tag: '28 km' },
+  { id: 'shadnagar', name: 'Shadnagar Commercial APMC Yard', shortName: 'Shadnagar APMC Yard', city: 'Ranga Reddy', state: 'Telangana', distKm: 48.0, coords: [17.0700, 78.2050], crops: 'Cotton, Maize, Groundnut', tag: '48 km' },
+  { id: 'jangaon', name: 'Jangaon Grain & Cotton Market Yard', shortName: 'Jangaon APMC Yard', city: 'Jangaon', state: 'Telangana', distKm: 85.0, coords: [17.7214, 79.1607], crops: 'Paddy, Cotton, Pulses', tag: '85 km' },
+  { id: 'enumamula', name: 'Warangal Enamamula APMC Yard (Gate 3)', shortName: 'Warangal Enamamula APMC', city: 'Warangal', state: 'Telangana', distKm: 142.0, coords: [17.9945, 79.5892], crops: 'Cotton, Chilli, Maize', tag: 'Hub · 142 km' },
+  { id: 'khammam', name: 'Khammam Spices APMC Mandi (Gate 1)', shortName: 'Khammam Spices Mandi', city: 'Khammam', state: 'Telangana', distKm: 185.0, coords: [17.2472, 80.1514], crops: 'Teja Chilli, Cotton', tag: 'Spice Hub · 185 km' },
+  { id: 'nizamabad', name: 'Nizamabad Turmeric & Spices Mandi', shortName: 'Nizamabad Turmeric Mandi', city: 'Nizamabad', state: 'Telangana', distKm: 165.0, coords: [18.6725, 78.0941], crops: 'Turmeric, Maize, Soya', tag: '165 km' },
+
+  // Andhra Pradesh APMC Yards
+  { id: 'nandyal', name: 'Nandyal Regional Commercial APMC Yard', shortName: 'Nandyal APMC Market', city: 'Nandyal', state: 'Andhra Pradesh', distKm: 210.0, coords: [15.4875, 78.4835], crops: 'Cotton, Bengal Gram, Paddy', tag: '210 km' },
+  { id: 'kurnool', name: 'Kurnool Agricultural Commercial APMC Yard', shortName: 'Kurnool APMC Yard', city: 'Kurnool', state: 'Andhra Pradesh', distKm: 195.0, coords: [15.8281, 78.0373], crops: 'Onion, Groundnut, Cotton', tag: '195 km' },
+  { id: 'markapur', name: 'Markapur Regional Grain & Cotton APMC Yard', shortName: 'Markapur APMC Yard', city: 'Prakasam', state: 'Andhra Pradesh', distKm: 240.0, coords: [15.7350, 79.2700], crops: 'Cotton, Chilli, Pulses', tag: '240 km' },
+  { id: 'guntur', name: 'Guntur Asian Mirchi & Cotton APMC Yard', shortName: 'Guntur APMC Yard', city: 'Guntur', state: 'Andhra Pradesh', distKm: 270.0, coords: [16.2990, 80.4420], crops: 'Chilli, Cotton, Turmeric', tag: '270 km' },
+  { id: 'adoni', name: 'Adoni Commercial Cotton APMC Yard', shortName: 'Adoni APMC Yard', city: 'Kurnool', state: 'Andhra Pradesh', distKm: 280.0, coords: [15.6322, 77.2728], crops: 'Cotton, Groundnut, Sunflower', tag: '280 km' },
+  { id: 'tirupati', name: 'Tirupati Regional APMC Vegetable Market', shortName: 'Tirupati APMC Market', city: 'Tirupati', state: 'Andhra Pradesh', distKm: 420.0, coords: [13.6288, 79.4192], crops: 'Paddy, Groundnut, Sugarcane', tag: '420 km' }
 ];
 
 let REAL_DRIVERS_FLEET = {

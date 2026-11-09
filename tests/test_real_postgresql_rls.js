@@ -690,9 +690,9 @@ $$ LANGUAGE plpgsql STABLE;`
     const pubIdCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [newTestUid]);
     const assignedPubId = pubIdCheck.rows[0]?.public_id;
     if (typeof assignedPubId === 'string' && /^nk_pub_[0-9a-f]{32}$/.test(assignedPubId) && assignedPubId.length === 39) {
-      pass('P0-PUBID-NONNULL', `public_id generated automatically on creation with 128-bit CSPRNG (${assignedPubId})`);
+      pass('P0-PUBID-NONNULL', `public_id generated automatically on creation with 128-bit UUID representation (122 bits of UUIDv4 random entropy, 32 hex chars suffix) (${assignedPubId})`);
     } else {
-      fail('P0-PUBID-NONNULL', `public_id was not properly generated with 128-bit CSPRNG: ${assignedPubId}`);
+      fail('P0-PUBID-NONNULL', `public_id was not properly generated with 122 bits of random entropy: ${assignedPubId}`);
     }
 
     // P0-PUBID-2: Attempting to insert explicit NULL public_id is caught and populated by trigger
@@ -709,9 +709,53 @@ $$ LANGUAGE plpgsql STABLE;`
     const nullBypassCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [nullBypassUid]);
     const bypassedPubId = nullBypassCheck.rows[0]?.public_id;
     if (typeof bypassedPubId === 'string' && /^nk_pub_[0-9a-f]{32}$/.test(bypassedPubId) && bypassedPubId.length === 39) {
-      pass('P0-PUBID-TRIGGER-POPULATE', `NULL public_id safely coerced to 128-bit CSPRNG public_id by trigger (${bypassedPubId})`);
+      pass('P0-PUBID-TRIGGER-POPULATE', `NULL public_id safely coerced to 122-bit UUIDv4 CSPRNG public_id by trigger (${bypassedPubId})`);
     } else {
       fail('P0-PUBID-TRIGGER-POPULATE', `NULL public_id was not coerced: ${bypassedPubId}`);
+    }
+
+    // P0-PUBID-AUTH-OMITTED: Authenticated user insert with public_id omitted succeeds via database-generated default
+    const authOmittedUid = '77777777-7777-7777-7777-7777777777a0';
+    await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'auth_omitted@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authOmittedUid]);
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${authOmittedUid}", "role": "authenticated"}';
+    `);
+    await pglite.query(`
+      INSERT INTO public.profiles (id, user_id, email, full_name, role)
+      VALUES ($1, $1, 'auth_omitted@nukrop.ai', 'Auth Omitted Profile', 'farmer');
+    `, [authOmittedUid]);
+    await pglite.exec(`RESET ROLE;`);
+    await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    const authOmittedCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [authOmittedUid]);
+    const authOmittedPubId = authOmittedCheck.rows[0]?.public_id;
+    if (typeof authOmittedPubId === 'string' && /^nk_pub_[0-9a-f]{32}$/.test(authOmittedPubId) && authOmittedPubId.length === 39) {
+      pass('P0-PUBID-AUTH-OMITTED', `Authenticated insert with public_id omitted safely populated by database default (${authOmittedPubId})`);
+    } else {
+      fail('P0-PUBID-AUTH-OMITTED', `Authenticated insert with omitted public_id failed: ${authOmittedPubId}`);
+    }
+
+    // P0-PUBID-AUTH-NULL: Authenticated user insert with public_id = NULL succeeds via trigger generation
+    const authNullUid = '77777777-7777-7777-7777-7777777777a2';
+    await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'auth_null@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authNullUid]);
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${authNullUid}", "role": "authenticated"}';
+    `);
+    await pglite.query(`
+      INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+      VALUES ($1, $1, 'auth_null@nukrop.ai', 'Auth Null Profile', 'farmer', NULL);
+    `, [authNullUid]);
+    await pglite.exec(`RESET ROLE;`);
+    await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    const authNullCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [authNullUid]);
+    const authNullPubId = authNullCheck.rows[0]?.public_id;
+    if (typeof authNullPubId === 'string' && /^nk_pub_[0-9a-f]{32}$/.test(authNullPubId) && authNullPubId.length === 39) {
+      pass('P0-PUBID-AUTH-NULL', `Authenticated insert with public_id = NULL safely populated by trigger (${authNullPubId})`);
+    } else {
+      fail('P0-PUBID-AUTH-NULL', `Authenticated insert with NULL public_id failed: ${authNullPubId}`);
     }
 
     // P0-PUBID-EMPTY: Attempting to insert empty string public_id is rejected
@@ -762,7 +806,10 @@ $$ LANGUAGE plpgsql STABLE;`
     try {
       await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
       await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'auth_supply@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authSupplyUid]);
-      await pglite.exec(`SET ROLE authenticated;`);
+      await pglite.exec(`
+        SET ROLE authenticated;
+        SET request.jwt.claims = '{"sub": "${authSupplyUid}", "role": "authenticated"}';
+      `);
       await pglite.query(`
         INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
         VALUES ($1, $1, 'auth_supply@nukrop.ai', 'Auth Supply User', 'farmer', 'nk_pub_11112222333344445555666677778888');
@@ -780,6 +827,35 @@ $$ LANGUAGE plpgsql STABLE;`
       pass('P0-PUBID-AUTHENTICATED-FORBIDDEN', 'Authenticated caller attempting custom public_id strictly rejected with PERMISSION_DENIED');
     } else {
       fail('P0-PUBID-AUTHENTICATED-FORBIDDEN', 'Authenticated caller was allowed to specify custom public_id!');
+    }
+
+    // P0-PUBID-AUTH-MALFORMED: Authenticated role inserting malformed public_id is rejected
+    const authMalformedUid = '77777777-7777-7777-7777-7777777777d1';
+    let authMalformedBlocked = false;
+    try {
+      await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+      await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'auth_malformed@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authMalformedUid]);
+      await pglite.exec(`
+        SET ROLE authenticated;
+        SET request.jwt.claims = '{"sub": "${authMalformedUid}", "role": "authenticated"}';
+      `);
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+        VALUES ($1, $1, 'auth_malformed@nukrop.ai', 'Auth Malformed User', 'farmer', 'malformed_id_string');
+      `, [authMalformedUid]);
+      await pglite.exec(`RESET ROLE;`);
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    } catch (e) {
+      await pglite.exec(`RESET ROLE;`);
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+      if (e.message.includes('PERMISSION_DENIED') || e.message.includes('INVALID_PUBLIC_ID')) {
+        authMalformedBlocked = true;
+      }
+    }
+    if (authMalformedBlocked) {
+      pass('P0-PUBID-AUTH-MALFORMED-REJECTED', 'Authenticated insert with malformed public_id strictly rejected');
+    } else {
+      fail('P0-PUBID-AUTH-MALFORMED-REJECTED', 'Authenticated insert with malformed public_id was accepted!');
     }
 
     // P0-PUBID-ARBITRARY-REJECTED: Arbitrary vanity strings rejected by format validator
@@ -845,7 +921,7 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0-PUBID-COLLISION', 'Duplicate public_id was permitted! Collision protection failed.');
     }
 
-    // P0-PUBID-CONCURRENCY: Concurrent creation generates distinct 128-bit IDs without collision
+    // P0-PUBID-CONCURRENCY: Concurrent creation generates distinct 122-bit UUIDv4 entropy IDs without collision
     const concurrentUids = [
       '77777777-7777-7777-7777-7777777777c1',
       '77777777-7777-7777-7777-7777777777c2',
@@ -858,7 +934,7 @@ $$ LANGUAGE plpgsql STABLE;`
     const generatedConcurrIds = concurrCheck.rows.map(r => r.public_id);
     const uniqueConcurrIds = new Set(generatedConcurrIds);
     if (generatedConcurrIds.length === 3 && uniqueConcurrIds.size === 3 && generatedConcurrIds.every(id => /^nk_pub_[0-9a-f]{32}$/.test(id))) {
-      pass('P0-PUBID-CONCURRENCY', `Concurrent profile creation generated 3 distinct 128-bit CSPRNG public_ids with zero collision`);
+      pass('P0-PUBID-CONCURRENCY', `Concurrent profile creation generated 3 distinct 122-bit UUIDv4 CSPRNG public_ids with zero collision`);
     } else {
       fail('P0-PUBID-CONCURRENCY', `Concurrent public_id creation failed uniqueness: ${JSON.stringify(generatedConcurrIds)}`);
     }

@@ -940,12 +940,30 @@ BEGIN
   END IF;
 END $$;
 
--- Populate public_id with dedicated opaque random identifier if null (122 bits of cryptographic randomness via RFC 4122 UUID v4, 32 hex chars)
+-- Dedicated server generator for public_id default (128-bit UUID representation, 122 bits of RFC 4122 UUIDv4 random entropy)
+CREATE OR REPLACE FUNCTION public.generate_profile_public_id()
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_id text;
+BEGIN
+  v_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
+  PERFORM set_config('nukrop.server_generated_public_id', v_id, true);
+  RETURN v_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.generate_profile_public_id() TO anon, authenticated, service_role;
+
+-- Populate public_id with dedicated opaque random identifier if null (128-bit UUID representation, 122 bits of RFC 4122 UUIDv4 random entropy, 32 hex chars suffix)
 UPDATE public.profiles 
 SET public_id = 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''))
 WHERE public_id IS NULL;
 
-ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT ('nk_pub_' || lower(replace(gen_random_uuid()::text, '-', '')));
+ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT public.generate_profile_public_id();
 ALTER TABLE public.profiles ALTER COLUMN public_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id_unique ON public.profiles(public_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
@@ -956,7 +974,17 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_server_generated text;
+  v_role text;
 BEGIN
+  -- Check if this execution was populated by the trusted column default generator in this transaction
+  BEGIN
+    v_server_generated := current_setting('nukrop.server_generated_public_id', true);
+  EXCEPTION WHEN OTHERS THEN
+    v_server_generated := NULL;
+  END;
+
   -- 1. If public_id is omitted or explicitly passed as NULL, generate 122-bit CSPRNG server identifier (RFC 4122 UUID v4)
   IF NEW.public_id IS NULL THEN
     NEW.public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
@@ -973,9 +1001,15 @@ BEGIN
     RAISE EXCEPTION 'UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id';
   END IF;
 
-  -- 4. Reject client-specified public IDs if called by authenticated role
-  IF (current_user = 'authenticated') THEN
-    RAISE EXCEPTION 'PERMISSION_DENIED: Client-specified public_id is prohibited. public_id must be server-generated.';
+  -- 4. Reject client-specified public IDs if called by untrusted authenticated or anon role
+  v_role := current_user;
+  IF (v_role = 'authenticated' OR v_role = 'anon') THEN
+    IF v_server_generated IS NOT NULL AND v_server_generated = NEW.public_id THEN
+      -- Trusted database default execution: clear setting to ensure one-time consumption per row
+      PERFORM set_config('nukrop.server_generated_public_id', '', true);
+    ELSE
+      RAISE EXCEPTION 'PERMISSION_DENIED: Client-specified public_id is prohibited. public_id must be server-generated.';
+    END IF;
   END IF;
 
   -- 5. Reject arbitrary strings, user-selected vanity names, or malformed/predictable strings

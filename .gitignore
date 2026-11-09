@@ -63,6 +63,7 @@ tests/**/*.pyc
 *.png
 !web/public/*.png
 !app/src/main/res/**/*.png
+!flutter_app/android/app/src/main/res/**/*.png
 !screenshots/**/*.png
 simulations/logs/*.jsonl
 

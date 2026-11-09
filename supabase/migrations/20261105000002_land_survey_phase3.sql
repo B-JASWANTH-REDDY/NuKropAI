@@ -177,6 +177,7 @@ CREATE OR REPLACE FUNCTION public.get_land_survey_coverage()
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_sources JSONB;
@@ -218,3 +219,6 @@ BEGIN
   );
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.get_land_survey_coverage() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_land_survey_coverage() TO authenticated, service_role;

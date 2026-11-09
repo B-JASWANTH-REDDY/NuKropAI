@@ -450,7 +450,7 @@ async function main() {
     assert.strictEqual(profY.public_profile_enabled, false);
   });
 
-  await testAsync('ID-19: Registration generates dedicated cryptographically secure public_id (nk_pub_*)', async () => {
+  await testAsync('ID-19: Registration generates dedicated cryptographically secure public_id (nk_pub_* with 128-bit entropy)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/register',
@@ -465,10 +465,40 @@ async function main() {
     const body = JSON.parse(res.body);
     const createdProfile = memoryStore.profiles.find(p => p.id === body.user.id);
     assert(createdProfile, 'Profile must exist in store');
-    assert.match(createdProfile.public_id, /^nk_pub_[0-9a-f]{16}$/i);
+    assert.match(createdProfile.public_id, /^nk_pub_[0-9a-f]{32}$/i);
+    assert.strictEqual(createdProfile.public_id.length, 39); // 'nk_pub_' (7) + 32 hex = 39 chars
     // Ensure public_id is completely independent of user UUID and email
     assert(!createdProfile.public_id.includes(body.user.id.replace(/-/g, '')));
     assert(!createdProfile.public_id.includes('farmer'));
+  });
+
+  await testAsync('ID-19b: Client attempts to supply custom, arbitrary, or UUID-injected public_id are rejected', async () => {
+    // 1. Attempting empty public_id
+    let emptyRejected = false;
+    try {
+      await query('insert into public.profiles (id, public_id) values ($1, $2)', ['test-empty-uid', '']);
+    } catch (e) {
+      if (e.message.includes('MALFORMED_PUBLIC_ID')) emptyRejected = true;
+    }
+    assert.strictEqual(emptyRejected, true, 'Empty public_id must be rejected with MALFORMED_PUBLIC_ID');
+
+    // 2. Attempting UUID injection
+    let uuidInjectionRejected = false;
+    try {
+      await query('insert into public.profiles (id, public_id) values ($1, $2)', ['test-uuid-uid', '11111111-2222-3333-4444-555555555555']);
+    } catch (e) {
+      if (e.message.includes('UUID_INJECTION_REJECTED')) uuidInjectionRejected = true;
+    }
+    assert.strictEqual(uuidInjectionRejected, true, 'UUID injection must be rejected with UUID_INJECTION_REJECTED');
+
+    // 3. Attempting arbitrary vanity string
+    let vanityRejected = false;
+    try {
+      await query('insert into public.profiles (id, public_id) values ($1, $2)', ['test-vanity-uid', 'nk_pub_my_custom_vanity_name']);
+    } catch (e) {
+      if (e.message.includes('INVALID_PUBLIC_ID')) vanityRejected = true;
+    }
+    assert.strictEqual(vanityRejected, true, 'Arbitrary vanity public_id must be rejected with INVALID_PUBLIC_ID');
   });
 
   await testAsync('ID-20: Attempting to mutate public_id is rejected as immutable (IMMUTABLE_FIELD)', async () => {

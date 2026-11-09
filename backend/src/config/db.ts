@@ -103,7 +103,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
       created_at: new Date()
     };
     memoryStore.users.push(newUser);
-    const generatedPublicId = `nk_pub_${crypto.randomBytes(8).toString('hex')}`;
+    const generatedPublicId = `nk_pub_${crypto.randomBytes(16).toString('hex')}`;
     memoryStore.profiles.push({
       id: newUser.id,
       user_id: newUser.id,
@@ -115,6 +115,27 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
       created_at: newUser.created_at
     });
     return { rows: [newUser] };
+  }
+
+  if (queryStr.includes('insert into public.profiles')) {
+    // Reject client-supplied, empty, arbitrary, or UUID-injected public_id
+    const pubIdMatch = queryStr.match(/insert into public\.profiles\s*\(([^)]+)\)/i);
+    if (pubIdMatch) {
+      const cols = pubIdMatch[1].split(',').map(c => c.trim().toLowerCase());
+      const pubIdIdx = cols.indexOf('public_id');
+      if (pubIdIdx !== -1 && pubIdIdx < params.length) {
+        const val = params[pubIdIdx];
+        if (val === '') {
+          throw new Error('MALFORMED_PUBLIC_ID: public_id cannot be an empty string');
+        }
+        if (typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
+          throw new Error('UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id');
+        }
+        if (typeof val === 'string' && !/^nk_pub_[0-9a-f]{32}$/i.test(val)) {
+          throw new Error(`INVALID_PUBLIC_ID: Caller cannot supply user-selected, arbitrary or malformed public_id "${val}"`);
+        }
+      }
+    }
   }
 
   if (queryStr.includes('update public.profiles set public_profile_enabled =')) {
@@ -138,7 +159,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     const optedIn = memoryStore.profiles
       .filter(p => p.public_profile_enabled === true)
       .map(p => ({
-        public_id: p.public_id || (p.public_id = `nk_pub_${crypto.randomBytes(8).toString('hex')}`),
+        public_id: p.public_id || (p.public_id = `nk_pub_${crypto.randomBytes(16).toString('hex')}`),
         full_name: p.full_name,
         role: p.role,
         avatar_url: p.avatar_url || null,

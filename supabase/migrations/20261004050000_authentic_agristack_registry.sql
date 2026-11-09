@@ -95,7 +95,11 @@ RETURNS TABLE (
   farmer_fid VARCHAR(50),
   aadhaar_verified BOOLEAN,
   parcels_data JSONB
-) AS $$
+) 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   RETURN QUERY
   SELECT 
@@ -125,4 +129,7 @@ BEGIN
      OR l.survey_number = p_search_token
   GROUP BY p.id, p.full_name, p.fid, p.is_ekyc_verified;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+REVOKE ALL ON FUNCTION public.fetch_authentic_agristack_registry(TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fetch_authentic_agristack_registry(TEXT) TO authenticated, service_role;

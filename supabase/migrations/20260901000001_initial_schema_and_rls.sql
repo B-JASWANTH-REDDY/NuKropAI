@@ -203,7 +203,11 @@ CREATE POLICY "Users can create bookings"
 
 -- ── RATE LIMITING HELPER FUNCTION (Anti-DDoS & Spam Protection) ──
 CREATE OR REPLACE FUNCTION public.check_rate_limit(user_uuid UUID, max_requests INT, interval_seconds INT)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   recent_count INT;
 BEGIN
@@ -216,4 +220,7 @@ BEGIN
   END IF;
   RETURN TRUE;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+REVOKE ALL ON FUNCTION public.check_rate_limit(UUID, INT, INT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.check_rate_limit(UUID, INT, INT) TO authenticated, service_role;

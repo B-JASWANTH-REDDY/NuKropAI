@@ -68,7 +68,11 @@ CREATE INDEX IF NOT EXISTS idx_user_follows_created_at ON public.user_follows(cr
 
 -- 4. Automated Counter Trigger: post_likes -> community_posts.likes_count
 CREATE OR REPLACE FUNCTION public.fn_sync_post_likes_count()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     IF (TG_OP = 'INSERT') THEN
         UPDATE public.community_posts
@@ -85,7 +89,7 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS trg_post_likes_count ON public.post_likes;
 CREATE TRIGGER trg_post_likes_count

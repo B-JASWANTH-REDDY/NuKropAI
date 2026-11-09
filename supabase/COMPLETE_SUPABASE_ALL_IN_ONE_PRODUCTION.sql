@@ -929,26 +929,54 @@ CREATE TABLE IF NOT EXISTS public._profile_provenance_audit (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_provenance_audit_unique 
   ON public._profile_provenance_audit (profile_id, field_name);
 
--- Populate public_id with dedicated opaque random identifier if null
+-- Secure schema permissions: untrusted roles cannot create objects in public schema
+REVOKE CREATE ON SCHEMA public FROM PUBLIC, anon, authenticated;
+GRANT CREATE ON SCHEMA public TO postgres, service_role;
+
+-- Populate public_id with dedicated opaque random identifier if null (128 bits entropy)
 UPDATE public.profiles 
-SET public_id = 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16)
+SET public_id = 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''))
 WHERE public_id IS NULL;
 
-ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT ('nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16));
+ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT ('nk_pub_' || lower(replace(gen_random_uuid()::text, '-', '')));
 ALTER TABLE public.profiles ALTER COLUMN public_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id_unique ON public.profiles(public_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
 
--- Enforce public_id generation on profile insert (cannot be bypassed even with NULL payload)
+-- Enforce server-controlled public_id generation on profile insert (rejects client selection, empty, malformed, or UUID injection)
 CREATE OR REPLACE FUNCTION public.ensure_profile_public_id()
 RETURNS TRIGGER 
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF NEW.public_id IS NULL OR NEW.public_id = '' THEN
-    NEW.public_id := 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16);
+  -- 1. If public_id is omitted or explicitly passed as NULL, generate 128-bit CSPRNG server identifier
+  IF NEW.public_id IS NULL THEN
+    NEW.public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
+    RETURN NEW;
   END IF;
+
+  -- 2. Reject empty strings
+  IF NEW.public_id = '' THEN
+    RAISE EXCEPTION 'MALFORMED_PUBLIC_ID: public_id cannot be an empty string';
+  END IF;
+
+  -- 3. Reject UUID injection (e.g. attempting to inject internal auth UUID as public identifier)
+  IF NEW.public_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    RAISE EXCEPTION 'UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id';
+  END IF;
+
+  -- 4. Reject client-specified public IDs if called by authenticated role
+  IF (current_user = 'authenticated') THEN
+    RAISE EXCEPTION 'PERMISSION_DENIED: Client-specified public_id is prohibited. public_id must be server-generated.';
+  END IF;
+
+  -- 5. Reject arbitrary strings, user-selected vanity names, or malformed/predictable strings
+  -- Only exact 128-bit hex format 'nk_pub_[32 hex]' is permitted from trusted internal callers/triggers
+  IF NOT (NEW.public_id ~ '^nk_pub_[0-9a-f]{32}$') THEN
+    RAISE EXCEPTION 'INVALID_PUBLIC_ID: Caller-supplied public_id "%" is prohibited. Must be server-generated with 128-bit randomness.', NEW.public_id;
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -1720,8 +1748,8 @@ BEGIN
     NEW.raw_user_meta_data->>'phone_number'
   );
 
-  -- Dedicated opaque public identifier
-  v_public_id := 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16);
+  -- Dedicated opaque public identifier (128 bits entropy)
+  v_public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
 
   -- Role whitelist & privilege escalation prevention:
   v_requested_role := lower(COALESCE(NEW.raw_user_meta_data->>'role', 'farmer'));

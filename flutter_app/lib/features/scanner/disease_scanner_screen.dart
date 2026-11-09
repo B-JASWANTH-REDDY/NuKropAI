@@ -307,3 +307,4 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
     );
   }
 }
+

@@ -34,6 +34,8 @@ class HomeScreen extends StatelessWidget {
               _buildCropSelectorRow(context),
               const SizedBox(height: 16),
               _buildLiveMandiCard(context),
+              const SizedBox(height: 10),
+              _buildMarketTicker(context),
               const SizedBox(height: 12),
               _buildWeatherSprayAdvisoryCard(context),
               const SizedBox(height: 16),
@@ -51,80 +53,112 @@ class HomeScreen extends StatelessWidget {
   Widget _buildTopHeader(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppConstants.primaryLight,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppConstants.primaryGreen, width: 1.5),
-          ),
-          child: Center(
-            child: Text(
-              session.name.isNotEmpty ? session.name[0] : 'K',
-              style: const TextStyle(
-                color: AppConstants.primaryDark,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppConstants.primaryLight,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppConstants.primaryGreen, width: 1.5),
               ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Namaste, ${session.name.split(' ').first}',
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                      color: AppConstants.textDark,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.verified_rounded,
-                    color: AppConstants.primaryGreen,
-                    size: 16,
-                  ),
-                ],
-              ),
-              Text(
-                '${session.district}, ${session.state}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppConstants.textMuted,
+              child: const Center(
+                child: Icon(
+                  Icons.eco_rounded,
+                  color: AppConstants.primaryGreen,
+                  size: 20,
                 ),
               ),
-            ],
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'NuKropAI',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: AppConstants.primaryDark,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
+        ),
+        const Spacer(),
+        GestureDetector(
+          onTap: onOpenLanguageSheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'English',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppConstants.textDark,
+                  ),
+                ),
+                SizedBox(width: 4),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: AppConstants.textDark,
+                ),
+              ],
+            ),
           ),
         ),
-        IconButton(
-          icon: const Icon(Icons.language_rounded, color: AppConstants.textDark),
-          onPressed: onOpenLanguageSheet,
-        ),
+        const SizedBox(width: 10),
         Stack(
+          clipBehavior: Clip.none,
           children: [
-            IconButton(
-              icon: const Icon(
-                Icons.notifications_none_rounded,
-                color: AppConstants.textDark,
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppConstants.primaryLight.withAlpha(140),
+                shape: BoxShape.circle,
               ),
-              onPressed: onOpenNotifications,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppConstants.textDark,
+                  size: 20,
+                ),
+                onPressed: onOpenNotifications,
+              ),
             ),
             Positioned(
-              right: 10,
-              top: 10,
+              right: -1,
+              top: -1,
               child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
+                padding: const EdgeInsets.all(2),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                decoration: BoxDecoration(
                   color: AppConstants.dangerRed,
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: const Center(
+                  child: Text(
+                    '4',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      height: 1.0,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -215,119 +249,227 @@ class HomeScreen extends StatelessWidget {
   Widget _buildLiveMandiCard(BuildContext context) {
     return Card(
       margin: EdgeInsets.zero,
+      elevation: 0.5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppConstants.primaryLight,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.bar_chart_rounded,
+                          color: AppConstants.primaryGreen,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Live Mandi Rates',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppConstants.textDark,
+                                  ),
+                                ),
+                                SizedBox(width: 4),
+                                Icon(
+                                  Icons.refresh_rounded,
+                                  size: 14,
+                                  color: AppConstants.textMuted,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on_rounded,
+                                  size: 12,
+                                  color: AppConstants.dangerRed,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '${session.district.isNotEmpty ? session.district : "Markapur"} APMC',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppConstants.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppConstants.primaryLight,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.storefront_rounded,
-                        color: AppConstants.primaryDark,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
                       children: [
-                        const Text(
-                          'Live Mandi Rates',
+                        Text(
+                          '₹8,000',
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
                             color: AppConstants.textDark,
                           ),
                         ),
                         Text(
-                          'Warangal APMC Yard',
-                          style: const TextStyle(
-                            fontSize: 12,
+                          ' /Qtl',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
                             color: AppConstants.textMuted,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppConstants.primaryLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        '🏛️ Agmarknet Live',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: AppConstants.primaryDark,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                TextButton(
-                  onPressed: () => onNavigateToScreen(AppConstants.viewMarket),
-                  child: const Text(
-                    'View All >',
-                    style: TextStyle(
-                      color: AppConstants.primaryGreen,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.show_chart_rounded, size: 14),
+                    label: const Text(
+                      'Price Trend',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppConstants.textDark,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    onPressed: () => onNavigateToScreen(AppConstants.viewMarket),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.notifications_active_outlined, size: 14),
+                    label: const Text(
+                      'Set Price Alert',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppConstants.textDark,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    onPressed: () {
+                      LuxuryToast.show(
+                        context,
+                        message: 'Price Alert set for ${session.activeCrops.firstOrNull ?? "Cotton"} at ₹8,200',
+                        icon: Icons.check_circle_rounded,
+                      );
+                    },
                   ),
                 ),
               ],
             ),
-            const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Cotton (Medium Staple)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppConstants.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'MSP: ₹7,121 / Qtl',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppConstants.textMuted,
-                      ),
-                    ),
-                  ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarketTicker(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onNavigateToScreen(AppConstants.viewMarket),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppConstants.primaryLight,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                '🌾 MARKET',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: AppConstants.primaryDark,
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text(
-                      '₹7,850 / Qtl',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppConstants.primaryDark,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.arrow_upward_rounded,
-                          size: 12,
-                          color: AppConstants.primaryGreen,
-                        ),
-                        Text(
-                          '+₹120 today',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppConstants.primaryGreen,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Markapur APMC • Paddy ₹2,380 • Chilli ₹18,400 • Cotton ₹7,850',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppConstants.textDark,
                 ),
-              ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: AppConstants.textMuted,
             ),
           ],
         ),

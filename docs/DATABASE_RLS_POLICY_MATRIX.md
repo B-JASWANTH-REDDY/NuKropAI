@@ -43,3 +43,4 @@ Every table storing user or transactional data has RLS enabled with **Deny-by-De
 3. **`land-deeds` (Confidential Bucket)**:
    - Private bucket with short-lived signed URLs (15-minute validity).
    - Zero direct public URL access permitted.
+

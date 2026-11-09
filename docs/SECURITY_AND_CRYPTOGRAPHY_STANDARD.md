@@ -46,3 +46,4 @@
    - APK and source assets contain zero hardcoded API secrets, private service keys, or staging credentials.
 4. **Logging Restrictions**:
    - Loggers, crashlytics, and analytics sanitize all requests: passwords, tokens, OTP codes, and private document URLs are stripped prior to emission.
+

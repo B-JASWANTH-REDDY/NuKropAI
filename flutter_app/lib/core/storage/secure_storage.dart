@@ -49,3 +49,4 @@ class SecureStorage {
     return prefs.getBool(_keyOnboardingDone) ?? false;
   }
 }
+

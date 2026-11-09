@@ -71,3 +71,4 @@ class UserSession {
     activeCrops: ['Cotton', 'Chilli'],
   );
 }
+

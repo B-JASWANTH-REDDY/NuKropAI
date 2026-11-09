@@ -93,3 +93,4 @@ On user sign-out (`SecureStorage.clearSession()`):
 1. **Local Purge**: Wipe all JWT access tokens, refresh tokens, and cached farmer profile records from local storage.
 2. **Server Revocation**: Invalidate active session tokens on Supabase / Fastify server.
 3. **Tenant Switch Safety**: Ensure Farmer B logging into the same device cannot access Farmer A's cached khata entries or foliar scan history. Verified by Mandatory User Journey H.
+

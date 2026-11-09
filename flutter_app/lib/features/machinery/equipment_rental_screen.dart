@@ -109,3 +109,4 @@ class EquipmentRentalScreen extends StatelessWidget {
     );
   }
 }
+

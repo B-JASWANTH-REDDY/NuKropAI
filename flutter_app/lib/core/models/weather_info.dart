@@ -43,3 +43,4 @@ class WeatherInfo {
     sprayWindow: '07:30 AM - 10:30 AM',
   );
 }
+

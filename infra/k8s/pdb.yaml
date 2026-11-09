@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: nukropai-backend-pdb
+  namespace: nukropai
+  labels:
+    app.kubernetes.io/name: nukropai-backend
+    app.kubernetes.io/part-of: nukropai-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nukropai-backend

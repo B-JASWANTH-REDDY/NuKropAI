@@ -37,3 +37,4 @@ class CropDisease {
     organicControls: 'Neem seed kernel extract (NSKE 5%), cow urine + asafoetida foliar spray.',
   );
 }
+

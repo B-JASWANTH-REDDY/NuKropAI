@@ -142,3 +142,4 @@ flutter_app/
    - Drivers attempting to enter farmer-only views are intercepted and redirected to `DriverDashboardScreen`.
    - Farmers attempting to enter driver cockpits are redirected to `GramHaulScreen`.
    - Role switching requires an explicit sign-out via `SecureStorage.clearSession()`.
+

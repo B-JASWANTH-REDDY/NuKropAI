@@ -22369,20 +22369,35 @@ function getMandiDefaults(slug, preferredState = null) {
     });
 
     if (stateMatches.length > 0) {
-      // If user has live GPS coordinates, find nearest APMC in the state
-      const sLat = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('user_live_lat')) : NaN;
-      const sLon = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('user_live_lon')) : NaN;
-      if (!isNaN(sLat) && !isNaN(sLon) && typeof REAL_APMC_MANDIS !== 'undefined' && typeof calculateHaversineKm === 'function') {
-        const sorted = [...stateMatches].sort((a, b) => {
-          const mA = REAL_APMC_MANDIS.find(m => ((a.mandi && a.mandi.en) || '').toLowerCase().includes((m.shortName || m.name).toLowerCase()));
-          const mB = REAL_APMC_MANDIS.find(m => ((b.mandi && b.mandi.en) || '').toLowerCase().includes((m.shortName || m.name).toLowerCase()));
-          const distA = (mA && mA.coords) ? calculateHaversineKm(sLat, sLon, mA.coords[0], mA.coords[1]) : 999;
-          const distB = (mB && mB.coords) ? calculateHaversineKm(sLat, sLon, mB.coords[0], mB.coords[1]) : 999;
-          return distA - distB;
+      // Priority A: If user has a detected district, prioritize APMC in that district!
+      const userDistrict = (typeof localStorage !== 'undefined' && (localStorage.getItem('user_live_district') || localStorage.getItem('user_live_city')) || '').toLowerCase().trim();
+      if (userDistrict) {
+        const distMatch = stateMatches.find(m => {
+          const d = String(m.district || '').toLowerCase();
+          const mName = ((m.mandi && (m.mandi.en + ' ' + (m.mandi.te||'') + ' ' + (m.mandi.hi||''))) || '').toLowerCase();
+          return (d && userDistrict.includes(d)) || (d && d.includes(userDistrict)) || mName.includes(userDistrict);
         });
-        found = sorted[0];
-      } else {
-        found = stateMatches[0];
+        if (distMatch) {
+          found = distMatch;
+        }
+      }
+
+      // Priority B: If user has live GPS coordinates, find nearest APMC in the state
+      if (!found) {
+        const sLat = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('user_live_lat')) : NaN;
+        const sLon = typeof localStorage !== 'undefined' ? parseFloat(localStorage.getItem('user_live_lon')) : NaN;
+        if (!isNaN(sLat) && !isNaN(sLon) && typeof REAL_APMC_MANDIS !== 'undefined' && typeof calculateHaversineKm === 'function') {
+          const sorted = [...stateMatches].sort((a, b) => {
+            const mA = REAL_APMC_MANDIS.find(m => ((a.mandi && a.mandi.en) || '').toLowerCase().includes((m.shortName || m.name).toLowerCase()));
+            const mB = REAL_APMC_MANDIS.find(m => ((b.mandi && b.mandi.en) || '').toLowerCase().includes((m.shortName || m.name).toLowerCase()));
+            const distA = (mA && mA.coords) ? calculateHaversineKm(sLat, sLon, mA.coords[0], mA.coords[1]) : 999;
+            const distB = (mB && mB.coords) ? calculateHaversineKm(sLat, sLon, mB.coords[0], mB.coords[1]) : 999;
+            return distA - distB;
+          });
+          found = sorted[0];
+        } else {
+          found = stateMatches[0];
+        }
       }
     }
   }
@@ -22417,7 +22432,10 @@ function getMandiDefaults(slug, preferredState = null) {
   };
 }
 
-function formatMandiBadge(badge, tradeDate) {
+function formatMandiBadge(badge, tradeDate, isCompact = false) {
+  if (isCompact) {
+    return '🏛️ Agmarknet Live';
+  }
   const dateStr = tradeDate || '';
   if (!badge) {
     return dateStr ? `🏛️ Agmarknet · ${dateStr}` : '🏛️ Agmarknet Live';
@@ -22914,9 +22932,9 @@ function getCurrentFarmerVillage() {
 
 function rehydrateCommunityStories() {
   try {
-    // Purge any stock Unsplash avatar from user storage
+    // Purge any stock photo / external avatar from user storage
     const storedUserAvatar = localStorage.getItem('nukrop_user_avatar');
-    if (storedUserAvatar && (storedUserAvatar.includes('unsplash.com') || storedUserAvatar.includes('placeholder'))) {
+    if (storedUserAvatar && (storedUserAvatar.startsWith('http://') || storedUserAvatar.startsWith('https://') || storedUserAvatar.includes('unsplash') || storedUserAvatar.includes('placeholder') || storedUserAvatar.includes('pravatar') || storedUserAvatar.includes('randomuser'))) {
       localStorage.removeItem('nukrop_user_avatar');
     }
 
@@ -22924,20 +22942,20 @@ function rehydrateCommunityStories() {
     if (rawStories) {
       let parsed = JSON.parse(rawStories);
       if (Array.isArray(parsed)) {
-        // Strip out fake Jacku7376 story and non-authentic images
+        // Strip out any fake stories, dummy names, or non-authentic images
         parsed = parsed.filter(s => {
           if (!s) return false;
-          const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || '');
+          const aName = typeof s.author === 'object' ? (s.author.en || '') : String(s.author || s.author_name || '');
           const sTitle = typeof s.title === 'object' ? (s.title.en || '') : String(s.title || '');
           const sUid = String(s.user_id || '');
           if (/jacku|test|dummy|fake|sample/i.test(aName) || /jacku|test|dummy/i.test(sTitle) || /jacku|test/i.test(sUid)) return false;
-          if (s.avatarUrl && (s.avatarUrl.includes('unsplash.com') || s.avatarUrl.includes('placeholder'))) {
+          if (s.avatarUrl && (s.avatarUrl.startsWith('http') || s.avatarUrl.includes('unsplash') || s.avatarUrl.includes('placeholder'))) {
             s.avatarUrl = null;
           }
-          if (!s.mediaUrl || s.mediaUrl.includes('unsplash.com') || s.mediaUrl.includes('placeholder')) {
+          if (!s.mediaUrl || s.mediaUrl.startsWith('http') || s.mediaUrl.includes('unsplash') || s.mediaUrl.includes('placeholder')) {
             return false;
           }
-          // Only permit genuine user uploads (data URI or authentic upload)
+          // Only permit genuine user uploads (data URI or blob)
           if (!s.mediaUrl.startsWith('data:image/') && !s.mediaUrl.startsWith('blob:')) {
             return false;
           }
@@ -22949,7 +22967,7 @@ function rehydrateCommunityStories() {
 
     const userStories = JSON.parse(localStorage.getItem('nukrop_community_stories') || '[]');
     if (Array.isArray(userStories)) {
-      const valid = userStories.filter(u => u && u.id && u.mediaUrl && (u.mediaUrl.startsWith('data:image/') || u.mediaUrl.startsWith('blob:')));
+      const valid = userStories.filter(u => u && u.id && u.mediaUrl && (u.mediaUrl.startsWith('data:image/') || u.mediaUrl.startsWith('blob:')) && !/jacku|test|dummy|fake|sample/i.test(typeof u.author === 'object' ? (u.author.en || '') : String(u.author || u.author_name || '')));
       COMMUNITY_STORIES_CATALOG = valid;
     } else {
       COMMUNITY_STORIES_CATALOG = [];
@@ -24453,18 +24471,28 @@ function generateCommunityFeedHtml(posts) {
     return true;
   });
 
-  // Strict deduplication by normalized content signature (author + title)
+  // Strict deduplication by normalized content signature (author + title + content)
   const seenSignatures = new Set();
   const dedupedPosts = [];
   for (const p of activePosts) {
-    const authorStr = ((p.author && (p.author.en || (typeof currentLang !== 'undefined' && p.author[currentLang]))) || p.author_name || '').trim().toLowerCase();
-    const titleStr = ((p.title && (p.title.en || (typeof currentLang !== 'undefined' && p.title[currentLang]))) || p.title || '').trim().toLowerCase();
-    const contentStr = ((p.text && (p.text.en || (typeof currentLang !== 'undefined' && p.text[currentLang]))) || p.content || '').trim().toLowerCase();
+    const authorStr = (typeof p.author === 'object' && p.author !== null ? (p.author[currentLang] || p.author.en || '') : String(p.author || p.author_name || '')).trim().toLowerCase();
+    const titleStr = (typeof p.title === 'object' && p.title !== null ? (p.title[currentLang] || p.title.en || '') : String(p.title || '')).trim().toLowerCase();
+    const contentStr = (typeof p.text === 'object' && p.text !== null ? (p.text[currentLang] || p.text.en || '') : String(p.text || p.content || '')).trim().toLowerCase();
+    const idSig = p.id ? String(p.id).trim().toLowerCase() : '';
     const signature = `${authorStr}:::${titleStr}`;
     const contentSig = `${titleStr}:::${contentStr.slice(0, 40)}`;
-    if (seenSignatures.has(signature) || (titleStr && seenSignatures.has(contentSig))) continue;
-    seenSignatures.add(signature);
+    const titleOnlySig = titleStr ? `title:::${titleStr}` : '';
+
+    if ((idSig && seenSignatures.has('id:' + idSig)) || 
+        (signature !== ':::' && seenSignatures.has(signature)) || 
+        (titleStr && seenSignatures.has(contentSig)) ||
+        (titleOnlySig && seenSignatures.has(titleOnlySig))) {
+      continue;
+    }
+    if (idSig) seenSignatures.add('id:' + idSig);
+    if (signature !== ':::') seenSignatures.add(signature);
     if (titleStr) seenSignatures.add(contentSig);
+    if (titleOnlySig) seenSignatures.add(titleOnlySig);
     dedupedPosts.push(p);
   }
 
@@ -32621,7 +32649,7 @@ const APP_VIEWS = {
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             <circle cx="12" cy="3" r="1" fill="#15803D"/>
           </svg>
-          ${(()=>{ const uc = APP_NOTIFICATIONS.filter(n=>!n.read).length; return uc > 0 ? `<span id="notif-bell-badge" style="position:absolute;top:-2px;right:-2px;background:#DC2626;color:#FFFFFF;border:2px solid #FFFFFF;border-radius:10px;min-width:18px;height:18px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;box-shadow:0 2px 6px rgba(220,38,38,0.45);pointer-events:none;box-sizing:border-box;">${uc}</span>` : ''; })()}
+          ${(()=>{ const uc = APP_NOTIFICATIONS.filter(n=>!n.read).length; return uc > 0 ? `<span id="notif-bell-badge" style="position:absolute;top:0px;right:0px;background:#DC2626;color:#FFFFFF;border:1.5px solid #FFFFFF;border-radius:9px;min-width:16px;height:16px;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 3px;box-shadow:0 1px 4px rgba(220,38,38,0.4);pointer-events:none;box-sizing:border-box;">${uc}</span>` : ''; })()}
         </button>
       </div>
     </div>
@@ -32652,25 +32680,25 @@ const APP_VIEWS = {
       <div id="home-mandi-card-container" style="padding:14px 16px;background:#FFFFFF;border-radius:20px;border:1px solid #E2E8F0;box-shadow:0 2px 10px rgba(0,0,0,0.03);transition:all 0.3s ease;">
         <div style="cursor:pointer;" onclick="openScreen('market',null);syncSideNav('btn-market')">
           <!-- Row 1: Live Title + Refresh + Live Price -->
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
-            <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-              <div style="width:36px;height:36px;border-radius:10px;background:#F0FDF4;border:1px solid #DCFCE7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:nowrap;">
+            <div style="display:flex;align-items:center;gap:7px;flex-shrink:0;">
+              <div style="width:34px;height:34px;border-radius:10px;background:#F0FDF4;border:1px solid #DCFCE7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               </div>
-              <div style="display:flex;align-items:center;gap:5px;min-width:0;">
-                <span style="font-size:14px;font-weight:900;color:#0F172A;white-space:nowrap;">${t.liveMandiTitle}</span>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                <span style="font-size:13.5px;font-weight:900;color:#0F172A;white-space:nowrap;">${t.liveMandiTitle}</span>
                 <button id="home-mandi-refresh-btn" onclick="event.stopPropagation();refreshMandiRatesLive();" style="background:none;border:none;cursor:pointer;font-size:11px;padding:2px;color:#64748B;line-height:1;display:inline-flex;align-items:center;" title="Refresh live rate"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></button>
               </div>
             </div>
-            <div id="home-mandi-live-price" style="font-size:18px;font-weight:900;color:#0F172A;line-height:1;white-space:nowrap;flex-shrink:0;">${mandiInfo.price} <span style="font-size:11px;color:#64748B;font-weight:700;">${mandiInfo.unit}</span></div>
+            <div id="home-mandi-live-price" style="font-size:17px;font-weight:900;color:#0F172A;line-height:1;white-space:nowrap;flex-shrink:0;text-align:right;">${mandiInfo.price} <span style="font-size:10.5px;color:#64748B;font-weight:700;">${mandiInfo.unit}</span></div>
           </div>
           <!-- Row 2: Crop Pill + Mandi Name + Live Badge -->
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;">
-            <div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;flex:1;">
               <span style="background:#F0FDF4;color:#16A34A;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;border:1px solid #BBF7D0;white-space:nowrap;flex-shrink:0;">🌾 ${cropName}</span>
               <span style="font-size:11px;color:#64748B;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 ${mandiName}</span>
             </div>
-            <div id="home-mandi-live-change" style="font-size:9.5px;font-weight:800;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:2px 7px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;">${formatMandiBadge(mandiInfo.catalogItem && mandiInfo.catalogItem.badge, mandiInfo.catalogItem && mandiInfo.catalogItem.tradeDate)}</div>
+            <div id="home-mandi-live-change" style="font-size:9.5px;font-weight:800;color:#15803D;background:#DCFCE7;border:1px solid #86EFAC;padding:2px 7px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;white-space:nowrap;flex-shrink:0;">${formatMandiBadge(mandiInfo.catalogItem && mandiInfo.catalogItem.badge, mandiInfo.catalogItem && mandiInfo.catalogItem.tradeDate, true)}</div>
           </div>
         </div>
 
@@ -32693,7 +32721,7 @@ const APP_VIEWS = {
       <span style="background:#F0FDF4;color:#15803D;border:1px solid #DCFCE7;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:900;letter-spacing:0.02em;flex-shrink:0;z-index:2;">
         🌾 ${TL('MARKET', 'మార్కెట్', 'मंडी')}
       </span>
-      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 4px 0 8px;-webkit-mask-image:linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);mask-image:linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);">
+      <div style="flex:1;overflow:hidden;position:relative;white-space:nowrap;padding:0 4px 0 2px;">
         <div class="news-ticker-track">
           ${renderLiveMandiTickerItemsHtml()}
         </div>
@@ -40710,11 +40738,19 @@ Respond strictly in valid JSON matching this schema:
     const diagBox = document.getElementById('scan-diag-box');
     const resultContent = document.getElementById('scan-result-content');
 
-    // ── CHECK IF IMAGE WAS NON-PLANT / UNKNOWN SUBJECT ──
-    const isUnknownOrNonCrop = aiPrediction && (aiPrediction.isPlantOrSoil === false || String(aiPrediction.diseaseName || '').toLowerCase().includes('unknown') || String(aiPrediction.diseaseName || '').toLowerCase().includes('non-crop'));
+    // ── CHECK IF IMAGE WAS NON-PLANT / UNKNOWN SUBJECT OR UNVERIFIED CUSTOM IMAGE ──
+    const isExplicitNonCrop = aiPrediction && (aiPrediction.isPlantOrSoil === false || String(aiPrediction.diseaseName || '').toLowerCase().includes('unknown') || String(aiPrediction.diseaseName || '').toLowerCase().includes('non-crop'));
+    const isUnverifiedCustomImage = (!isAiLive && uploadedScanImageData && !window._isOfficialBotanicalSample);
 
-    if (isUnknownOrNonCrop) {
+    if (isExplicitNonCrop || isUnverifiedCustomImage) {
       if (resultContent && diagBox) {
+        const titleText = isExplicitNonCrop 
+          ? TL('Invalid / Non-Agricultural Image', 'వ్యవసాయ పంట లేదా నేల చిత్రం కాదు', 'अमान्य / गैर-कृषि तस्वीर')
+          : TL('Real AI Vision API Key Required', 'రియల్ AI విజన్ కీ అవసరం', 'रीयल AI विजन API कुंजी आवश्यक');
+        const reasonText = isExplicitNonCrop
+          ? (aiPrediction.symptoms || TL('The uploaded photo does not contain an agricultural crop leaf, plant stem, or farm soil specimen. NuKropAI does not generate artificial or hallucinated disease prescriptions for non-agricultural objects.', 'ఈ చిత్రం వ్యవసాయ పంట ఆకు లేదా నేల నమూనా కాదు. పంటలు కాని వస్తువులకు న్యుక్రాప్ AI తప్పుడు రసాయన మందులను సూచించదు.', 'अपलोड की गई तस्वीर में कोई कृषि फसल, पत्ता या मिट्टी नहीं है। गैर-कृषि वस्तुओं के लिए कोई रासायनिक कीटनाशक सुझाव नहीं दिया जाता।'))
+          : TL('To analyze custom field photos without hallucination, NuKropAI requires a live Vision AI connection (Groq or Gemini). Please enter your API key or point the camera directly at an authentic crop leaf in daylight.', 'కస్టమ్ ఫోటోల ఖచ్చితమైన విశ్లేషణకు లైవ్ AI విజన్ కనెక్షన్ అవసరం. దయచేసి API కీని నమోదు చేయండి లేదా స్పష్టమైన పంట ఆకును చూపించండి.', 'सटीक परिणाम के लिए रीयल AI विज़न कनेक्शन आवश्यक है। कृपया अपनी API कुंजी दर्ज करें या स्पष्ट पत्ता स्कैन करें।');
+
         resultContent.innerHTML = `
           <div class="scan-result-card" style="background:#FFFFFF;border-radius:20px;border:2px solid #EF4444;box-shadow:0 8px 30px rgba(239,68,68,0.18);overflow:hidden;">
             <div style="background:linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);color:#FFFFFF;padding:16px;display:flex;align-items:center;justify-content:space-between;">
@@ -40723,12 +40759,12 @@ Respond strictly in valid JSON matching this schema:
                   <span style="width:7px;height:7px;border-radius:50%;background:#F87171;box-shadow:0 0 6px #F87171;"></span>
                   NuKropAI Vision Engine · Authenticity Check
                 </div>
-                <div style="font-size:17px;font-weight:900;margin-top:2px;">⚠️ ${TL('Invalid / Non-Agricultural Image', 'వ్యవసాయ పంట లేదా నేల చిత్రం కాదు', 'अमान्य / गैर-कृषि तस्वीर')}</div>
-                <div style="font-size:11.5px;color:#FEE2E2;margin-top:3px;font-weight:700;">${TL('Detected Subject', 'గుర్తించబడినది', 'पहचाना गया')}: ${aiPrediction.detectedSubject || 'Non-crop object'}</div>
+                <div style="font-size:17px;font-weight:900;margin-top:2px;">⚠️ ${titleText}</div>
+                <div style="font-size:11.5px;color:#FEE2E2;margin-top:3px;font-weight:700;">${isExplicitNonCrop ? (TL('Detected Subject', 'గుర్తించబడినది', 'पहचाना गया') + ': ' + (aiPrediction.detectedSubject || 'Non-crop object')) : TL('Status: Live API Verification Pending', 'స్థితి: లైవ్ API ధృవీకరణ పెండింగ్‌లో ఉంది', 'स्थिति: लाइव API सत्यापन लंबित')}</div>
               </div>
               <div style="background:rgba(255,255,255,0.22);padding:6px 12px;border-radius:14px;backdrop-filter:blur(4px);text-align:center;">
                 <div style="font-size:9px;font-weight:800;color:#FEE2E2;">STATUS</div>
-                <div style="font-size:13px;font-weight:900;color:#FFFFFF;">REJECTED</div>
+                <div style="font-size:13px;font-weight:900;color:#FFFFFF;">${isExplicitNonCrop ? 'REJECTED' : 'UNVERIFIED'}</div>
               </div>
             </div>
 
@@ -40742,7 +40778,7 @@ Respond strictly in valid JSON matching this schema:
               <div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:14px;padding:14px;">
                 <div style="font-size:12px;font-weight:900;color:#991B1B;margin-bottom:6px;">⚠️ ${TL('Authentication Notice', 'ప్రామాణికత నివేదిక', 'सत्यापन सूचना')}</div>
                 <div style="font-size:12px;color:#7F1D1D;line-height:1.5;font-weight:600;">
-                  ${aiPrediction.symptoms || TL('The uploaded photo does not contain an agricultural crop leaf, plant stem, or farm soil specimen. NuKropAI does not generate artificial or hallucinated disease prescriptions for non-agricultural objects.', 'ఈ చిత్రం వ్యవసాయ పంట ఆకు లేదా నేల నమూనా కాదు. పంటలు కాని వస్తువులకు న్యుక్రాప్ AI తప్పుడు రసాయన మందులను సూచించదు.', 'अपलोड की गई तस्वीर में कोई कृषि फसल, पत्ता या मिट्टी नहीं है। गैर-कृषि वस्तुओं के लिए कोई रासायनिक कीटनाशक सुझाव नहीं दिया जाता।')}
+                  ${reasonText}
                 </div>
               </div>
 

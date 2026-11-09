@@ -170,3 +170,4 @@ class AgriStackPassportScreen extends StatelessWidget {
     );
   }
 }
+

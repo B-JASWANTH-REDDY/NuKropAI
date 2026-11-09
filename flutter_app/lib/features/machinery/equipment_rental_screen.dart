@@ -61,7 +61,8 @@ class EquipmentRentalScreen extends StatelessWidget {
                       Expanded(
                         child: Text(
                           item['title']!,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800),
                         ),
                       ),
                       Text(
@@ -77,12 +78,14 @@ class EquipmentRentalScreen extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${item["provider"]} • 📍 ${item["distance"]}',
-                    style: const TextStyle(fontSize: 12, color: AppConstants.textMuted),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppConstants.textMuted),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Attachment: ${item["implements"]}',
-                    style: const TextStyle(fontSize: 12, color: AppConstants.textDark),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppConstants.textDark),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -109,4 +112,3 @@ class EquipmentRentalScreen extends StatelessWidget {
     );
   }
 }
-

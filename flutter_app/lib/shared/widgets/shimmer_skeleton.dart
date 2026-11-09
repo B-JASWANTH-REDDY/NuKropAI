@@ -64,4 +64,3 @@ class _ShimmerSkeletonState extends State<ShimmerSkeleton>
     );
   }
 }
-

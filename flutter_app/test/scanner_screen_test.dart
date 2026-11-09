@@ -16,7 +16,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('DiseaseScannerScreen mounts and displays initial camera viewport', (WidgetTester tester) async {
+  testWidgets(
+      'DiseaseScannerScreen mounts and displays initial camera viewport',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: DiseaseScannerScreen(),
@@ -28,26 +30,32 @@ void main() {
     expect(find.byIcon(Icons.camera_alt_rounded), findsOneWidget);
   });
 
-  testWidgets('DiseaseScannerScreen rejects non-crop image with authenticity check notice', (WidgetTester tester) async {
+  testWidgets(
+      'DiseaseScannerScreen rejects non-crop image with authenticity check notice',
+      (WidgetTester tester) async {
     final mockClient = MockClient((request) async {
       if (request.url.path.contains('/ai/diagnose-crop')) {
-        return http.Response(jsonEncode({
-          'status': 'success',
-          'ai_prediction': {
-            'isPlantOrSoil': false,
-            'detectedSubject': 'Automobile',
-            'diseaseName': 'Unknown / Non-Crop Image',
-            'severity': 'None',
-            'confidence': 0,
-            'pathogen': 'None',
-            'symptoms': 'The provided image is an automobile, not an agricultural crop foliage.',
-            'chemicalSolution': 'None applicable.',
-            'organicSolution': 'None required.',
-            'sprayAdvisory': 'N/A'
-          },
-          'provenance': 'Groq AI Cloud (qwen/qwen3.8-27b Multimodal Vision)',
-          'timestamp': DateTime.now().toIso8601String(),
-        }), 200);
+        return http.Response(
+            jsonEncode({
+              'status': 'success',
+              'ai_prediction': {
+                'isPlantOrSoil': false,
+                'detectedSubject': 'Automobile',
+                'diseaseName': 'Unknown / Non-Crop Image',
+                'severity': 'None',
+                'confidence': 0,
+                'pathogen': 'None',
+                'symptoms':
+                    'The provided image is an automobile, not an agricultural crop foliage.',
+                'chemicalSolution': 'None applicable.',
+                'organicSolution': 'None required.',
+                'sprayAdvisory': 'N/A'
+              },
+              'provenance':
+                  'Groq AI Cloud (qwen/qwen3.8-27b Multimodal Vision)',
+              'timestamp': DateTime.now().toIso8601String(),
+            }),
+            200);
       }
       return http.Response(jsonEncode({}), 200);
     });
@@ -64,4 +72,3 @@ void main() {
     expect(find.text('Authenticity Verification Notice'), findsNothing);
   });
 }
-

@@ -12,7 +12,8 @@ class BioRxScreen extends StatefulWidget {
 }
 
 class _BioRxScreenState extends State<BioRxScreen> {
-  final TextEditingController _acresController = TextEditingController(text: '4.5');
+  final TextEditingController _acresController =
+      TextEditingController(text: '4.5');
   String _selectedChemical = 'Diafenthiuron 50% WP';
   double _tankSize = 16.0; // Liters per knapsack
 
@@ -54,7 +55,8 @@ class _BioRxScreenState extends State<BioRxScreen> {
                   children: [
                     const Text(
                       'Crop & Acreage Parameters',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -63,7 +65,8 @@ class _BioRxScreenState extends State<BioRxScreen> {
                           child: TextField(
                             controller: _acresController,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Farm Acreage (Acres)'),
+                            decoration: const InputDecoration(
+                                labelText: 'Farm Acreage (Acres)'),
                             onChanged: (_) => setState(() {}),
                           ),
                         ),
@@ -71,11 +74,15 @@ class _BioRxScreenState extends State<BioRxScreen> {
                         Expanded(
                           child: DropdownButtonFormField<double>(
                             initialValue: _tankSize,
-                            decoration: const InputDecoration(labelText: 'Sprayer Tank'),
+                            decoration: const InputDecoration(
+                                labelText: 'Sprayer Tank'),
                             items: [12.0, 16.0, 20.0]
-                                .map((s) => DropdownMenuItem(value: s, child: Text('${s.toInt()} Liters')))
+                                .map((s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text('${s.toInt()} Liters')))
                                 .toList(),
-                            onChanged: (val) => setState(() => _tankSize = val!),
+                            onChanged: (val) =>
+                                setState(() => _tankSize = val!),
                           ),
                         ),
                       ],
@@ -83,14 +90,19 @@ class _BioRxScreenState extends State<BioRxScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: _selectedChemical,
-                      decoration: const InputDecoration(labelText: 'Target Formulation'),
+                      decoration: const InputDecoration(
+                          labelText: 'Target Formulation'),
                       items: [
                         'Diafenthiuron 50% WP',
                         'Flonicamid 50 WG',
                         'Neem Oil 1500 ppm',
                         'Acetamiprid 20 SP',
-                      ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                      onChanged: (val) => setState(() => _selectedChemical = val!),
+                      ]
+                          .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)))
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => _selectedChemical = val!),
                     ),
                   ],
                 ),
@@ -114,11 +126,16 @@ class _BioRxScreenState extends State<BioRxScreen> {
                       ),
                     ),
                     const Divider(height: 20),
-                    _buildRecipeRow('Total Spray Water Required', '${_totalWater.toInt()} Liters'),
-                    _buildRecipeRow('Knapsack Sprayer Charges', '$_knapsackCharges Tanks (${_tankSize.toInt()}L each)'),
-                    _buildRecipeRow('Active Formulation Required', '${(_totalChemicalGrams / 1000).toStringAsFixed(2)} kg'),
-                    _buildRecipeRow('Dosage Per Knapsack Tank', '${(_totalChemicalGrams / _knapsackCharges).toStringAsFixed(1)} grams / tank'),
-                    _buildRecipeRow('Pre-Harvest Waiting Interval (PHI)', '14 Days'),
+                    _buildRecipeRow('Total Spray Water Required',
+                        '${_totalWater.toInt()} Liters'),
+                    _buildRecipeRow('Knapsack Sprayer Charges',
+                        '$_knapsackCharges Tanks (${_tankSize.toInt()}L each)'),
+                    _buildRecipeRow('Active Formulation Required',
+                        '${(_totalChemicalGrams / 1000).toStringAsFixed(2)} kg'),
+                    _buildRecipeRow('Dosage Per Knapsack Tank',
+                        '${(_totalChemicalGrams / _knapsackCharges).toStringAsFixed(1)} grams / tank'),
+                    _buildRecipeRow(
+                        'Pre-Harvest Waiting Interval (PHI)', '14 Days'),
                   ],
                 ),
               ),
@@ -147,8 +164,14 @@ class _BioRxScreenState extends State<BioRxScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppConstants.textDark)),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppConstants.primaryDark)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, color: AppConstants.textDark)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppConstants.primaryDark)),
         ],
       ),
     );

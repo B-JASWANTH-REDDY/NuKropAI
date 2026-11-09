@@ -60,7 +60,8 @@ class ProfileScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppConstants.dangerRed),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppConstants.dangerRed),
             onPressed: () async {
               Navigator.pop(ctx);
               await SecureStorage.clearSession();
@@ -102,7 +103,8 @@ class ProfileScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: AppConstants.primaryLight,
                         shape: BoxShape.circle,
-                        border: Border.all(color: AppConstants.primaryGreen, width: 2),
+                        border: Border.all(
+                            color: AppConstants.primaryGreen, width: 2),
                       ),
                       child: Center(
                         child: Text(
@@ -140,7 +142,9 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            session.phone.isNotEmpty ? session.phone : '+91 98765 43210',
+                            session.phone.isNotEmpty
+                                ? session.phone
+                                : '+91 98765 43210',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppConstants.textMuted,
@@ -179,10 +183,14 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                     const Divider(height: 20),
-                    _buildProfileRow('Total Farm Land', '4.5 Acres (Warangal Rural)'),
-                    _buildProfileRow('Active Cultivation', session.activeCrops.join(', ')),
-                    _buildProfileRow('Soil Category', 'Black Cotton Soil (Vertisol)'),
-                    _buildProfileRow('AgriStack Farmer ID', 'AP-TEL-2026-88194'),
+                    _buildProfileRow(
+                        'Total Farm Land', '4.5 Acres (Warangal Rural)'),
+                    _buildProfileRow(
+                        'Active Cultivation', session.activeCrops.join(', ')),
+                    _buildProfileRow(
+                        'Soil Category', 'Black Cotton Soil (Vertisol)'),
+                    _buildProfileRow(
+                        'AgriStack Farmer ID', 'AP-TEL-2026-88194'),
                   ],
                 ),
               ),
@@ -193,29 +201,43 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.language_rounded, color: AppConstants.primaryGreen),
-                    title: const Text('App Language', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    leading: const Icon(Icons.language_rounded,
+                        color: AppConstants.primaryGreen),
+                    title: const Text('App Language',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: onOpenLanguageSheet,
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.play_circle_outline_rounded, color: AppConstants.primaryGreen),
-                    title: const Text('Replay Splash & App Tour', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    leading: const Icon(Icons.play_circle_outline_rounded,
+                        color: AppConstants.primaryGreen),
+                    title: const Text('Replay Splash & App Tour',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: onReplaySplash,
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.privacy_tip_outlined, color: AppConstants.primaryGreen),
-                    title: const Text('DPDP 2023 Privacy Rights', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    leading: const Icon(Icons.privacy_tip_outlined,
+                        color: AppConstants.primaryGreen),
+                    title: const Text('DPDP 2023 Privacy Rights',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _showDpdpNotice(context),
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded, color: AppConstants.dangerRed),
-                    title: const Text('Delete Account & Farm Data', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppConstants.dangerRed)),
+                    leading: const Icon(Icons.delete_outline_rounded,
+                        color: AppConstants.dangerRed),
+                    title: const Text('Delete Account & Farm Data',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppConstants.dangerRed)),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => _confirmDeleteAccount(context),
                   ),
@@ -251,8 +273,14 @@ class ProfileScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppConstants.textMuted)),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppConstants.textDark)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, color: AppConstants.textMuted)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppConstants.textDark)),
         ],
       ),
     );

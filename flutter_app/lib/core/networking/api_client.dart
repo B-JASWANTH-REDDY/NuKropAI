@@ -49,7 +49,8 @@ class RateLimitException extends ApiException {
 }
 
 class ServerException extends ApiException {
-  const ServerException(super.message, {super.statusCode, super.code, super.details});
+  const ServerException(super.message,
+      {super.statusCode, super.code, super.details});
 }
 
 /// Enterprise Typed HTTP & WebSocket API Client for NuKropAI
@@ -304,7 +305,10 @@ class ApiClient {
         }
 
         // Retry transient upstream/gateway errors (502, 503, 504)
-        if ((response.statusCode == 502 || response.statusCode == 503 || response.statusCode == 504) && attempts <= maxRetries) {
+        if ((response.statusCode == 502 ||
+                response.statusCode == 503 ||
+                response.statusCode == 504) &&
+            attempts <= maxRetries) {
           await Future.delayed(Duration(milliseconds: 200 * attempts));
           continue;
         }
@@ -361,7 +365,10 @@ class ApiClient {
 
     switch (response.statusCode) {
       case 400:
-        throw ServerException(errorMessage, statusCode: 400, code: errorCode ?? 'BAD_REQUEST', details: parsedBody);
+        throw ServerException(errorMessage,
+            statusCode: 400,
+            code: errorCode ?? 'BAD_REQUEST',
+            details: parsedBody);
       case 401:
         throw UnauthorizedException(errorMessage, details: parsedBody);
       case 403:

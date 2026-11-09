@@ -74,7 +74,8 @@ class DriverDashboardScreen extends StatelessWidget {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: AppConstants.primaryGreen,
                           borderRadius: BorderRadius.circular(6),
@@ -99,8 +100,13 @@ class DriverDashboardScreen extends StatelessWidget {
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Today\'s Trips: 3 Completed', style: TextStyle(color: Colors.white, fontSize: 12)),
-                      Text('Earnings: ₹9,400', style: TextStyle(color: AppConstants.accentGold, fontSize: 14, fontWeight: FontWeight.w800)),
+                      Text('Today\'s Trips: 3 Completed',
+                          style: TextStyle(color: Colors.white, fontSize: 12)),
+                      Text('Earnings: ₹9,400',
+                          style: TextStyle(
+                              color: AppConstants.accentGold,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800)),
                     ],
                   ),
                 ],
@@ -126,7 +132,8 @@ class DriverDashboardScreen extends StatelessWidget {
                       children: [
                         Text(
                           load['crop']!,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w800),
                         ),
                         Text(
                           load['fare']!,
@@ -139,9 +146,12 @@ class DriverDashboardScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('Farmer: ${load["farmer"]}', style: const TextStyle(fontSize: 12, color: AppConstants.textMuted)),
+                    Text('Farmer: ${load["farmer"]}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppConstants.textMuted)),
                     const SizedBox(height: 4),
-                    Text('Route: ${load["pickup"]} ➔ ${load["drop"]}', style: const TextStyle(fontSize: 12)),
+                    Text('Route: ${load["pickup"]} ➔ ${load["drop"]}',
+                        style: const TextStyle(fontSize: 12)),
                     const SizedBox(height: 12),
                     ElevatedButton(
                       onPressed: () {
@@ -163,4 +173,3 @@ class DriverDashboardScreen extends StatelessWidget {
     );
   }
 }
-

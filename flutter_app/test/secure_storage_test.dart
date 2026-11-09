@@ -13,7 +13,9 @@ void main() {
   });
 
   group('SecureStorage Hardware-Backed & Preferences Isolation Suite', () {
-    test('Stores and retrieves authentic session with JWT access and refresh tokens', () async {
+    test(
+        'Stores and retrieves authentic session with JWT access and refresh tokens',
+        () async {
       const session = UserSession(
         userId: 'usr_farmer_warangal_001',
         name: 'B. Jaswanth Reddy',
@@ -32,14 +34,18 @@ void main() {
       final restored = await SecureStorage.getSession();
       expect(restored, isNotNull);
       expect(restored!.userId, equals('usr_farmer_warangal_001'));
-      expect(restored.accessToken, equals('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access'));
-      expect(restored.refreshToken, equals('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh'));
+      expect(restored.accessToken,
+          equals('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access'));
+      expect(restored.refreshToken,
+          equals('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh'));
 
       final tokenDirect = await SecureStorage.getAccessToken();
-      expect(tokenDirect, equals('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access'));
+      expect(
+          tokenDirect, equals('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access'));
     });
 
-    test('Rotates access and refresh tokens without corrupting profile', () async {
+    test('Rotates access and refresh tokens without corrupting profile',
+        () async {
       const session = UserSession(
         userId: 'usr_farmer_002',
         name: 'Suresh Driver',
@@ -83,7 +89,9 @@ void main() {
       expect(await SecureStorage.getRefreshToken(), isNull);
     });
 
-    test('Non-sensitive preferences are isolated in SharedPreferences without token leak', () async {
+    test(
+        'Non-sensitive preferences are isolated in SharedPreferences without token leak',
+        () async {
       await SecureStorage.saveLanguage('te');
       await SecureStorage.setOnboardingCompleted(true);
 
@@ -100,4 +108,3 @@ void main() {
     });
   });
 }
-

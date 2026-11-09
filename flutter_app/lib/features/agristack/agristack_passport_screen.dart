@@ -40,7 +40,8 @@ class AgriStackPassportScreen extends StatelessWidget {
                             color: AppConstants.primaryLight,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.verified_user_rounded, color: AppConstants.primaryDark),
+                          child: const Icon(Icons.verified_user_rounded,
+                              color: AppConstants.primaryDark),
                         ),
                         const SizedBox(width: 12),
                         const Expanded(
@@ -49,11 +50,14 @@ class AgriStackPassportScreen extends StatelessWidget {
                             children: [
                               Text(
                                 'Cadastral Parcel #42/A',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w800),
                               ),
                               Text(
                                 'Himayath Nagar, Warangal Rural • 4.50 Acres',
-                                style: TextStyle(fontSize: 12, color: AppConstants.textMuted),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppConstants.textMuted),
                               ),
                             ],
                           ),
@@ -64,7 +68,8 @@ class AgriStackPassportScreen extends StatelessWidget {
                     _buildRow('Farmer Name', 'B. Jaswanth Reddy'),
                     _buildRow('Kisan Registry ID', 'IND-TEL-WAR-88194'),
                     _buildRow('Survey Sub-division', 'Sy. No. 42 / Hissa 1-A'),
-                    _buildRow('Irrigation Source', 'Borewell (Drip Micro-irrigation)'),
+                    _buildRow('Irrigation Source',
+                        'Borewell (Drip Micro-irrigation)'),
                   ],
                 ),
               ),
@@ -79,7 +84,8 @@ class AgriStackPassportScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'Soil Health Card Telemetry',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -93,12 +99,16 @@ class AgriStackPassportScreen extends StatelessWidget {
                     const Divider(height: 24),
                     const Text(
                       'Primary Nutrients (N - P - K):',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
-                    _buildNutrientBar('Nitrogen (N)', 0.35, 'LOW (185 kg/ha)', AppConstants.dangerRed),
-                    _buildNutrientBar('Phosphorus (P)', 0.65, 'MEDIUM (22 kg/ha)', AppConstants.accentGold),
-                    _buildNutrientBar('Potassium (K)', 0.85, 'HIGH (340 kg/ha)', AppConstants.primaryGreen),
+                    _buildNutrientBar('Nitrogen (N)', 0.35, 'LOW (185 kg/ha)',
+                        AppConstants.dangerRed),
+                    _buildNutrientBar('Phosphorus (P)', 0.65,
+                        'MEDIUM (22 kg/ha)', AppConstants.accentGold),
+                    _buildNutrientBar('Potassium (K)', 0.85, 'HIGH (340 kg/ha)',
+                        AppConstants.primaryGreen),
                   ],
                 ),
               ),
@@ -127,8 +137,12 @@ class AgriStackPassportScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppConstants.textMuted)),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, color: AppConstants.textMuted)),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -137,14 +151,21 @@ class AgriStackPassportScreen extends StatelessWidget {
   Widget _buildSoilChip(String title, String status) {
     return Column(
       children: [
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppConstants.primaryDark)),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppConstants.primaryDark)),
         const SizedBox(height: 2),
-        Text(status, style: const TextStyle(fontSize: 11, color: AppConstants.textMuted)),
+        Text(status,
+            style:
+                const TextStyle(fontSize: 11, color: AppConstants.textMuted)),
       ],
     );
   }
 
-  Widget _buildNutrientBar(String nutrient, double progress, String val, Color color) {
+  Widget _buildNutrientBar(
+      String nutrient, double progress, String val, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
@@ -153,8 +174,12 @@ class AgriStackPassportScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(nutrient, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-              Text(val, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+              Text(nutrient,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(val,
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: color)),
             ],
           ),
           const SizedBox(height: 4),
@@ -170,4 +195,3 @@ class AgriStackPassportScreen extends StatelessWidget {
     );
   }
 }
-

@@ -19,42 +19,50 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<Map<String, dynamic>> _slides = [
     {
       'title': 'Welcome to NuKropAI',
-      'subtitle': 'The AI-powered Agrarian Operating System designed to maximize your yield, reduce pest damage, and boost market profits.',
+      'subtitle':
+          'The AI-powered Agrarian Operating System designed to maximize your yield, reduce pest damage, and boost market profits.',
       'icon': Icons.agriculture_rounded,
     },
     {
       'title': 'Instant Crop Disease Doctor',
-      'subtitle': 'Take a photo of diseased leaves or stems to receive instant ICAR-verified diagnosis and custom chemical/organic treatment plans.',
+      'subtitle':
+          'Take a photo of diseased leaves or stems to receive instant ICAR-verified diagnosis and custom chemical/organic treatment plans.',
       'icon': Icons.camera_alt_rounded,
     },
     {
       'title': 'Live APMC Mandi Rates',
-      'subtitle': 'Track genuine APMC prices from your local market yard with historical trend charts and price drop alerts.',
+      'subtitle':
+          'Track genuine APMC prices from your local market yard with historical trend charts and price drop alerts.',
       'icon': Icons.trending_up_rounded,
     },
     {
       'title': 'Microclimate Spray Advisory',
-      'subtitle': 'Hyperlocal 3-hour spray windows based on wind speed, temperature, and rain probability to eliminate wasted chemicals.',
+      'subtitle':
+          'Hyperlocal 3-hour spray windows based on wind speed, temperature, and rain probability to eliminate wasted chemicals.',
       'icon': Icons.wb_sunny_rounded,
     },
     {
       'title': 'GramHaul Freight Transport',
-      'subtitle': 'Connect with verified local truck haulers, track transport in real-time, and settle with secure OTP PIN authorization.',
+      'subtitle':
+          'Connect with verified local truck haulers, track transport in real-time, and settle with secure OTP PIN authorization.',
       'icon': Icons.local_shipping_rounded,
     },
     {
       'title': 'Farm Khata Bookkeeping',
-      'subtitle': 'Track every rupee spent on seeds, fertilizers, and labor with automated profit & loss calculations and undo protection.',
+      'subtitle':
+          'Track every rupee spent on seeds, fertilizers, and labor with automated profit & loss calculations and undo protection.',
       'icon': Icons.account_balance_wallet_rounded,
     },
     {
       'title': 'Kisan Community Network',
-      'subtitle': 'Share field observations, learn pest prevention techniques from fellow farmers, and consult verified agronomists.',
+      'subtitle':
+          'Share field observations, learn pest prevention techniques from fellow farmers, and consult verified agronomists.',
       'icon': Icons.people_alt_rounded,
     },
     {
       'title': 'Configure Your Crops',
-      'subtitle': 'Select the crops currently cultivated on your farm to personalize mandi rates, disease models, and spray calendars.',
+      'subtitle':
+          'Select the crops currently cultivated on your farm to personalize mandi rates, disease models, and spray calendars.',
       'icon': Icons.eco_rounded,
       'isCropPicker': true,
     },
@@ -259,4 +267,3 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 }
-

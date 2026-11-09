@@ -16,7 +16,13 @@ class CommunityScreen extends StatefulWidget {
 
 class _CommunityScreenState extends State<CommunityScreen> {
   String _selectedTopic = 'All Topics';
-  final List<String> _topics = ['All Topics', 'Cotton', 'Chilli', 'Paddy', 'Tomato'];
+  final List<String> _topics = [
+    'All Topics',
+    'Cotton',
+    'Chilli',
+    'Paddy',
+    'Tomato'
+  ];
 
   // Authentic posts fetched from backend / persistent database (Zero built-in dummy posts)
   final List<CommunityPost> _rawPosts = [];
@@ -62,11 +68,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
           title: item['title']?.toString() ?? '',
           content: item['content']?.toString() ?? '',
           likesCount: item['likesCount'] is int ? item['likesCount'] : 0,
-          commentsCount: item['commentsCount'] is int ? item['commentsCount'] : 0,
+          commentsCount:
+              item['commentsCount'] is int ? item['commentsCount'] : 0,
           isLiked: item['isLiked'] == true,
           isFollowed: item['isFollowed'] == true,
           createdAt: item['createdAt'] != null
-              ? DateTime.tryParse(item['createdAt'].toString()) ?? DateTime.now()
+              ? DateTime.tryParse(item['createdAt'].toString()) ??
+                  DateTime.now()
               : DateTime.now(),
         );
       }).toList();
@@ -93,11 +101,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final seen = <String>{};
     final unique = <CommunityPost>[];
     for (final post in _rawPosts) {
-      final sig = '${post.authorName.toLowerCase()}:::${post.title.toLowerCase()}';
+      final sig =
+          '${post.authorName.toLowerCase()}:::${post.title.toLowerCase()}';
       if (!seen.contains(post.id) && !seen.contains(sig)) {
         seen.add(post.id);
         seen.add(sig);
-        if (_selectedTopic == 'All Topics' || post.cropTag.toLowerCase() == _selectedTopic.toLowerCase()) {
+        if (_selectedTopic == 'All Topics' ||
+            post.cropTag.toLowerCase() == _selectedTopic.toLowerCase()) {
           unique.add(post);
         }
       }
@@ -119,7 +129,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     });
 
     try {
-      await ApiClient.post<Map<String, dynamic>>('/community/posts/$postId/like');
+      await ApiClient.post<Map<String, dynamic>>(
+          '/community/posts/$postId/like');
     } catch (_) {
       // Revert if network error
       if (mounted) {
@@ -234,14 +245,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   final title = titleController.text.trim();
                   final content = contentController.text.trim();
                   if (title.isEmpty) {
-                    LuxuryToast.show(ctx, message: 'Please enter a title for your query', color: Colors.orange);
+                    LuxuryToast.show(ctx,
+                        message: 'Please enter a title for your query',
+                        color: Colors.orange);
                     return;
                   }
 
                   try {
                     final session = await SecureStorage.getSession();
-                    final location = '${session?.district.isNotEmpty == true ? session!.district : "Warangal"}, ${session?.state.isNotEmpty == true ? session!.state : "Telangana"}';
-                    
+                    final location =
+                        '${session?.district.isNotEmpty == true ? session!.district : "Warangal"}, ${session?.state.isNotEmpty == true ? session!.state : "Telangana"}';
+
                     final res = await ApiClient.post<Map<String, dynamic>>(
                       '/community/posts',
                       body: {
@@ -255,9 +269,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     final postData = res['post'];
                     if (postData != null) {
                       final newPost = CommunityPost(
-                        id: postData['id']?.toString() ?? 'p_${DateTime.now().millisecondsSinceEpoch}',
-                        authorName: postData['authorName']?.toString() ?? (session?.name ?? 'Kisan Farmer'),
-                        authorRole: postData['authorRole']?.toString() ?? 'Verified Farmer',
+                        id: postData['id']?.toString() ??
+                            'p_${DateTime.now().millisecondsSinceEpoch}',
+                        authorName: postData['authorName']?.toString() ??
+                            (session?.name ?? 'Kisan Farmer'),
+                        authorRole: postData['authorRole']?.toString() ??
+                            'Verified Farmer',
                         location: postData['location']?.toString() ?? location,
                         cropTag: postData['cropTag']?.toString() ?? crop,
                         title: postData['title']?.toString() ?? title,
@@ -273,7 +290,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     if (mounted) {
                       LuxuryToast.show(
                         context,
-                        message: 'Your query has been posted to Kisan Community!',
+                        message:
+                            'Your query has been posted to Kisan Community!',
                         icon: Icons.check_circle_rounded,
                       );
                     }
@@ -307,13 +325,15 @@ class _CommunityScreenState extends State<CommunityScreen> {
         backgroundColor: Colors.white,
         leading: widget.onBack != null
             ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: AppConstants.textDark),
+                icon: const Icon(Icons.arrow_back_rounded,
+                    color: AppConstants.textDark),
                 onPressed: widget.onBack,
               )
             : null,
         title: const Row(
           children: [
-            Icon(Icons.groups_rounded, color: AppConstants.primaryGreen, size: 22),
+            Icon(Icons.groups_rounded,
+                color: AppConstants.primaryGreen, size: 22),
             SizedBox(width: 8),
             Text(
               'Kisan Community',
@@ -334,8 +354,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppConstants.primaryGreen,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               ),
               onPressed: _showCreatePostDialog,
             ),
@@ -398,7 +420,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                                 shape: BoxShape.circle,
                                 color: AppConstants.primaryLight,
                                 border: Border.all(
-                                  color: AppConstants.primaryGreen.withAlpha(120),
+                                  color:
+                                      AppConstants.primaryGreen.withAlpha(120),
                                   width: 1.5,
                                 ),
                               ),
@@ -509,9 +532,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppConstants.textDark : Colors.white,
+                        color:
+                            isSelected ? AppConstants.textDark : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: isSelected
@@ -525,7 +550,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: isSelected ? Colors.white : AppConstants.textDark,
+                            color: isSelected
+                                ? Colors.white
+                                : AppConstants.textDark,
                           ),
                         ),
                       ),
@@ -544,7 +571,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
             const SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
-                child: CircularProgressIndicator(color: AppConstants.primaryGreen),
+                child:
+                    CircularProgressIndicator(color: AppConstants.primaryGreen),
               ),
             )
           else if (posts.isEmpty)
@@ -555,7 +583,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.forum_outlined, size: 64, color: Colors.grey.shade400),
+                    Icon(Icons.forum_outlined,
+                        size: 64, color: Colors.grey.shade400),
                     const SizedBox(height: 16),
                     const Text(
                       'No Community posts published yet.',
@@ -582,8 +611,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppConstants.primaryGreen,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
                       ),
                       onPressed: _showCreatePostDialog,
                     ),
@@ -595,225 +626,232 @@ class _CommunityScreenState extends State<CommunityScreen> {
             // Community Feed List (Deduplicated)
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final post = posts[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    elevation: 0.5,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.grey.shade200),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: AppConstants.primaryLight,
-                                child: Text(
-                                  post.authorName.isNotEmpty ? post.authorName[0] : 'U',
-                                  style: const TextStyle(
-                                    color: AppConstants.primaryDark,
-                                    fontWeight: FontWeight.w800,
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final post = posts[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      elevation: 0.5,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: AppConstants.primaryLight,
+                                  child: Text(
+                                    post.authorName.isNotEmpty
+                                        ? post.authorName[0]
+                                        : 'U',
+                                    style: const TextStyle(
+                                      color: AppConstants.primaryDark,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          post.authorName,
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppConstants.textDark,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Icon(
-                                          Icons.verified_rounded,
-                                          color: AppConstants.primaryGreen,
-                                          size: 14,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppConstants.primaryLight,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            post.cropTag.toLowerCase(),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            post.authorName,
                                             style: const TextStyle(
-                                              fontSize: 10,
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w700,
-                                              color: AppConstants.primaryDark,
+                                              color: AppConstants.textDark,
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '📍 ${post.location}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppConstants.textMuted,
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.verified_rounded,
+                                            color: AppConstants.primaryGreen,
+                                            size: 14,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppConstants.primaryLight,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              post.cropTag.toLowerCase(),
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppConstants.primaryDark,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () => _toggleFollow(post.id),
-                                style: TextButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(50, 30),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: Text(
-                                  post.isFollowed ? 'Following' : '+ Follow',
-                                  style: TextStyle(
-                                    color: post.isFollowed
-                                        ? AppConstants.textMuted
-                                        : AppConstants.primaryGreen,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            post.title,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: AppConstants.textDark,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            post.content,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppConstants.textDark,
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              InkWell(
-                                onTap: () => _toggleLike(post.id),
-                                borderRadius: BorderRadius.circular(8),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 4,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        post.isLiked
-                                            ? Icons.favorite_rounded
-                                            : Icons.favorite_border_rounded,
-                                        color: post.isLiked
-                                            ? AppConstants.dangerRed
-                                            : AppConstants.textMuted,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 4),
+                                      const SizedBox(height: 2),
                                       Text(
-                                        '${post.likesCount}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: post.isLiked
-                                              ? AppConstants.dangerRed
-                                              : AppConstants.textMuted,
+                                        '📍 ${post.location}',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppConstants.textMuted,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.chat_bubble_outline_rounded,
-                                    color: AppConstants.textMuted,
-                                    size: 16,
+                                TextButton(
+                                  onPressed: () => _toggleFollow(post.id),
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(50, 30),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${post.commentsCount} answers',
-                                    style: const TextStyle(
+                                  child: Text(
+                                    post.isFollowed ? 'Following' : '+ Follow',
+                                    style: TextStyle(
+                                      color: post.isFollowed
+                                          ? AppConstants.textMuted
+                                          : AppConstants.primaryGreen,
+                                      fontWeight: FontWeight.w700,
                                       fontSize: 12,
-                                      color: AppConstants.textMuted,
                                     ),
                                   ),
-                                ],
-                              ),
-                              const Spacer(),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.bookmark_border_rounded,
-                                  size: 18,
-                                  color: AppConstants.textMuted,
                                 ),
-                                onPressed: () {
-                                  LuxuryToast.show(
-                                    context,
-                                    message: 'Post saved to Farm Library',
-                                  );
-                                },
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              post.title,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppConstants.textDark,
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.share_outlined,
-                                  size: 18,
-                                  color: AppConstants.textMuted,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              post.content,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppConstants.textDark,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                InkWell(
+                                  onTap: () => _toggleLike(post.id),
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          post.isLiked
+                                              ? Icons.favorite_rounded
+                                              : Icons.favorite_border_rounded,
+                                          color: post.isLiked
+                                              ? AppConstants.dangerRed
+                                              : AppConstants.textMuted,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${post.likesCount}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: post.isLiked
+                                                ? AppConstants.dangerRed
+                                                : AppConstants.textMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                                onPressed: () {
-                                  LuxuryToast.show(
-                                    context,
-                                    message: 'Link copied to clipboard',
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
+                                const SizedBox(width: 16),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.chat_bubble_outline_rounded,
+                                      color: AppConstants.textMuted,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${post.commentsCount} answers',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppConstants.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.bookmark_border_rounded,
+                                    size: 18,
+                                    color: AppConstants.textMuted,
+                                  ),
+                                  onPressed: () {
+                                    LuxuryToast.show(
+                                      context,
+                                      message: 'Post saved to Farm Library',
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.share_outlined,
+                                    size: 18,
+                                    color: AppConstants.textMuted,
+                                  ),
+                                  onPressed: () {
+                                    LuxuryToast.show(
+                                      context,
+                                      message: 'Link copied to clipboard',
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
-                childCount: posts.length,
+                    );
+                  },
+                  childCount: posts.length,
+                ),
               ),
             ),
-          ),
           if (_hasMore)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: OutlinedButton(
-                  onPressed: _isLoading ? null : () => _loadPosts(refresh: false),
+                  onPressed:
+                      _isLoading ? null : () => _loadPosts(refresh: false),
                   child: _isLoading
                       ? const SizedBox(
                           width: 16,

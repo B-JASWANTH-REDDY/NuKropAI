@@ -49,7 +49,8 @@ class PlantixBottomBar extends StatelessWidget {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = currentIndex == index;
-    final color = isSelected ? AppConstants.primaryGreen : AppConstants.textMuted;
+    final color =
+        isSelected ? AppConstants.primaryGreen : AppConstants.textMuted;
     return InkWell(
       onTap: () => onTabSelected(index),
       borderRadius: BorderRadius.circular(12),
@@ -100,4 +101,3 @@ class PlantixBottomBar extends StatelessWidget {
     );
   }
 }
-

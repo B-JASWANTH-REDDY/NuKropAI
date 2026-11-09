@@ -12,14 +12,16 @@ class KccLoanScreen extends StatefulWidget {
 }
 
 class _KccLoanScreenState extends State<KccLoanScreen> {
-  final TextEditingController _acresController = TextEditingController(text: '4.5');
+  final TextEditingController _acresController =
+      TextEditingController(text: '4.5');
   double _scaleOfFinance = 42000.0; // ₹ per acre for Cotton
 
   double get _acres => double.tryParse(_acresController.text) ?? 4.5;
   double get _cropCreditLimit => _acres * _scaleOfFinance;
   double get _postHarvestComponent => _cropCreditLimit * 0.10;
   double get _maintenanceComponent => _cropCreditLimit * 0.20;
-  double get _totalKccLimit => _cropCreditLimit + _postHarvestComponent + _maintenanceComponent;
+  double get _totalKccLimit =>
+      _cropCreditLimit + _postHarvestComponent + _maintenanceComponent;
 
   @override
   void dispose() {
@@ -54,25 +56,35 @@ class _KccLoanScreenState extends State<KccLoanScreen> {
                   children: [
                     const Text(
                       'NABARD Scale of Finance Parameters',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _acresController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Cultivated Land Area (Acres)'),
+                      decoration: const InputDecoration(
+                          labelText: 'Cultivated Land Area (Acres)'),
                       onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<double>(
                       initialValue: _scaleOfFinance,
-                      decoration: const InputDecoration(labelText: 'Crop Category & District Scale'),
+                      decoration: const InputDecoration(
+                          labelText: 'Crop Category & District Scale'),
                       items: const [
-                        DropdownMenuItem(value: 42000.0, child: Text('Cotton (Warangal: ₹42,000/ac)')),
-                        DropdownMenuItem(value: 55000.0, child: Text('Chilli (Nandyal: ₹55,000/ac)')),
-                        DropdownMenuItem(value: 36000.0, child: Text('Paddy (Khammam: ₹36,000/ac)')),
+                        DropdownMenuItem(
+                            value: 42000.0,
+                            child: Text('Cotton (Warangal: ₹42,000/ac)')),
+                        DropdownMenuItem(
+                            value: 55000.0,
+                            child: Text('Chilli (Nandyal: ₹55,000/ac)')),
+                        DropdownMenuItem(
+                            value: 36000.0,
+                            child: Text('Paddy (Khammam: ₹36,000/ac)')),
                       ],
-                      onChanged: (val) => setState(() => _scaleOfFinance = val!),
+                      onChanged: (val) =>
+                          setState(() => _scaleOfFinance = val!),
                     ),
                   ],
                 ),
@@ -96,12 +108,18 @@ class _KccLoanScreenState extends State<KccLoanScreen> {
                       ),
                     ),
                     const Divider(height: 20),
-                    _buildRow('Crop Cultivation Component', '₹${_cropCreditLimit.toInt()}'),
-                    _buildRow('10% Post-Harvest & Household', '₹${_postHarvestComponent.toInt()}'),
-                    _buildRow('20% Farm Maintenance & Asset Repair', '₹${_maintenanceComponent.toInt()}'),
+                    _buildRow('Crop Cultivation Component',
+                        '₹${_cropCreditLimit.toInt()}'),
+                    _buildRow('10% Post-Harvest & Household',
+                        '₹${_postHarvestComponent.toInt()}'),
+                    _buildRow('20% Farm Maintenance & Asset Repair',
+                        '₹${_maintenanceComponent.toInt()}'),
                     const Divider(height: 20),
-                    _buildRow('Total Sanction Limit', '₹${_totalKccLimit.toInt()}', isBold: true),
-                    _buildRow('Effective Interest Rate (Govt. Subvention)', '4.0% p.a. (Prompt Repayment)'),
+                    _buildRow(
+                        'Total Sanction Limit', '₹${_totalKccLimit.toInt()}',
+                        isBold: true),
+                    _buildRow('Effective Interest Rate (Govt. Subvention)',
+                        '4.0% p.a. (Prompt Repayment)'),
                   ],
                 ),
               ),
@@ -129,7 +147,9 @@ class _KccLoanScreenState extends State<KccLoanScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: AppConstants.textDark)),
+          Text(label,
+              style:
+                  const TextStyle(fontSize: 12, color: AppConstants.textDark)),
           Text(
             value,
             style: TextStyle(

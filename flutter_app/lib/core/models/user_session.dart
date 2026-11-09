@@ -56,7 +56,8 @@ class UserSession {
       role: json['role'] == 'driver' ? UserRole.driver : UserRole.farmer,
       state: json['state'] ?? 'Telangana',
       district: json['district'] ?? 'Warangal',
-      activeCrops: List<String>.from(json['activeCrops'] ?? ['Cotton', 'Chilli']),
+      activeCrops:
+          List<String>.from(json['activeCrops'] ?? ['Cotton', 'Chilli']),
       languageCode: json['languageCode'] ?? 'en',
       accessToken: json['accessToken'],
       refreshToken: json['refreshToken'],
@@ -75,4 +76,3 @@ class UserSession {
     activeCrops: ['Cotton', 'Chilli'],
   );
 }
-

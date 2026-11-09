@@ -7,14 +7,17 @@ import 'package:nukrop_app/features/splash/splash_screen.dart';
 import 'package:nukrop_app/features/onboarding/onboarding_screen.dart';
 
 void main() {
-  testWidgets('NuKropAI Flutter App boots into SplashScreen with Agrarian branding', (WidgetTester tester) async {
+  testWidgets(
+      'NuKropAI Flutter App boots into SplashScreen with Agrarian branding',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const NuKropFlutterApp());
 
     expect(find.text('NuKropAI'), findsOneWidget);
     expect(find.text('Agrarian Intelligence Operating System'), findsOneWidget);
   });
 
-  testWidgets('SplashScreen triggers callback upon completion', (WidgetTester tester) async {
+  testWidgets('SplashScreen triggers callback upon completion',
+      (WidgetTester tester) async {
     bool finished = false;
     await tester.pumpWidget(
       MaterialApp(
@@ -39,7 +42,8 @@ void main() {
     expect(finished, isTrue);
   });
 
-  testWidgets('OnboardingScreen navigates slides and supports crop selection', (WidgetTester tester) async {
+  testWidgets('OnboardingScreen navigates slides and supports crop selection',
+      (WidgetTester tester) async {
     bool finished = false;
     await tester.pumpWidget(
       MaterialApp(

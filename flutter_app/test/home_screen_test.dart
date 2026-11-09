@@ -26,19 +26,24 @@ void main() {
     activeCrops: ['Cotton'],
   );
 
-  testWidgets('HomeScreen displays honest Weather Offline and Price Unavailable when telemetry is absent', (WidgetTester tester) async {
+  testWidgets(
+      'HomeScreen displays honest Weather Offline and Price Unavailable when telemetry is absent',
+      (WidgetTester tester) async {
     // Mock backend returning empty mandi rates and unavailable weather
     final mockClient = MockClient((request) async {
       if (request.url.path.contains('/mandi/rates')) {
-        return http.Response(jsonEncode({'status': 'success', 'data': []}), 200);
+        return http.Response(
+            jsonEncode({'status': 'success', 'data': []}), 200);
       }
       if (request.url.path.contains('/weather/current')) {
-        return http.Response(jsonEncode({
-          'status': 'unavailable',
-          'source': 'Open-Meteo',
-          'data': null,
-          'message': 'Weather telemetry offline'
-        }), 200);
+        return http.Response(
+            jsonEncode({
+              'status': 'unavailable',
+              'source': 'Open-Meteo',
+              'data': null,
+              'message': 'Weather telemetry offline'
+            }),
+            200);
       }
       if (request.url.path.contains('/weather/notifications/unread-count')) {
         return http.Response(jsonEncode({'unreadCount': 0}), 200);
@@ -71,66 +76,76 @@ void main() {
     expect(find.text('Price Unavailable'), findsWidgets);
   });
 
-  testWidgets('HomeScreen displays authentic weather telemetry and dynamic spray advisory when available', (WidgetTester tester) async {
+  testWidgets(
+      'HomeScreen displays authentic weather telemetry and dynamic spray advisory when available',
+      (WidgetTester tester) async {
     final mockClient = MockClient((request) async {
       if (request.url.path.contains('/mandi/rates')) {
         return http.Response(
           utf8.decode(utf8.encode(jsonEncode({
             'status': 'success',
-            'records': [{
-              'id': 'm1',
-              'commodity': 'Cotton',
-              'market': 'Warangal APMC',
-              'state': 'Telangana',
-              'district': 'Warangal',
-              'modalPrice': 7420,
-              'minPrice': 7100,
-              'maxPrice': 7650,
-              'priceUnit': 'Rs/Quintal',
-              'priceChange': '+120',
-              'tradeVolume': '450 MT',
-              'arrivalDate': '2026-11-09',
-              'source': 'data.gov.in (Agmarknet)',
-            }],
-            'data': [{
-              'id': 'm1',
-              'commodity': 'Cotton',
-              'market': 'Warangal APMC',
-              'state': 'Telangana',
-              'district': 'Warangal',
-              'modalPrice': 7420,
-              'minPrice': 7100,
-              'maxPrice': 7650,
-              'priceUnit': 'Rs/Quintal',
-              'priceChange': '+120',
-              'tradeVolume': '450 MT',
-              'arrivalDate': '2026-11-09',
-              'source': 'data.gov.in (Agmarknet)',
-            }]
+            'records': [
+              {
+                'id': 'm1',
+                'commodity': 'Cotton',
+                'market': 'Warangal APMC',
+                'state': 'Telangana',
+                'district': 'Warangal',
+                'modalPrice': 7420,
+                'minPrice': 7100,
+                'maxPrice': 7650,
+                'priceUnit': 'Rs/Quintal',
+                'priceChange': '+120',
+                'tradeVolume': '450 MT',
+                'arrivalDate': '2026-11-09',
+                'source': 'data.gov.in (Agmarknet)',
+              }
+            ],
+            'data': [
+              {
+                'id': 'm1',
+                'commodity': 'Cotton',
+                'market': 'Warangal APMC',
+                'state': 'Telangana',
+                'district': 'Warangal',
+                'modalPrice': 7420,
+                'minPrice': 7100,
+                'maxPrice': 7650,
+                'priceUnit': 'Rs/Quintal',
+                'priceChange': '+120',
+                'tradeVolume': '450 MT',
+                'arrivalDate': '2026-11-09',
+                'source': 'data.gov.in (Agmarknet)',
+              }
+            ]
           }))),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }
       if (request.url.path.contains('/weather/current')) {
-        return http.Response(jsonEncode({
-          'status': 'AVAILABLE',
-          'source': 'Open-Meteo Meteorological Service (WMO Station Network)',
-          'location': {'district': 'Warangal', 'state': 'Telangana'},
-          'observationTime': DateTime.now().toIso8601String(),
-          'weather': {
-            'temperature': 26.5,
-            'humidity': 55,
-            'windSpeed': 8.2,
-            'condition': 'Clear',
-            'weatherCode': 0,
-          },
-          'sprayAdvisory': {
-            'isSafe': true,
-            'status': 'OPTIMAL: Temperature 26.5°C, Wind 8.2 km/h, Humidity 55%',
-            'window': 'Morning 07:30 - 10:30 AM',
-          },
-        }), 200);
+        return http.Response(
+            jsonEncode({
+              'status': 'AVAILABLE',
+              'source':
+                  'Open-Meteo Meteorological Service (WMO Station Network)',
+              'location': {'district': 'Warangal', 'state': 'Telangana'},
+              'observationTime': DateTime.now().toIso8601String(),
+              'weather': {
+                'temperature': 26.5,
+                'humidity': 55,
+                'windSpeed': 8.2,
+                'condition': 'Clear',
+                'weatherCode': 0,
+              },
+              'sprayAdvisory': {
+                'isSafe': true,
+                'status':
+                    'OPTIMAL: Temperature 26.5°C, Wind 8.2 km/h, Humidity 55%',
+                'window': 'Morning 07:30 - 10:30 AM',
+              },
+            }),
+            200);
       }
       if (request.url.path.contains('/weather/notifications/unread-count')) {
         return http.Response(jsonEncode({'unreadCount': 3}), 200);
@@ -164,4 +179,3 @@ void main() {
     expect(find.text('Warangal APMC (Cotton)'), findsOneWidget);
   });
 }
-

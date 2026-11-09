@@ -111,7 +111,8 @@ class _FarmKhataScreenState extends State<FarmKhataScreen> {
                       label: const Center(child: Text('Expense (Debit)')),
                       selected: !isIncome,
                       selectedColor: AppConstants.dangerRed.withAlpha(30),
-                      onSelected: (val) => setModalState(() => isIncome = false),
+                      onSelected: (val) =>
+                          setModalState(() => isIncome = false),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -128,7 +129,8 @@ class _FarmKhataScreenState extends State<FarmKhataScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: 'Description / Item'),
+                decoration:
+                    const InputDecoration(labelText: 'Description / Item'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -201,9 +203,12 @@ class _FarmKhataScreenState extends State<FarmKhataScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildBalanceColumn('Total Income', '₹${_totalIncome.toInt()}', AppConstants.primaryDark),
-                      _buildBalanceColumn('Total Expenses', '₹${_totalExpense.toInt()}', AppConstants.dangerRed),
-                      _buildBalanceColumn('Net Profit', '₹${_netProfit.toInt()}', AppConstants.primaryGreen),
+                      _buildBalanceColumn('Total Income',
+                          '₹${_totalIncome.toInt()}', AppConstants.primaryDark),
+                      _buildBalanceColumn('Total Expenses',
+                          '₹${_totalExpense.toInt()}', AppConstants.dangerRed),
+                      _buildBalanceColumn('Net Profit',
+                          '₹${_netProfit.toInt()}', AppConstants.primaryGreen),
                     ],
                   ),
                 ],
@@ -223,7 +228,8 @@ class _FarmKhataScreenState extends State<FarmKhataScreen> {
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 20),
                     color: AppConstants.dangerRed,
-                    child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+                    child: const Icon(Icons.delete_outline_rounded,
+                        color: Colors.white),
                   ),
                   onDismissed: (_) => _deleteEntry(index),
                   child: Card(
@@ -244,11 +250,13 @@ class _FarmKhataScreenState extends State<FarmKhataScreen> {
                       ),
                       title: Text(
                         entry.title,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
                         '${entry.category} • ${entry.date.day}/${entry.date.month}/${entry.date.year}',
-                        style: const TextStyle(fontSize: 11, color: AppConstants.textMuted),
+                        style: const TextStyle(
+                            fontSize: 11, color: AppConstants.textMuted),
                       ),
                       trailing: Text(
                         '${entry.isIncome ? "+" : "-"}₹${entry.amount.toInt()}',
@@ -279,14 +287,16 @@ class _FarmKhataScreenState extends State<FarmKhataScreen> {
   Widget _buildBalanceColumn(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: AppConstants.textMuted)),
+        Text(label,
+            style:
+                const TextStyle(fontSize: 11, color: AppConstants.textMuted)),
         const SizedBox(height: 4),
         Text(
           value,
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color),
+          style: TextStyle(
+              fontSize: 15, fontWeight: FontWeight.w800, color: color),
         ),
       ],
     );
   }
 }
-

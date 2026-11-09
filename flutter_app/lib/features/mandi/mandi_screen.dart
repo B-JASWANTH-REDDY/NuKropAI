@@ -104,7 +104,8 @@ class _MandiScreenState extends State<MandiScreen> {
       final records = response['records'] as List<dynamic>?;
       if (records != null && records.isNotEmpty) {
         final parsed = records.map((r) {
-          final modal = (r['modal_price'] ?? r['modalPrice'] ?? r['modal'] ?? 0.0);
+          final modal =
+              (r['modal_price'] ?? r['modalPrice'] ?? r['modal'] ?? 0.0);
           final min = (r['min_price'] ?? r['minPrice'] ?? r['min'] ?? 0.0);
           final max = (r['max_price'] ?? r['maxPrice'] ?? r['max'] ?? 0.0);
 
@@ -126,7 +127,8 @@ class _MandiScreenState extends State<MandiScreen> {
 
         // Update local SWR cache
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_cacheKey, jsonEncode(parsed.map((e) => e.toJson()).toList()));
+        await prefs.setString(
+            _cacheKey, jsonEncode(parsed.map((e) => e.toJson()).toList()));
 
         if (mounted) {
           setState(() {
@@ -156,7 +158,8 @@ class _MandiScreenState extends State<MandiScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Live Mandi pipeline temporarily unavailable: ${e.toString()}';
+          _errorMessage =
+              'Live Mandi pipeline temporarily unavailable: ${e.toString()}';
           _isLoading = false;
         });
       }
@@ -189,7 +192,8 @@ class _MandiScreenState extends State<MandiScreen> {
         backgroundColor: Colors.white,
         leading: widget.onBack != null
             ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: AppConstants.textDark),
+                icon: const Icon(Icons.arrow_back_rounded,
+                    color: AppConstants.textDark),
                 onPressed: widget.onBack,
               )
             : null,
@@ -215,7 +219,8 @@ class _MandiScreenState extends State<MandiScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppConstants.primaryGreen),
+            icon: const Icon(Icons.refresh_rounded,
+                color: AppConstants.primaryGreen),
             onPressed: _loadMandiRates,
           ),
         ],
@@ -224,14 +229,16 @@ class _MandiScreenState extends State<MandiScreen> {
         onRefresh: _loadMandiRates,
         color: AppConstants.primaryGreen,
         child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics()),
           slivers: [
             // Status Banner (Live vs Cached vs Offline Error)
             if (_isLive)
               SliverToBoxAdapter(
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(10),
@@ -239,11 +246,15 @@ class _MandiScreenState extends State<MandiScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.sensors_rounded, size: 16, color: AppConstants.primaryDark),
+                      const Icon(Icons.sensors_rounded,
+                          size: 16, color: AppConstants.primaryDark),
                       const SizedBox(width: 8),
                       Text(
                         'LIVE AGMARKNET INTELLIGENCE (${_rates.length} Mandi Yards)',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppConstants.primaryDark),
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppConstants.primaryDark),
                       ),
                     ],
                   ),
@@ -253,7 +264,8 @@ class _MandiScreenState extends State<MandiScreen> {
               SliverToBoxAdapter(
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.amber.shade50,
                     borderRadius: BorderRadius.circular(10),
@@ -261,12 +273,16 @@ class _MandiScreenState extends State<MandiScreen> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.offline_bolt_rounded, size: 16, color: Colors.orange),
+                      Icon(Icons.offline_bolt_rounded,
+                          size: 16, color: Colors.orange),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Displaying SWR cached rates while syncing with Ministry of Agriculture portal.',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87),
                         ),
                       ),
                     ],
@@ -277,7 +293,8 @@ class _MandiScreenState extends State<MandiScreen> {
               SliverToBoxAdapter(
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(10),
@@ -285,12 +302,16 @@ class _MandiScreenState extends State<MandiScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.cloud_off_rounded, size: 16, color: AppConstants.dangerRed),
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 16, color: AppConstants.dangerRed),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppConstants.dangerRed),
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppConstants.dangerRed),
                         ),
                       ),
                     ],
@@ -314,10 +335,17 @@ class _MandiScreenState extends State<MandiScreen> {
                               isDense: true,
                               filled: true,
                               fillColor: Colors.white,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
                             ),
-                            items: _states.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12)))).toList(),
+                            items: _states
+                                .map((s) => DropdownMenuItem(
+                                    value: s,
+                                    child: Text(s,
+                                        style: const TextStyle(fontSize: 12))))
+                                .toList(),
                             onChanged: (val) {
                               if (val != null) {
                                 setState(() => _selectedState = val);
@@ -335,10 +363,17 @@ class _MandiScreenState extends State<MandiScreen> {
                               isDense: true,
                               filled: true,
                               fillColor: Colors.white,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
                             ),
-                            items: _commodities.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))).toList(),
+                            items: _commodities
+                                .map((c) => DropdownMenuItem(
+                                    value: c,
+                                    child: Text(c,
+                                        style: const TextStyle(fontSize: 12))))
+                                .toList(),
                             onChanged: (val) {
                               if (val != null) {
                                 setState(() => _selectedCommodity = val);
@@ -357,7 +392,8 @@ class _MandiScreenState extends State<MandiScreen> {
                         suffixIcon: _searchQuery.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear_rounded),
-                                onPressed: () => setState(() => _searchQuery = ''),
+                                onPressed: () =>
+                                    setState(() => _searchQuery = ''),
                               )
                             : null,
                         filled: true,
@@ -368,7 +404,8 @@ class _MandiScreenState extends State<MandiScreen> {
                         ),
                         isDense: true,
                       ),
-                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                      onChanged: (val) =>
+                          setState(() => _searchQuery = val.trim()),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -415,7 +452,8 @@ class _MandiScreenState extends State<MandiScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => const Padding(
                       padding: EdgeInsets.only(bottom: 12),
-                      child: ShimmerSkeleton(width: double.infinity, height: 120),
+                      child:
+                          ShimmerSkeleton(width: double.infinity, height: 120),
                     ),
                     childCount: 4,
                   ),
@@ -428,10 +466,12 @@ class _MandiScreenState extends State<MandiScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.storefront_outlined, size: 56, color: Colors.grey.shade400),
+                      Icon(Icons.storefront_outlined,
+                          size: 56, color: Colors.grey.shade400),
                       const SizedBox(height: 12),
                       Text(
-                        _errorMessage ?? 'No Mandi transactions found for this search.',
+                        _errorMessage ??
+                            'No Mandi transactions found for this search.',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 14,
@@ -469,11 +509,13 @@ class _MandiScreenState extends State<MandiScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           rate.commodity,
@@ -528,7 +570,8 @@ class _MandiScreenState extends State<MandiScreen> {
                               ),
                               const Divider(height: 20),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     'Min: ₹${rate.minPrice.toInt()} • Max: ₹${rate.maxPrice.toInt()}',
@@ -539,7 +582,8 @@ class _MandiScreenState extends State<MandiScreen> {
                                     ),
                                   ),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: AppConstants.primaryLight,
                                       borderRadius: BorderRadius.circular(4),

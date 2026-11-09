@@ -34,9 +34,9 @@ class FarmEntry {
       amount: (json['amount'] ?? 0).toDouble(),
       isIncome: json['isIncome'] ?? false,
       category: json['category'] ?? 'General',
-      date: json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
+      date:
+          json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       note: json['note'] ?? '',
     );
   }
 }
-

@@ -78,4 +78,3 @@ class AppConstants {
   static const String viewLogin = 'login';
   static const String viewRegister = 'register';
 }
-

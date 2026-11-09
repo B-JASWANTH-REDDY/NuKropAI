@@ -13,7 +13,8 @@ class GramHaulScreen extends StatefulWidget {
 }
 
 class _GramHaulScreenState extends State<GramHaulScreen> {
-  final TextEditingController _weightController = TextEditingController(text: '40');
+  final TextEditingController _weightController =
+      TextEditingController(text: '40');
   String _selectedCrop = 'Cotton';
   String _destination = 'Enumamula APMC Yard';
   GramHaulTrip? _activeTrip;
@@ -111,7 +112,8 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(8),
@@ -130,23 +132,27 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                       const SizedBox(height: 8),
                       Text(
                         'Driver: ${_activeTrip!.driverName} (${_activeTrip!.vehicleNumber})',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       Text(
                         'Route: ${_activeTrip!.pickupLocation} ➔ ${_activeTrip!.destinationMandi}',
-                        style: const TextStyle(fontSize: 12, color: AppConstants.textMuted),
+                        style: const TextStyle(
+                            fontSize: 12, color: AppConstants.textMuted),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Est. Fare: ₹${_activeTrip!.estimatedFare.toInt()} (${_activeTrip!.weightQuintals.toInt()} Qtl ${_activeTrip!.crop})',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: () {
                           LuxuryToast.show(
                             context,
-                            message: 'Trip completed! Dynamic UPI QR generated for payment.',
+                            message:
+                                'Trip completed! Dynamic UPI QR generated for payment.',
                           );
                           setState(() {
                             _activeTrip = null;
@@ -169,7 +175,8 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                   children: [
                     const Text(
                       'Request Freight Haul',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -177,11 +184,14 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             initialValue: _selectedCrop,
-                            decoration: const InputDecoration(labelText: 'Crop'),
+                            decoration:
+                                const InputDecoration(labelText: 'Crop'),
                             items: ['Cotton', 'Chilli', 'Paddy', 'Maize']
-                                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                                .map((c) =>
+                                    DropdownMenuItem(value: c, child: Text(c)))
                                 .toList(),
-                            onChanged: (val) => setState(() => _selectedCrop = val!),
+                            onChanged: (val) =>
+                                setState(() => _selectedCrop = val!),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -199,12 +209,16 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: _destination,
-                      decoration: const InputDecoration(labelText: 'Destination Mandi'),
+                      decoration:
+                          const InputDecoration(labelText: 'Destination Mandi'),
                       items: [
                         'Enumamula APMC Yard',
                         'Warangal Grain Yard',
                         'Khammam Cotton Market',
-                      ].map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                      ]
+                          .map(
+                              (m) => DropdownMenuItem(value: m, child: Text(m)))
+                          .toList(),
                       onChanged: (val) => setState(() => _destination = val!),
                     ),
                   ],
@@ -249,11 +263,14 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                             ),
                             Text(
                               '${truck["truck"]} • ${truck["reg"]}',
-                              style: const TextStyle(fontSize: 11, color: AppConstants.textMuted),
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppConstants.textMuted),
                             ),
                             Text(
                               '📍 ${truck["distance"]} • ${truck["rating"]}',
-                              style: const TextStyle(fontSize: 11, color: AppConstants.primaryDark),
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppConstants.primaryDark),
                             ),
                           ],
                         ),
@@ -270,10 +287,12 @@ class _GramHaulScreenState extends State<GramHaulScreen> {
                           const SizedBox(height: 6),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
                             ),
                             onPressed: () => _bookHauler(truck),
-                            child: const Text('Book', style: TextStyle(fontSize: 12)),
+                            child: const Text('Book',
+                                style: TextStyle(fontSize: 12)),
                           ),
                         ],
                       ),

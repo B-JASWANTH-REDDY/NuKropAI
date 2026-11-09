@@ -17,7 +17,9 @@ void main() {
   });
 
   group('ApiClient Enterprise Network Engine Suite', () {
-    test('Injects Authorization, Correlation ID, and Idempotency headers on mutations', () async {
+    test(
+        'Injects Authorization, Correlation ID, and Idempotency headers on mutations',
+        () async {
       await SecureStorage.saveTokens(
         accessToken: 'valid_test_access_jwt',
         refreshToken: 'valid_test_refresh_jwt',
@@ -66,7 +68,9 @@ void main() {
     test('Classifies 403 Forbidden with ForbiddenException', () async {
       final mockClient = MockClient((request) async {
         return http.Response(
-          jsonEncode({'error': 'Forbidden: Administrative self-registration prohibited'}),
+          jsonEncode({
+            'error': 'Forbidden: Administrative self-registration prohibited'
+          }),
           403,
         );
       });
@@ -79,7 +83,9 @@ void main() {
       );
     });
 
-    test('Handles 401 Unauthorized by executing token refresh and retrying original request', () async {
+    test(
+        'Handles 401 Unauthorized by executing token refresh and retrying original request',
+        () async {
       await SecureStorage.saveTokens(
         accessToken: 'expired_access_token',
         refreshToken: 'valid_refresh_token',
@@ -102,8 +108,10 @@ void main() {
           return http.Response(jsonEncode({'error': 'Token expired'}), 401);
         }
 
-        if (request.headers['Authorization'] == 'Bearer fresh_rotated_access_token') {
-          return http.Response(jsonEncode({'data': 'authorized_profile_payload'}), 200);
+        if (request.headers['Authorization'] ==
+            'Bearer fresh_rotated_access_token') {
+          return http.Response(
+              jsonEncode({'data': 'authorized_profile_payload'}), 200);
         }
 
         return http.Response(jsonEncode({'error': 'Unexpected token'}), 400);
@@ -114,22 +122,27 @@ void main() {
       final res = await ApiClient.get<Map<String, dynamic>>('/user/profile');
 
       expect(res['data'], equals('authorized_profile_payload'));
-      expect(requestCount, equals(3)); // Initial 401 -> Refresh call -> Successful retry
+      expect(requestCount,
+          equals(3)); // Initial 401 -> Refresh call -> Successful retry
 
       // Verify new tokens saved in hardware Keystore
       final savedAccess = await SecureStorage.getAccessToken();
       expect(savedAccess, equals('fresh_rotated_access_token'));
     });
 
-    test('Environment-aware baseUrl allows dynamic runtime override and reset', () {
+    test('Environment-aware baseUrl allows dynamic runtime override and reset',
+        () {
       expect(ApiClient.baseUrl, isNotEmpty);
       ApiClient.setBaseUrl('https://api.staging.nukropai.com/api/v1/');
-      expect(ApiClient.baseUrl, equals('https://api.staging.nukropai.com/api/v1'));
+      expect(
+          ApiClient.baseUrl, equals('https://api.staging.nukropai.com/api/v1'));
       ApiClient.resetBaseUrl();
       expect(ApiClient.baseUrl, equals(AppConstants.apiBaseUrl));
     });
 
-    test('Preserves identical X-Idempotency-Key across transient 503 retry attempts', () async {
+    test(
+        'Preserves identical X-Idempotency-Key across transient 503 retry attempts',
+        () async {
       final capturedIdempotencyKeys = <String>[];
       int attempt = 0;
 
@@ -139,14 +152,18 @@ void main() {
         if (key != null) capturedIdempotencyKeys.add(key);
 
         if (attempt == 1) {
-          return http.Response(jsonEncode({'error': 'Temporarily unavailable'}), 503);
+          return http.Response(
+              jsonEncode({'error': 'Temporarily unavailable'}), 503);
         }
-        return http.Response(jsonEncode({'success': true, 'txId': 'tx_123'}), 200);
+        return http.Response(
+            jsonEncode({'success': true, 'txId': 'tx_123'}), 200);
       });
 
       ApiClient.setMockClient(mockClient);
 
-      final res = await ApiClient.post<Map<String, dynamic>>('/khata/transactions', body: {'amount': 500});
+      final res = await ApiClient.post<Map<String, dynamic>>(
+          '/khata/transactions',
+          body: {'amount': 500});
       expect(res['success'], isTrue);
       expect(attempt, equals(2));
       expect(capturedIdempotencyKeys.length, equals(2));
@@ -155,4 +172,3 @@ void main() {
     });
   });
 }
-

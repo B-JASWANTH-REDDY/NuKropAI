@@ -1,4 +1,11 @@
-enum TripStatus { requested, accepted, arrived, inTransit, completed, cancelled }
+enum TripStatus {
+  requested,
+  accepted,
+  arrived,
+  inTransit,
+  completed,
+  cancelled
+}
 
 class GramHaulTrip {
   final String id;
@@ -57,4 +64,3 @@ class GramHaulTrip {
     );
   }
 }
-

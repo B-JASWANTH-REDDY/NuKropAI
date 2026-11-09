@@ -41,8 +41,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchHomeLiveIntelligence() async {
     final activeCrop = widget.session.activeCrops.firstOrNull ?? 'Cotton';
-    final state = widget.session.state.isNotEmpty ? widget.session.state : 'Telangana';
-    final district = widget.session.district.isNotEmpty ? widget.session.district : 'Warangal';
+    final state =
+        widget.session.state.isNotEmpty ? widget.session.state : 'Telangana';
+    final district = widget.session.district.isNotEmpty
+        ? widget.session.district
+        : 'Warangal';
 
     // 1. Fetch Live Mandi Rates
     try {
@@ -53,7 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final records = (res['records'] ?? res['data']) as List<dynamic>?;
       if (records != null && records.isNotEmpty) {
         final parsed = records.map((r) {
-          final modal = (r['modal_price'] ?? r['modalPrice'] ?? r['modal'] ?? 0.0);
+          final modal =
+              (r['modal_price'] ?? r['modalPrice'] ?? r['modal'] ?? 0.0);
           final min = (r['min_price'] ?? r['minPrice'] ?? r['min'] ?? 0.0);
           final max = (r['max_price'] ?? r['maxPrice'] ?? r['max'] ?? 0.0);
           return MandiRate(
@@ -72,7 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (mounted) {
           final top = parsed.first;
-          final ticker = parsed.take(3).map((m) => '${m.mandiName} • ${m.commodity} ₹${m.modalPrice.toInt()}').join('   |   ');
+          final ticker = parsed
+              .take(3)
+              .map((m) =>
+                  '${m.mandiName} • ${m.commodity} ₹${m.modalPrice.toInt()}')
+              .join('   |   ');
           setState(() {
             _liveRate = top;
             _marketTickerText = ticker;
@@ -82,7 +90,8 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           setState(() {
             _liveRate = null;
-            _marketTickerText = 'No APMC Mandi arrivals recorded for $activeCrop in $district today';
+            _marketTickerText =
+                'No APMC Mandi arrivals recorded for $activeCrop in $district today';
           });
         }
       }
@@ -90,7 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _liveRate = null;
-          _marketTickerText = 'Mandi intelligence service temporarily unreachable';
+          _marketTickerText =
+              'Mandi intelligence service temporarily unreachable';
         });
       }
     } finally {
@@ -132,7 +142,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // 3. Fetch Unread Notifications
     try {
-      final nRes = await ApiClient.get<Map<String, dynamic>>('/weather/notifications/unread-count');
+      final nRes = await ApiClient.get<Map<String, dynamic>>(
+          '/weather/notifications/unread-count');
       if (mounted && nRes['unreadCount'] is num) {
         setState(() {
           _notificationCount = (nRes['unreadCount'] as num).toInt();
@@ -184,7 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 color: AppConstants.primaryLight,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppConstants.primaryGreen, width: 1.5),
+                border:
+                    Border.all(color: AppConstants.primaryGreen, width: 1.5),
               ),
               child: const Center(
                 child: Icon(
@@ -487,17 +499,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 2),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _liveRate != null ? AppConstants.primaryLight : Colors.grey.shade100,
+                        color: _liveRate != null
+                            ? AppConstants.primaryLight
+                            : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        _liveRate != null ? '🏛️ Agmarknet Live' : '🏛️ No Arrivals Recorded',
+                        _liveRate != null
+                            ? '🏛️ Agmarknet Live'
+                            : '🏛️ No Arrivals Recorded',
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
-                          color: _liveRate != null ? AppConstants.primaryDark : AppConstants.textMuted,
+                          color: _liveRate != null
+                              ? AppConstants.primaryDark
+                              : AppConstants.textMuted,
                         ),
                       ),
                     ),
@@ -513,7 +532,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.show_chart_rounded, size: 14),
                     label: const Text(
                       'Price Trend',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      style:
+                          TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppConstants.textDark,
@@ -523,18 +543,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                     ),
-                    onPressed: () => widget.onNavigateToScreen(AppConstants.viewMarket),
+                    onPressed: () =>
+                        widget.onNavigateToScreen(AppConstants.viewMarket),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: _isCreatingAlert 
-                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.notifications_active_outlined, size: 14),
+                    icon: _isCreatingAlert
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.notifications_active_outlined,
+                            size: 14),
                     label: Text(
                       _isCreatingAlert ? 'Activating...' : 'Set Price Alert',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppConstants.textDark,
@@ -544,42 +570,53 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                     ),
-                    onPressed: _isCreatingAlert ? null : () async {
-                      final crop = widget.session.activeCrops.firstOrNull ?? 'Cotton';
-                      final target = (_liveRate != null && _liveRate!.modalPrice > 0)
-                          ? _liveRate!.modalPrice + 200.0
-                          : 8200.0;
-                      final mandi = _liveRate?.mandiName ?? '${widget.session.district} APMC';
+                    onPressed: _isCreatingAlert
+                        ? null
+                        : () async {
+                            final crop =
+                                widget.session.activeCrops.firstOrNull ??
+                                    'Cotton';
+                            final target =
+                                (_liveRate != null && _liveRate!.modalPrice > 0)
+                                    ? _liveRate!.modalPrice + 200.0
+                                    : 8200.0;
+                            final mandi = _liveRate?.mandiName ??
+                                '${widget.session.district} APMC';
 
-                      setState(() => _isCreatingAlert = true);
-                      try {
-                        final res = await ApiClient.post<Map<String, dynamic>>(
-                          '/weather/price-alerts',
-                          body: {
-                            'crop': crop,
-                            'targetPrice': target,
-                            'mandi': mandi,
+                            setState(() => _isCreatingAlert = true);
+                            try {
+                              final res =
+                                  await ApiClient.post<Map<String, dynamic>>(
+                                '/weather/price-alerts',
+                                body: {
+                                  'crop': crop,
+                                  'targetPrice': target,
+                                  'mandi': mandi,
+                                },
+                              );
+                              if (context.mounted && res['success'] == true) {
+                                LuxuryToast.show(
+                                  context,
+                                  message: res['message'] ??
+                                      'Price alert activated for $crop',
+                                  icon: Icons.check_circle_rounded,
+                                );
+                              }
+                            } catch (_) {
+                              if (context.mounted) {
+                                LuxuryToast.show(
+                                  context,
+                                  message:
+                                      'Could not set alert: Network or server unavailable',
+                                  icon: Icons.error_outline_rounded,
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isCreatingAlert = false);
+                              }
+                            }
                           },
-                        );
-                        if (context.mounted && res['success'] == true) {
-                          LuxuryToast.show(
-                            context,
-                            message: res['message'] ?? 'Price alert activated for $crop',
-                            icon: Icons.check_circle_rounded,
-                          );
-                        }
-                      } catch (_) {
-                        if (context.mounted) {
-                          LuxuryToast.show(
-                            context,
-                            message: 'Could not set alert: Network or server unavailable',
-                            icon: Icons.error_outline_rounded,
-                          );
-                        }
-                      } finally {
-                        if (mounted) setState(() => _isCreatingAlert = false);
-                      }
-                    },
                   ),
                 ),
               ],
@@ -657,7 +694,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 12),
               Text(
                 'Fetching live weather telemetry for ${widget.session.district}...',
-                style: const TextStyle(fontSize: 12, color: AppConstants.textMuted),
+                style: const TextStyle(
+                    fontSize: 12, color: AppConstants.textMuted),
               ),
             ],
           ),
@@ -708,7 +746,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
@@ -780,9 +819,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isOptimal ? AppConstants.primaryLight : AppConstants.dangerLight,
+                    color: isOptimal
+                        ? AppConstants.primaryLight
+                        : AppConstants.dangerLight,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -790,7 +832,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: isOptimal ? AppConstants.primaryDark : AppConstants.dangerRed,
+                      color: isOptimal
+                          ? AppConstants.primaryDark
+                          : AppConstants.dangerRed,
                     ),
                   ),
                 ),
@@ -806,9 +850,12 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildWeatherMetric(Icons.water_drop_outlined, 'Humidity', '${weather.humidity}%'),
-                  _buildWeatherMetric(Icons.air_rounded, 'Wind', '${weather.windSpeed} km/h'),
-                  _buildWeatherMetric(Icons.access_time_rounded, 'Window', weather.sprayWindow),
+                  _buildWeatherMetric(Icons.water_drop_outlined, 'Humidity',
+                      '${weather.humidity}%'),
+                  _buildWeatherMetric(
+                      Icons.air_rounded, 'Wind', '${weather.windSpeed} km/h'),
+                  _buildWeatherMetric(
+                      Icons.access_time_rounded, 'Window', weather.sprayWindow),
                 ],
               ),
             ),
@@ -817,7 +864,8 @@ class _HomeScreenState extends State<HomeScreen> {
               alignment: Alignment.centerLeft,
               child: Text(
                 'Source: ${weather.source}',
-                style: const TextStyle(fontSize: 9, color: AppConstants.textMuted),
+                style:
+                    const TextStyle(fontSize: 9, color: AppConstants.textMuted),
               ),
             ),
           ],
@@ -836,7 +884,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text(
               title,
-              style: const TextStyle(fontSize: 10, color: AppConstants.textMuted),
+              style:
+                  const TextStyle(fontSize: 10, color: AppConstants.textMuted),
             ),
             Text(
               value,

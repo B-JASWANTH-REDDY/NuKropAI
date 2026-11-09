@@ -55,7 +55,7 @@ class LanguageSelectSheet extends StatelessWidget {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: languages.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final lang = languages[index];
                 final isSelected = lang['code'] == currentLang;
@@ -63,13 +63,17 @@ class LanguageSelectSheet extends StatelessWidget {
                   title: Text(
                     lang['name']!,
                     style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                      color: isSelected ? AppConstants.primaryDark : AppConstants.textDark,
+                      fontWeight:
+                          isSelected ? FontWeight.w800 : FontWeight.w500,
+                      color: isSelected
+                          ? AppConstants.primaryDark
+                          : AppConstants.textDark,
                     ),
                   ),
                   subtitle: Text(lang['native']!),
                   trailing: isSelected
-                      ? const Icon(Icons.check_circle_rounded, color: AppConstants.primaryGreen)
+                      ? const Icon(Icons.check_circle_rounded,
+                          color: AppConstants.primaryGreen)
                       : null,
                   onTap: () async {
                     await SecureStorage.saveLanguage(lang['code']!);

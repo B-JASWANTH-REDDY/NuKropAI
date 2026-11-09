@@ -15,21 +15,24 @@ class BioShieldRadarScreen extends StatelessWidget {
         'crop': 'Cotton',
         'location': 'Warangal Rural (8.4 km away)',
         'severity': 'CRITICAL',
-        'advice': 'Pheromone trap counts exceed 8 moths/night. Install rosette flower traps immediately.',
+        'advice':
+            'Pheromone trap counts exceed 8 moths/night. Install rosette flower traps immediately.',
       },
       {
         'title': 'Chilli Black Thrips (Thrips parvispinus)',
         'crop': 'Chilli',
         'location': 'Nandyal District (24 km away)',
         'severity': 'HIGH',
-        'advice': 'Border planting of maize and sorghum acts as physical barrier. Spray spinosad if threshold >5/leaf.',
+        'advice':
+            'Border planting of maize and sorghum acts as physical barrier. Spray spinosad if threshold >5/leaf.',
       },
       {
         'title': 'Yellow Mosaic Virus (YMV)',
         'crop': 'Soybean & Pulses',
         'location': 'Nizamabad (42 km away)',
         'severity': 'WATCH',
-        'advice': 'Whitefly vector migration observed. Apply neem oil 1500 ppm prophylactically.',
+        'advice':
+            'Whitefly vector migration observed. Apply neem oil 1500 ppm prophylactically.',
       },
     ];
 
@@ -65,7 +68,8 @@ class BioShieldRadarScreen extends StatelessWidget {
               padding: EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(Icons.radar_rounded, color: AppConstants.primaryDark, size: 32),
+                  Icon(Icons.radar_rounded,
+                      color: AppConstants.primaryDark, size: 32),
                   SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -73,11 +77,15 @@ class BioShieldRadarScreen extends StatelessWidget {
                       children: [
                         Text(
                           '25 km Active Surveillance Active',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppConstants.primaryDark),
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppConstants.primaryDark),
                         ),
                         Text(
                           'Connected to ICAR-CRIDA & Telangana Agrarian Early Warning Sensor Grid',
-                          style: TextStyle(fontSize: 11, color: AppConstants.textDark),
+                          style: TextStyle(
+                              fontSize: 11, color: AppConstants.textDark),
                         ),
                       ],
                     ),
@@ -104,7 +112,8 @@ class BioShieldRadarScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: AppConstants.dangerRed.withAlpha(20),
                             borderRadius: BorderRadius.circular(6),
@@ -120,24 +129,32 @@ class BioShieldRadarScreen extends StatelessWidget {
                         ),
                         Text(
                           a['location']!,
-                          style: const TextStyle(fontSize: 11, color: AppConstants.textMuted),
+                          style: const TextStyle(
+                              fontSize: 11, color: AppConstants.textMuted),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
                       a['title']!,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Crop affected: ${a["crop"]}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppConstants.primaryDark),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppConstants.primaryDark),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       a['advice']!,
-                      style: const TextStyle(fontSize: 12, color: AppConstants.textDark, height: 1.3),
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: AppConstants.textDark,
+                          height: 1.3),
                     ),
                   ],
                 ),
@@ -149,4 +166,3 @@ class BioShieldRadarScreen extends StatelessWidget {
     );
   }
 }
-

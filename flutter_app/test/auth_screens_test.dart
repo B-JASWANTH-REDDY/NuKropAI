@@ -19,13 +19,16 @@ void main() {
   });
 
   group('Authentication Flow Integration Suite', () {
-    testWidgets('LoginScreen dispatches authentic POST /auth/login and stores canonical identity', (WidgetTester tester) async {
+    testWidgets(
+        'LoginScreen dispatches authentic POST /auth/login and stores canonical identity',
+        (WidgetTester tester) async {
       bool loginSuccessCalled = false;
 
       final mockClient = MockClient((request) async {
         if (request.url.path.endsWith('/auth/login')) {
           final body = jsonDecode(request.body);
-          if (body['email'] == '9876543210@nukrop.ai' && body['password'] == 'SecretPass@2026') {
+          if (body['email'] == '9876543210@nukrop.ai' &&
+              body['password'] == 'SecretPass@2026') {
             return http.Response(
               jsonEncode({
                 'accessToken': 'auth_test_access_jwt',
@@ -74,13 +77,16 @@ void main() {
       expect(session.accessToken, equals('auth_test_access_jwt'));
     });
 
-    testWidgets('RegisterScreen dispatches authentic POST /auth/register and verifies role', (WidgetTester tester) async {
+    testWidgets(
+        'RegisterScreen dispatches authentic POST /auth/register and verifies role',
+        (WidgetTester tester) async {
       bool registerSuccessCalled = false;
 
       final mockClient = MockClient((request) async {
         if (request.url.path.endsWith('/auth/register')) {
           final body = jsonDecode(request.body);
-          if (body['email'] == 'newfarmer@nukrop.ai' && body['role'] == 'farmer') {
+          if (body['email'] == 'newfarmer@nukrop.ai' &&
+              body['role'] == 'farmer') {
             return http.Response(
               jsonEncode({
                 'accessToken': 'new_reg_access_jwt',
@@ -95,7 +101,8 @@ void main() {
             );
           }
         }
-        return http.Response(jsonEncode({'error': 'Registration rejected'}), 400);
+        return http.Response(
+            jsonEncode({'error': 'Registration rejected'}), 400);
       });
 
       ApiClient.setMockClient(mockClient);

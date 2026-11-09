@@ -117,16 +117,22 @@ class _NuKropFlutterAppState extends State<NuKropFlutterApp> {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.wb_sunny_rounded, color: AppConstants.accentGold),
-              title: Text('Spray Window Safe Today', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              subtitle: Text('07:30 AM - 10:30 AM (Low wind: 11 km/h)', style: TextStyle(fontSize: 11)),
+              leading:
+                  Icon(Icons.wb_sunny_rounded, color: AppConstants.accentGold),
+              title: Text('Spray Window Safe Today',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              subtitle: Text('07:30 AM - 10:30 AM (Low wind: 11 km/h)',
+                  style: TextStyle(fontSize: 11)),
             ),
             Divider(),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.storefront_rounded, color: AppConstants.primaryGreen),
-              title: Text('Warangal Cotton Rate Rose', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              subtitle: Text('₹7,850/Qtl (+₹120 above MSP)', style: TextStyle(fontSize: 11)),
+              leading: Icon(Icons.storefront_rounded,
+                  color: AppConstants.primaryGreen),
+              title: Text('Warangal Cotton Rate Rose',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              subtitle: Text('₹7,850/Qtl (+₹120 above MSP)',
+                  style: TextStyle(fontSize: 11)),
             ),
           ],
         ),
@@ -147,7 +153,8 @@ class _NuKropFlutterAppState extends State<NuKropFlutterApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: PopScope(
-        canPop: _activeScreen == AppConstants.viewHome && _navigationStack.isEmpty,
+        canPop:
+            _activeScreen == AppConstants.viewHome && _navigationStack.isEmpty,
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop) {
             _handleBackPress();
@@ -251,7 +258,8 @@ class _NuKropFlutterAppState extends State<NuKropFlutterApp> {
           onBack: _handleBackPress,
           onShareToCommunity: () {
             _navigateToScreen(AppConstants.viewCommunity);
-            LuxuryToast.show(context, message: 'Diagnosis shared to Kisan Community Feed!');
+            LuxuryToast.show(context,
+                message: 'Diagnosis shared to Kisan Community Feed!');
           },
         );
       case AppConstants.viewMarket:
@@ -301,4 +309,3 @@ class _NuKropFlutterAppState extends State<NuKropFlutterApp> {
     }
   }
 }
-

@@ -9,7 +9,8 @@ class WeatherInfo {
   final int? pressure;
   final double windSpeed;
   final double? windGusts;
-  final String sprayAdvisory; // 'OPTIMAL TO SPRAY', 'UNSAFE TO SPRAY', 'Advisory unavailable'
+  final String
+      sprayAdvisory; // 'OPTIMAL TO SPRAY', 'UNSAFE TO SPRAY', 'Advisory unavailable'
   final String sprayWindow;
   final String source;
   final DateTime observationTime;
@@ -51,8 +52,10 @@ class WeatherInfo {
     final state = locationMap['state']?.toString() ?? 'Telangana';
 
     final isSafe = advisory['isSafe'] == true;
-    final advisoryStatus = advisory['status']?.toString() ?? (isSafe ? 'OPTIMAL TO SPRAY' : 'Advisory unavailable');
-    final window = advisory['window']?.toString() ?? 'Condition-dependent: apply while parameters remain within safe ranges';
+    final advisoryStatus = advisory['status']?.toString() ??
+        (isSafe ? 'OPTIMAL TO SPRAY' : 'Advisory unavailable');
+    final window = advisory['window']?.toString() ??
+        'Condition-dependent: apply while parameters remain within safe ranges';
 
     DateTime obsTime;
     try {
@@ -74,7 +77,8 @@ class WeatherInfo {
       windGusts: windGusts,
       sprayAdvisory: advisoryStatus,
       sprayWindow: window,
-      source: json['source']?.toString() ?? 'Open-Meteo Weather API (NWP Forecast Model)',
+      source: json['source']?.toString() ??
+          'Open-Meteo Weather API (NWP Forecast Model)',
       observationTime: obsTime,
       isAvailable: json['status'] == 'AVAILABLE',
     );

@@ -48,7 +48,9 @@ class _LoginScreenState extends State<LoginScreen>
     }
     // Standard phone normalization to agrarian identity email
     final cleanDigits = trimmed.replaceAll(RegExp(r'\D'), '');
-    final phone = cleanDigits.length > 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+    final phone = cleanDigits.length > 10
+        ? cleanDigits.substring(cleanDigits.length - 10)
+        : cleanDigits;
     return '$phone@nukrop.ai';
   }
 
@@ -95,7 +97,8 @@ class _LoginScreenState extends State<LoginScreen>
       final user = response['user'] as Map<String, dynamic>?;
 
       if (accessToken == null || refreshToken == null || user == null) {
-        throw const ServerException('Server returned an invalid authentication payload.');
+        throw const ServerException(
+            'Server returned an invalid authentication payload.');
       }
 
       final serverRole = (user['role'] as String? ?? 'farmer').toLowerCase();
@@ -112,7 +115,8 @@ class _LoginScreenState extends State<LoginScreen>
       final canonicalUserId = user['id']?.toString() ?? '';
       final session = UserSession(
         userId: canonicalUserId,
-        name: user['name'] ?? (serverRole == 'driver' ? 'Verified Driver' : 'Kisan Mitra'),
+        name: user['name'] ??
+            (serverRole == 'driver' ? 'Verified Driver' : 'Kisan Mitra'),
         email: user['email'] ?? normalizedEmail,
         phone: user['phone'] ?? (identifier.contains('@') ? '' : identifier),
         role: serverRole == 'driver' ? UserRole.driver : UserRole.farmer,
@@ -145,7 +149,8 @@ class _LoginScreenState extends State<LoginScreen>
         setState(() => _isLoading = false);
         LuxuryToast.show(
           context,
-          message: 'Invalid mobile/email or password. Please verify your credentials.',
+          message:
+              'Invalid mobile/email or password. Please verify your credentials.',
           color: AppConstants.dangerRed,
         );
       }

@@ -42,7 +42,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return trimmed;
     }
     final cleanDigits = trimmed.replaceAll(RegExp(r'\D'), '');
-    final phone = cleanDigits.length > 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+    final phone = cleanDigits.length > 10
+        ? cleanDigits.substring(cleanDigits.length - 10)
+        : cleanDigits;
     return '$phone@nukrop.ai';
   }
 
@@ -108,7 +110,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final user = response['user'] as Map<String, dynamic>?;
 
       if (accessToken == null || refreshToken == null || user == null) {
-        throw const ServerException('Server returned an invalid registration response.');
+        throw const ServerException(
+            'Server returned an invalid registration response.');
       }
 
       // Canonical UUID for RLS
@@ -241,7 +244,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 label: const Text('🌾 Kisan / Farmer'),
                                 selected: _selectedRole == 'farmer',
                                 onSelected: (val) {
-                                  if (val) setState(() => _selectedRole = 'farmer');
+                                  if (val) {
+                                    setState(() => _selectedRole = 'farmer');
+                                  }
                                 },
                                 selectedColor: AppConstants.primaryLight,
                               ),
@@ -252,7 +257,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 label: const Text('🚚 Driver'),
                                 selected: _selectedRole == 'driver',
                                 onSelected: (val) {
-                                  if (val) setState(() => _selectedRole = 'driver');
+                                  if (val) {
+                                    setState(() => _selectedRole = 'driver');
+                                  }
                                 },
                                 selectedColor: AppConstants.primaryLight,
                               ),

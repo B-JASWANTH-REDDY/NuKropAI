@@ -115,4 +115,3 @@ class AppLocalizations {
     return langMap[key] ?? _localizedValues['en']![key] ?? key;
   }
 }
-

@@ -36,7 +36,13 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
   String? _selectedImageBase64;
   final ImagePicker _picker = ImagePicker();
 
-  final List<String> _crops = ['Cotton', 'Chilli', 'Paddy', 'Tomato', 'Soil Sample'];
+  final List<String> _crops = [
+    'Cotton',
+    'Chilli',
+    'Paddy',
+    'Tomato',
+    'Soil Sample'
+  ];
 
   @override
   void initState() {
@@ -73,7 +79,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
         if (mounted) {
           LuxuryToast.show(
             context,
-            message: 'Image size exceeds 5MB limit. Please select a smaller photo.',
+            message:
+                'Image size exceeds 5MB limit. Please select a smaller photo.',
             color: Colors.orange,
             icon: Icons.warning_amber_rounded,
           );
@@ -173,14 +180,17 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
           diseaseName.toLowerCase().contains('non-crop')) {
         setState(() {
           _isAnalyzing = false;
-          _errorMessage = 'Inconclusive foliar diagnosis: The image features could not be conclusively matched to a known crop pathogen. Please re-capture in clear lighting.';
+          _errorMessage =
+              'Inconclusive foliar diagnosis: The image features could not be conclusively matched to a known crop pathogen. Please re-capture in clear lighting.';
         });
         return;
       }
 
       final rawConfidence = prediction['confidence'];
       final double parsedConfidence = (rawConfidence is num)
-          ? (rawConfidence > 1 ? rawConfidence.toDouble() / 100.0 : rawConfidence.toDouble())
+          ? (rawConfidence > 1
+              ? rawConfidence.toDouble() / 100.0
+              : rawConfidence.toDouble())
           : 0.0;
 
       final chemicalSol = prediction['chemicalSolution']?.toString();
@@ -188,28 +198,40 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
       final sprayAdv = prediction['sprayAdvisory']?.toString();
 
       final List<String> treatments = [];
-      if (chemicalSol != null && chemicalSol.trim().isNotEmpty && !chemicalSol.toLowerCase().contains('none')) {
+      if (chemicalSol != null &&
+          chemicalSol.trim().isNotEmpty &&
+          !chemicalSol.toLowerCase().contains('none')) {
         treatments.add('Chemical: $chemicalSol');
       }
-      if (organicSol != null && organicSol.trim().isNotEmpty && !organicSol.toLowerCase().contains('none')) {
+      if (organicSol != null &&
+          organicSol.trim().isNotEmpty &&
+          !organicSol.toLowerCase().contains('none')) {
         treatments.add('Organic: $organicSol');
       }
-      if (sprayAdv != null && sprayAdv.trim().isNotEmpty && !sprayAdv.toLowerCase().contains('n/a')) {
+      if (sprayAdv != null &&
+          sprayAdv.trim().isNotEmpty &&
+          !sprayAdv.toLowerCase().contains('n/a')) {
         treatments.add('Advisory: $sprayAdv');
       }
 
       final disease = CropDisease(
         diseaseName: diseaseName,
-        scientificName: prediction['pathogen']?.toString() ?? 'Pathogen classification pending',
+        scientificName: prediction['pathogen']?.toString() ??
+            'Pathogen classification pending',
         crop: _selectedCrop,
         confidence: parsedConfidence,
         severity: prediction['severity']?.toString() ?? 'Moderate',
-        symptoms: prediction['symptoms']?.toString() ?? 'Foliar pathology observed',
+        symptoms:
+            prediction['symptoms']?.toString() ?? 'Foliar pathology observed',
         chemicalControls: chemicalSol ?? 'No chemical control registered',
         organicControls: organicSol ?? 'No organic control registered',
-        icarTreatments: treatments.isNotEmpty ? treatments : ['No registered treatments for indeterminate diagnosis'],
+        icarTreatments: treatments.isNotEmpty
+            ? treatments
+            : ['No registered treatments for indeterminate diagnosis'],
         provenance: response['provenance']?.toString(),
-        timestamp: response['timestamp'] != null ? DateTime.tryParse(response['timestamp'].toString()) : DateTime.now(),
+        timestamp: response['timestamp'] != null
+            ? DateTime.tryParse(response['timestamp'].toString())
+            : DateTime.now(),
         disclaimer: response['disclaimer']?.toString(),
         sprayAdvisory: sprayAdv,
       );
@@ -266,9 +288,13 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
             value: _selectedCrop,
             dropdownColor: Colors.grey.shade900,
             underline: const SizedBox(),
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white),
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
-            items: _crops.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: Colors.white),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+            items: _crops
+                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .toList(),
             onChanged: (val) {
               if (val != null) setState(() => _selectedCrop = val);
             },
@@ -362,7 +388,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                               color: AppConstants.primaryGreen,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppConstants.primaryGreen.withAlpha(200),
+                                  color:
+                                      AppConstants.primaryGreen.withAlpha(200),
                                   blurRadius: 10,
                                   spreadRadius: 2,
                                 ),
@@ -385,14 +412,16 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                   padding: const EdgeInsets.all(20),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+                          const Icon(Icons.warning_amber_rounded,
+                              color: Colors.orange, size: 24),
                           const SizedBox(width: 8),
                           const Expanded(
                             child: Text(
@@ -410,13 +439,17 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                       Text(
                         _rejectionMessage ??
                             'The provided image does not match verified agricultural crop foliage or farm soil. No synthetic diagnosis generated.',
-                        style: const TextStyle(fontSize: 13, height: 1.4, color: AppConstants.textDark),
+                        style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: AppConstants.textDark),
                       ),
                       const Spacer(),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () => setState(() => _isNonCropRejection = false),
+                          onPressed: () =>
+                              setState(() => _isNonCropRejection = false),
                           child: const Text('Capture Genuine Foliar Photo'),
                         ),
                       ),
@@ -432,17 +465,22 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                   padding: const EdgeInsets.all(20),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.cloud_off_rounded, size: 48, color: AppConstants.dangerRed),
+                      const Icon(Icons.cloud_off_rounded,
+                          size: 48, color: AppConstants.dangerRed),
                       const SizedBox(height: 12),
                       Text(
                         _errorMessage!,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppConstants.textDark),
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppConstants.textDark),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
@@ -461,7 +499,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                   padding: const EdgeInsets.all(20),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(24)),
                   ),
                   child: SingleChildScrollView(
                     child: Column(
@@ -512,15 +551,18 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                         if (_diagnosticResult!.provenance != null) ...[
                           const SizedBox(height: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppConstants.borderSubtle),
+                              border:
+                                  Border.all(color: AppConstants.borderSubtle),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.psychology_outlined, size: 14, color: AppConstants.primaryDark),
+                                const Icon(Icons.psychology_outlined,
+                                    size: 14, color: AppConstants.primaryDark),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
@@ -553,7 +595,9 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('• ', style: TextStyle(fontWeight: FontWeight.w800)),
+                                const Text('• ',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w800)),
                                 Expanded(
                                   child: Text(
                                     treatment,
@@ -592,7 +636,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                                   } else {
                                     LuxuryToast.show(
                                       context,
-                                      message: 'Prescription shared to Kisan Community Feed!',
+                                      message:
+                                          'Prescription shared to Kisan Community Feed!',
                                     );
                                   }
                                 },
@@ -612,7 +657,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.flash_on_rounded, color: Colors.white),
+                      icon: const Icon(Icons.flash_on_rounded,
+                          color: Colors.white),
                       tooltip: 'Toggle Flash',
                       onPressed: () {
                         LuxuryToast.show(
@@ -624,26 +670,35 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                       },
                     ),
                     GestureDetector(
-                      onTap: _isAnalyzing ? null : () => _pickImage(ImageSource.camera),
+                      onTap: _isAnalyzing
+                          ? null
+                          : () => _pickImage(ImageSource.camera),
                       child: Container(
                         width: 72,
                         height: 72,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 4),
-                          color: _isAnalyzing ? Colors.grey : AppConstants.primaryGreen,
+                          color: _isAnalyzing
+                              ? Colors.grey
+                              : AppConstants.primaryGreen,
                         ),
                         child: Icon(
-                          _isAnalyzing ? Icons.hourglass_top_rounded : Icons.camera_alt_rounded,
+                          _isAnalyzing
+                              ? Icons.hourglass_top_rounded
+                              : Icons.camera_alt_rounded,
                           color: Colors.white,
                           size: 32,
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.photo_library_rounded, color: Colors.white),
+                      icon: const Icon(Icons.photo_library_rounded,
+                          color: Colors.white),
                       tooltip: 'Pick from Gallery',
-                      onPressed: _isAnalyzing ? null : () => _pickImage(ImageSource.gallery),
+                      onPressed: _isAnalyzing
+                          ? null
+                          : () => _pickImage(ImageSource.gallery),
                     ),
                   ],
                 ),

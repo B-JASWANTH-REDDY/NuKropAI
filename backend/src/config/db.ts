@@ -103,10 +103,11 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
       created_at: new Date()
     };
     memoryStore.users.push(newUser);
+    const generatedPublicId = `nk_pub_${crypto.randomBytes(8).toString('hex')}`;
     memoryStore.profiles.push({
       id: newUser.id,
       user_id: newUser.id,
-      public_id: `nk_pub_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`,
+      public_id: generatedPublicId,
       email: newUser.email,
       role: newUser.role,
       full_name: newUser.email.split('@')[0],
@@ -137,7 +138,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     const optedIn = memoryStore.profiles
       .filter(p => p.public_profile_enabled === true)
       .map(p => ({
-        public_id: p.public_id || `nk_pub_${String(p.id).replace(/-/g, '').substring(0, 16)}`,
+        public_id: p.public_id || (p.public_id = `nk_pub_${crypto.randomBytes(8).toString('hex')}`),
         full_name: p.full_name,
         role: p.role,
         avatar_url: p.avatar_url || null,
@@ -146,6 +147,10 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
         created_at: p.created_at
       }));
     return { rows: optedIn };
+  }
+
+  if (queryStr.includes('update public.profiles') && queryStr.includes('public_id =')) {
+    throw new Error('IMMUTABLE_FIELD: public_id cannot be modified once set');
   }
 
   if (queryStr.includes('select * from public.users where email =')) {

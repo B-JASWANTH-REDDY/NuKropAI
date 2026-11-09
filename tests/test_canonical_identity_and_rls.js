@@ -398,6 +398,91 @@ async function main() {
     assert.strictEqual(res.statusCode, 404);
   });
 
+  await testAsync('ID-18: Cross-collision (Profile A id === Profile B user_id) returns HTTP 409 AMBIGUOUS_IDENTITY', async () => {
+    const crossUidX = '66666666-6666-6666-6666-666666666661';
+    const crossUidY = '66666666-6666-6666-6666-666666666662';
+    const crossUidZ = '66666666-6666-6666-6666-666666666663';
+
+    // Profile X has id=crossUidX, user_id=crossUidY
+    memoryStore.profiles.push({
+      id: crossUidX,
+      user_id: crossUidY,
+      public_id: 'nk_pub_cross_x1',
+      full_name: 'Cross Collision Farmer X',
+      role: 'farmer',
+      public_profile_enabled: false,
+      created_at: new Date()
+    });
+
+    // Profile Y has id=crossUidY, user_id=crossUidZ
+    memoryStore.profiles.push({
+      id: crossUidY,
+      user_id: crossUidZ,
+      public_id: 'nk_pub_cross_y1',
+      full_name: 'Cross Collision Farmer Y',
+      role: 'farmer',
+      public_profile_enabled: false,
+      created_at: new Date()
+    });
+
+    const crossToken = jwt.sign(
+      { sub: crossUidY, role: 'authenticated', app_metadata: { role: 'farmer' } },
+      process.env.JWT_SECRET,
+      { audience: 'authenticated', issuer: 'https://nukrop-agri-test.supabase.co/auth/v1', expiresIn: '1h' }
+    );
+
+    // Call discovery endpoint as crossUidY: matches both Profile X (user_id) and Profile Y (id)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${crossToken}` },
+      payload: { enabled: true }
+    });
+
+    assert.strictEqual(res.statusCode, 409);
+    const body = JSON.parse(res.body);
+    assert.strictEqual(body.code, 'AMBIGUOUS_IDENTITY');
+
+    // Verify neither profile row was modified
+    const profX = memoryStore.profiles.find(p => p.id === crossUidX);
+    const profY = memoryStore.profiles.find(p => p.id === crossUidY);
+    assert.strictEqual(profX.public_profile_enabled, false);
+    assert.strictEqual(profY.public_profile_enabled, false);
+  });
+
+  await testAsync('ID-19: Registration generates dedicated cryptographically secure public_id (nk_pub_*)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        email: 'csprng.farmer@nukrop.in',
+        password: 'FarmerSecurePass456!',
+        role: 'farmer'
+      }
+    });
+
+    assert.strictEqual(res.statusCode, 201);
+    const body = JSON.parse(res.body);
+    const createdProfile = memoryStore.profiles.find(p => p.id === body.user.id);
+    assert(createdProfile, 'Profile must exist in store');
+    assert.match(createdProfile.public_id, /^nk_pub_[0-9a-f]{16}$/i);
+    // Ensure public_id is completely independent of user UUID and email
+    assert(!createdProfile.public_id.includes(body.user.id.replace(/-/g, '')));
+    assert(!createdProfile.public_id.includes('farmer'));
+  });
+
+  await testAsync('ID-20: Attempting to mutate public_id is rejected as immutable (IMMUTABLE_FIELD)', async () => {
+    let immutabilityViolated = false;
+    try {
+      await query('UPDATE public.profiles SET public_id = $1 WHERE id = $2', ['nk_pub_hack', farmerId]);
+    } catch (e) {
+      if (e.message.includes('IMMUTABLE_FIELD')) {
+        immutabilityViolated = true;
+      }
+    }
+    assert.strictEqual(immutabilityViolated, true, 'Updating public_id must throw IMMUTABLE_FIELD error');
+  });
+
   console.log('\n================================================================================');
   console.log(`📊 CANONICAL IDENTITY AUDIT: ${passed}/${total} PASSED`);
   console.log('================================================================================\n');

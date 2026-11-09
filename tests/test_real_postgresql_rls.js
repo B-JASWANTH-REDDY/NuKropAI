@@ -681,6 +681,133 @@ $$ LANGUAGE plpgsql STABLE;`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
     `);
 
+    // P0-PUBID-1: Profile creation automatically populates non-null CSPRNG public_id via trigger/default
+    await pglite.exec(`RESET ROLE;`);
+    const newTestUid = '77777777-7777-7777-7777-777777777771';
+    await pglite.query(`
+      INSERT INTO auth.users (id, email) VALUES ($1, 'pubid_test@nukrop.ai') ON CONFLICT (id) DO NOTHING;
+    `, [newTestUid]);
+    const pubIdCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [newTestUid]);
+    const assignedPubId = pubIdCheck.rows[0]?.public_id;
+    if (typeof assignedPubId === 'string' && assignedPubId.startsWith('nk_pub_') && assignedPubId.length >= 23) {
+      pass('P0-PUBID-NONNULL', `public_id generated automatically on creation without bypass (${assignedPubId})`);
+    } else {
+      fail('P0-PUBID-NONNULL', `public_id was not properly generated: ${assignedPubId}`);
+    }
+
+    // P0-PUBID-2: Attempting to insert explicit NULL public_id is caught and populated by trigger
+    const nullBypassUid = '77777777-7777-7777-7777-777777777772';
+    await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+    await pglite.query(`
+      INSERT INTO auth.users (id, email) VALUES ($1, 'null_bypass@nukrop.ai') ON CONFLICT (id) DO NOTHING;
+    `, [nullBypassUid]);
+    await pglite.query(`
+      INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+      VALUES ($1, $1, 'null_bypass@nukrop.ai', 'Null Bypass User', 'farmer', NULL);
+    `, [nullBypassUid]);
+    await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    const nullBypassCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [nullBypassUid]);
+    const bypassedPubId = nullBypassCheck.rows[0]?.public_id;
+    if (typeof bypassedPubId === 'string' && bypassedPubId.startsWith('nk_pub_')) {
+      pass('P0-PUBID-TRIGGER-POPULATE', `NULL public_id safely coerced to CSPRNG public_id by trigger (${bypassedPubId})`);
+    } else {
+      fail('P0-PUBID-TRIGGER-POPULATE', `NULL public_id was not coerced: ${bypassedPubId}`);
+    }
+
+    // P0-PUBID-3: Immutability enforcement - Attempting to UPDATE public_id is rejected by trigger
+    let pubIdUpdateBlocked = false;
+    try {
+      await pglite.query(`
+        UPDATE public.profiles SET public_id = 'nk_pub_attacker_override' WHERE id = $1;
+      `, [newTestUid]);
+    } catch (e) {
+      if (e.message.includes('IMMUTABLE_FIELD') || e.message.includes('cannot be modified')) {
+        pubIdUpdateBlocked = true;
+      }
+    }
+    if (pubIdUpdateBlocked) {
+      pass('P0-PUBID-IMMUTABLE', 'Attempt to update public_id strictly blocked by immutability trigger (IMMUTABLE_FIELD)');
+    } else {
+      fail('P0-PUBID-IMMUTABLE', 'public_id was mutable! Immutability trigger failed.');
+    }
+
+    // P0-PUBID-4: Collision protection - Duplicate public_id insert rejected by unique index
+    let pubIdCollisionBlocked = false;
+    const collisionUid = '77777777-7777-7777-7777-777777777773';
+    try {
+      await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+      await pglite.query(`
+        INSERT INTO auth.users (id, email) VALUES ($1, 'collision@nukrop.ai') ON CONFLICT (id) DO NOTHING;
+      `, [collisionUid]);
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+        VALUES ($1, $1, 'collision@nukrop.ai', 'Collision User', 'farmer', $2);
+      `, [collisionUid, assignedPubId]);
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    } catch (e) {
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+      if (e.message.includes('unique') || e.message.includes('duplicate key') || e.message.includes('idx_profiles_public_id_unique')) {
+        pubIdCollisionBlocked = true;
+      }
+    }
+    if (pubIdCollisionBlocked) {
+      pass('P0-PUBID-COLLISION', 'Duplicate public_id insertion strictly blocked by unique constraint');
+    } else {
+      fail('P0-PUBID-COLLISION', 'Duplicate public_id was permitted! Collision protection failed.');
+    }
+
+    // P0-PUBID-5: Migration rerun idempotency - Rerunning backfill does NOT regenerate existing public_id
+    const pubIdBeforeRerun = assignedPubId;
+    await pglite.query(`
+      UPDATE public.profiles 
+      SET public_id = 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16)
+      WHERE public_id IS NULL;
+    `);
+    const pubIdAfterRerunCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [newTestUid]);
+    const pubIdAfterRerun = pubIdAfterRerunCheck.rows[0]?.public_id;
+    if (pubIdBeforeRerun === pubIdAfterRerun) {
+      pass('P0-PUBID-RERUN-STABLE', 'Migration rerun preserves existing public_id without regeneration (idempotent)');
+    } else {
+      fail('P0-PUBID-RERUN-STABLE', `public_id was mutated on rerun: before=${pubIdBeforeRerun}, after=${pubIdAfterRerun}`);
+    }
+
+    // P1-CROSS-COLLISION: Profile A id collides with Profile B user_id
+    // Profile X has id=uidX, user_id=uidY. Profile Y has id=uidY, user_id=uidZ.
+    const uidX = '66666666-6666-6666-6666-666666666661';
+    const uidY = '66666666-6666-6666-6666-666666666662';
+    const uidZ = '66666666-6666-6666-6666-666666666663';
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'userX@nukrop.ai'), ($2, 'userY@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [uidX, uidY]);
+    // First update Profile Y's user_id to uidZ so user_id values remain unique across both profiles
+    await pglite.query(`UPDATE public.profiles SET user_id = $2 WHERE id = $1;`, [uidY, uidZ]);
+    // Then update Profile X's user_id to uidY (colliding Profile X user_id with Profile Y id)
+    await pglite.query(`UPDATE public.profiles SET user_id = $2 WHERE id = $1;`, [uidX, uidY]);
+
+    // As user Y: Both profiles match query (id::text = Y OR user_id::text = Y)
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${uidY}", "role": "authenticated"}';
+    `);
+    let crossCollisionRpcBlocked = false;
+    try {
+      await pglite.query(`SELECT public.set_my_profile_discovery(true)`);
+    } catch (e) {
+      if (e.message.includes('AMBIGUOUS_IDENTITY')) {
+        crossCollisionRpcBlocked = true;
+      }
+    }
+    // Verify neither profile was updated
+    await pglite.exec(`RESET ROLE;`);
+    const checkProfA = await pglite.query(`SELECT public_profile_enabled FROM public.profiles WHERE id = $1`, [uidX]);
+    const checkProfB = await pglite.query(`SELECT public_profile_enabled FROM public.profiles WHERE id = $1`, [uidY]);
+    if (crossCollisionRpcBlocked && !checkProfA.rows[0]?.public_profile_enabled && !checkProfB.rows[0]?.public_profile_enabled) {
+      pass('P1-CROSS-COLLISION', 'Cross-collision (Profile A id === Profile B user_id) safely raises AMBIGUOUS_IDENTITY without mutating either profile');
+    } else {
+      fail('P1-CROSS-COLLISION', `Cross-collision failed: blocked=${crossCollisionRpcBlocked}, profA=${checkProfA.rows[0]?.public_profile_enabled}, profB=${checkProfB.rows[0]?.public_profile_enabled}`);
+    }
+
+    // Clean up test profiles
+    await pglite.query(`DELETE FROM public.profiles WHERE id IN ($1, $2, $3, $4, $5)`, [newTestUid, nullBypassUid, collisionUid, uidX, uidY]);
+
     // AS DRIVER: Test driver profile access
     await pglite.exec(`
       SET ROLE authenticated;

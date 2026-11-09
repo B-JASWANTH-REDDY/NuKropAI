@@ -948,8 +948,49 @@ SET public_id = 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', '')
 WHERE public_id IS NULL;
 
 ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT ('nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16));
+ALTER TABLE public.profiles ALTER COLUMN public_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id_unique ON public.profiles(public_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
+
+-- Enforce public_id generation on profile insert (cannot be bypassed even with NULL payload)
+CREATE OR REPLACE FUNCTION public.ensure_profile_public_id()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.public_id IS NULL OR NEW.public_id = '' THEN
+    NEW.public_id := 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_ensure_profile_public_id ON public.profiles;
+CREATE TRIGGER trg_ensure_profile_public_id
+  BEFORE INSERT ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.ensure_profile_public_id();
+
+-- Enforce public_id immutability on profile updates
+CREATE OR REPLACE FUNCTION public.protect_profile_immutable_fields()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF (OLD.public_id IS NOT NULL AND OLD.public_id IS DISTINCT FROM NEW.public_id) THEN
+    RAISE EXCEPTION 'IMMUTABLE_FIELD: public_id cannot be modified once set';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_immutable_fields ON public.profiles;
+CREATE TRIGGER trg_protect_profile_immutable_fields
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.protect_profile_immutable_fields();
 
 DO $$
 DECLARE
@@ -1079,7 +1120,7 @@ REVOKE EXECUTE ON FUNCTION public.set_my_profile_discovery(boolean) FROM anon, P
 -- private profile columns or permitting arbitrary user enumeration.
 CREATE OR REPLACE FUNCTION public.get_community_author_profile(p_author_id text)
 RETURNS TABLE (
-  farmer_id text,
+  public_id text,
   full_name text,
   avatar_url text,
   district text,
@@ -1093,9 +1134,9 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS \$\$
+AS $$
   SELECT 
-    p.farmer_id,
+    p.public_id,
     p.full_name,
     p.avatar_url,
     p.district,
@@ -1105,7 +1146,7 @@ AS \$\$
     p.preferred_language,
     p.created_at
   FROM public.profiles p
-  WHERE p.id = p_author_id
+  WHERE (p.id = p_author_id OR p.user_id = p_author_id)
     AND (
       p.id = auth.uid()::text
       OR EXISTS (SELECT 1 FROM public.community_posts cp WHERE cp.author_id = p.id)
@@ -1113,7 +1154,7 @@ AS \$\$
       OR EXISTS (SELECT 1 FROM public.community_comments cc WHERE cc.author_id = p.id)
     )
   LIMIT 1;
-\$\$;
+$$;
 
 REVOKE ALL ON FUNCTION public.get_community_author_profile(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_community_author_profile(text) TO authenticated, service_role;
@@ -1121,7 +1162,7 @@ GRANT EXECUTE ON FUNCTION public.get_community_author_profile(text) TO authentic
 CREATE OR REPLACE FUNCTION public.get_community_authors(p_author_ids text[])
 RETURNS TABLE (
   author_id text,
-  farmer_id text,
+  public_id text,
   full_name text,
   avatar_url text,
   district text,
@@ -1133,10 +1174,10 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
-AS \$\$
+AS $$
   SELECT 
     p.id AS author_id,
-    p.farmer_id,
+    p.public_id,
     p.full_name,
     p.avatar_url,
     p.district,
@@ -1151,7 +1192,7 @@ AS \$\$
       OR EXISTS (SELECT 1 FROM public.community_stories cs WHERE cs.author_id = p.id)
       OR EXISTS (SELECT 1 FROM public.community_comments cc WHERE cc.author_id = p.id)
     );
-\$\$;
+$$;
 
 REVOKE ALL ON FUNCTION public.get_community_authors(text[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_community_authors(text[]) TO authenticated, service_role;

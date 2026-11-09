@@ -83,7 +83,48 @@ SET public_id = 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', '')
 WHERE public_id IS NULL;
 
 ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT ('nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16));
+ALTER TABLE public.profiles ALTER COLUMN public_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id_unique ON public.profiles(public_id);
+
+-- Enforce public_id generation on profile insert (cannot be bypassed even with NULL payload)
+CREATE OR REPLACE FUNCTION public.ensure_profile_public_id()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.public_id IS NULL OR NEW.public_id = '' THEN
+    NEW.public_id := 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16);
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_ensure_profile_public_id ON public.profiles;
+CREATE TRIGGER trg_ensure_profile_public_id
+  BEFORE INSERT ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.ensure_profile_public_id();
+
+-- Enforce public_id immutability on profile updates
+CREATE OR REPLACE FUNCTION public.protect_profile_immutable_fields()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF (OLD.public_id IS NOT NULL AND OLD.public_id IS DISTINCT FROM NEW.public_id) THEN
+    RAISE EXCEPTION 'IMMUTABLE_FIELD: public_id cannot be modified once set';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_immutable_fields ON public.profiles;
+CREATE TRIGGER trg_protect_profile_immutable_fields
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.protect_profile_immutable_fields();
 
 -- Enforce domain role check on profiles
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;

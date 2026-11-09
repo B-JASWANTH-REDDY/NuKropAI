@@ -106,9 +106,9 @@ def run_adversarial_simulation():
     anon_read_profile = eval_policy_expr(p_using, None, {'id': 'usr-farmer-a', 'user_id': 'usr-farmer-a'})
     assert_perm("Anonymous user SELECT profiles (private table)", anon_read_profile, False)
 
-    # Anon trying to read public_profiles view
-    has_public_view = "CREATE OR REPLACE VIEW public.public_profiles" in sql
-    assert_perm("Anonymous user permitted SELECT public_profiles view", has_public_view, True)
+    # Anon trying to read public_profiles view: must be blocked via REVOKE from PUBLIC, anon
+    anon_view_blocked = "REVOKE ALL ON public.public_profiles FROM PUBLIC, anon" in sql
+    assert_perm("Anonymous user blocked from public_profiles view (REVOKE ALL FROM PUBLIC, anon)", anon_view_blocked, True)
 
     # Anon trying to insert truck listing
     trk_check = policies.get(('truck_listings', 'truck_listings_insert_owner', 'INSERT'), ('', ''))[1]

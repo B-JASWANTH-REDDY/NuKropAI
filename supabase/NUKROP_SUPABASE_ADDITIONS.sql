@@ -64,25 +64,27 @@ CREATE INDEX IF NOT EXISTS idx_post_likes_post_id ON public.post_likes(post_id);
 CREATE INDEX IF NOT EXISTS idx_post_likes_user_id ON public.post_likes(user_id);
 
 -- C. PUBLIC PROFILES VIEW (DPDP Act 2023 Compliant Safe Identity View)
--- Allows community authors and haul drivers to be resolved without exposing
--- sensitive personal data (Aadhaar, AgriStack ULPIN, KCC Balance, Phone Number)
-CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
+-- Defined as a SECURITY DEFINER view (WITH security_barrier = true, security_invoker = false)
+-- owned by postgres so that authenticated users can discover opted-in users' public identities
+-- while keeping the underlying public.profiles table strictly owner-only.
+-- Filters strictly to users who have explicitly opted in (WHERE public_profile_enabled = TRUE).
+-- Excludes internal auth identifiers (id, user_id) and confidential attributes.
+-- Exposes dedicated opaque public_id without auth UUIDs.
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true, security_invoker = false) AS
 SELECT 
-  COALESCE(farmer_id, driver_id, 'NK-' || substring(encode(sha256(id::text::bytea), 'hex') from 1 for 10)) AS public_id,
-  farmer_id,
-  driver_id,
+  public_id,
   full_name,
+  role,
   avatar_url,
   district,
   state,
-  role,
-  agristack_verified,
-  preferred_language,
   created_at
-FROM public.profiles;
+FROM public.profiles
+WHERE public_profile_enabled = TRUE;
 
+ALTER VIEW public.public_profiles OWNER TO postgres;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
-REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated, anon;
 GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────

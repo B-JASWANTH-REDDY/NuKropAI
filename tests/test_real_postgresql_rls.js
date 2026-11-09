@@ -53,6 +53,7 @@ CREATE SCHEMA IF NOT EXISTS auth;
 CREATE TABLE IF NOT EXISTS auth.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE,
+  phone VARCHAR(50),
   raw_user_meta_data JSONB DEFAULT '{}'::jsonb,
   raw_app_meta_data JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -197,6 +198,213 @@ $$ LANGUAGE plpgsql STABLE;`
     } else {
       fail('RLS-2.5', 'Driver deleted Farmer 1 Khata records');
     }
+
+    // =========================================================================
+    // P0.1 TESTS: PROFILES PRIVATE DATA ISOLATION & PUBLIC VIEW VERIFICATION
+    // =========================================================================
+    // AS FARMER 1: Update own profile with sensitive financial and identity data
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+      UPDATE public.profiles SET
+        phone = '+919111111111',
+        land_acres = 12.5,
+        kcc_credit_limit = 250000.00,
+        agristack_id = 'AGR-TEL-WAR-9821'
+      WHERE id = '${farmer1Id}';
+    `);
+    pass('P0.1-1', 'Farmer 1 updated own profile with sensitive PII / financial data');
+
+    // AS FARMER 1: Can select own full profile
+    const f1OwnProfile = await pglite.query(`SELECT phone, land_acres, kcc_credit_limit, agristack_id FROM public.profiles WHERE id = $1`, [farmer1Id]);
+    if (f1OwnProfile.rows.length === 1 && f1OwnProfile.rows[0].phone === '+919111111111') {
+      pass('P0.1-2', 'Farmer 1 can read own sensitive private profile fields');
+    } else {
+      fail('P0.1-2', 'Farmer 1 failed to read own profile');
+    }
+
+    // AS FARMER 2: Attempt to query Farmer 1's private profile table directly
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2ReadF1 = await pglite.query(`SELECT * FROM public.profiles WHERE id = $1`, [farmer1Id]);
+    if (f2ReadF1.rows.length === 0) {
+      pass('P0.1-3', 'Farmer 2 CANNOT read Farmer 1 private profile table (RLS returned 0 rows)');
+    } else {
+      fail('P0.1-3', `Farmer 2 breached Farmer 1 private profile: ${JSON.stringify(f2ReadF1.rows)}`);
+    }
+
+    // AS FARMER 2: Query public.public_profiles discovery view for Farmer 1
+    const f2ReadView = await pglite.query(`SELECT * FROM public.public_profiles WHERE id = $1`, [farmer1Id]);
+    if (f2ReadView.rows.length === 1) {
+      const row = f2ReadView.rows[0];
+      // Verify public fields are present
+      const hasPublicFields = row.full_name !== undefined && row.role !== undefined && row.district !== undefined;
+      // Verify sensitive private fields are NOT present in the view schema
+      const exposesPrivate = row.phone !== undefined || row.email !== undefined || row.land_acres !== undefined || row.kcc_credit_limit !== undefined || row.agristack_id !== undefined;
+      
+      if (hasPublicFields && !exposesPrivate) {
+        pass('P0.1-4', 'Farmer 2 can discover Farmer 1 via public_profiles view without exposing phone/email/kcc/land');
+      } else {
+        fail('P0.1-4', `public_profiles view exposes private columns: exposesPrivate=${exposesPrivate}, fields=${Object.keys(row)}`);
+      }
+    } else {
+      fail('P0.1-4', `public_profiles view failed to return row for Farmer 1 (rows: ${f2ReadView.rows.length})`);
+    }
+
+    // AS DRIVER: Test driver profile access
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${driverId}", "role": "authenticated"}';
+    `);
+    const driverOwn = await pglite.query(`SELECT id, role FROM public.profiles WHERE id = $1`, [driverId]);
+    const driverOther = await pglite.query(`SELECT id FROM public.profiles WHERE id = $1`, [farmer1Id]);
+    if (driverOwn.rows.length === 1 && driverOther.rows.length === 0) {
+      pass('P0.1-5', 'Driver can select own profile (1 row) but cannot read Farmer 1 private profile (0 rows)');
+    } else {
+      fail('P0.1-5', `Driver RLS profile isolation violated: own=${driverOwn.rows.length}, other=${driverOther.rows.length}`);
+    }
+
+    // AS ADMIN: Admin role can read all profiles via app_metadata
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "00000000-0000-0000-0000-000000000099", "role": "authenticated", "app_metadata": {"role": "admin"}}';
+    `);
+    const adminRead = await pglite.query(`SELECT COUNT(*)::int as count FROM public.profiles`);
+    if (adminRead.rows[0].count >= 3) {
+      pass('P0.1-6', `Admin can query all profiles (${adminRead.rows[0].count} profiles visible)`);
+    } else {
+      fail('P0.1-6', `Admin failed to read profiles: count=${adminRead.rows[0]?.count}`);
+    }
+
+    // AS SERVICE_ROLE: Service role can read all profiles
+    await pglite.exec(`
+      SET ROLE service_role;
+      SET request.jwt.claims = '{"role": "service_role"}';
+    `);
+    const svcRead = await pglite.query(`SELECT COUNT(*)::int as count FROM public.profiles`);
+    if (svcRead.rows[0].count >= 3) {
+      pass('P0.1-7', `Service role can query all profiles (${svcRead.rows[0].count} profiles visible)`);
+    } else {
+      fail('P0.1-7', `Service role failed to read profiles: count=${svcRead.rows[0]?.count}`);
+    }
+
+    // =========================================================================
+    // P0.4 TESTS: GENUINE PERSISTENT PRICE ALERTS RLS & IDEMPOTENCY
+    // =========================================================================
+    // AS FARMER 1: Create a genuine price alert
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+    `);
+    const alertRes = await pglite.query(`
+      INSERT INTO public.price_alerts (user_id, crop, commodity, mandi, target_price, condition, idempotency_key)
+      VALUES ($1, 'Cotton', 'Cotton', 'Warangal', 7500.00, 'ABOVE', 'alert-idem-farmer1-001')
+      RETURNING id, crop, target_price, status;
+    `, [farmer1Id]);
+    const alertId = alertRes.rows[0].id;
+    if (alertRes.rows[0].status === 'ACTIVE' && Number(alertRes.rows[0].target_price) === 7500) {
+      pass('P0.4-1', `Farmer 1 created persistent price alert (${alertId}) with status ACTIVE`);
+    } else {
+      fail('P0.4-1', 'Failed to create active price alert');
+    }
+
+    // AS FARMER 2: Cannot select Farmer 1's price alert
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2Alerts = await pglite.query(`SELECT * FROM public.price_alerts WHERE id = $1`, [alertId]);
+    if (f2Alerts.rows.length === 0) {
+      pass('P0.4-2', 'Farmer 2 cannot read Farmer 1 price alerts (RLS returned 0 rows)');
+    } else {
+      fail('P0.4-2', 'Farmer 2 accessed Farmer 1 price alert');
+    }
+
+    // AS FARMER 2: Cannot delete Farmer 1's price alert
+    const f2DelAlert = await pglite.query(`DELETE FROM public.price_alerts WHERE id = $1`, [alertId]);
+    if (f2DelAlert.affectedRows === 0) {
+      pass('P0.4-3', 'Farmer 2 cannot delete Farmer 1 price alert (0 rows deleted)');
+    } else {
+      fail('P0.4-3', 'Farmer 2 deleted Farmer 1 price alert');
+    }
+
+    // AS FARMER 1: Idempotency Key uniqueness prevents duplicate alerts
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+    `);
+    let dupBlocked = false;
+    try {
+      await pglite.query(`
+        INSERT INTO public.price_alerts (user_id, crop, commodity, mandi, target_price, condition, idempotency_key)
+        VALUES ($1, 'Cotton', 'Cotton', 'Warangal', 7500.00, 'ABOVE', 'alert-idem-farmer1-001');
+      `, [farmer1Id]);
+    } catch (e) {
+      dupBlocked = true;
+    }
+    if (dupBlocked) {
+      pass('P0.4-4', 'Duplicate price alert with same idempotency key blocked by unique constraint');
+    } else {
+      fail('P0.4-4', 'Duplicate price alert was allowed');
+    }
+
+    // =========================================================================
+    // P0.5 TESTS: GENUINE NOTIFICATIONS TABLE RLS & STATE INTEGRITY
+    // =========================================================================
+    // Insert notification for Farmer 1
+    const notifRes = await pglite.query(`
+      INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+      VALUES ($1, 'PRICE_ALERT_ENGINE', 'alert-idem-farmer1-001', 'PRICE_ALERT', 'Cotton Price Target Met', 'Warangal mandi reached ₹7,550/Q')
+      RETURNING id, is_read;
+    `, [farmer1Id]);
+    const notifId = notifRes.rows[0].id;
+    pass('P0.5-1', `Created notification for Farmer 1 (${notifId})`);
+
+    // AS FARMER 2: Attempt to read Farmer 1's notifications
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2Notifs = await pglite.query(`SELECT * FROM public.notifications WHERE user_id = $1`, [farmer1Id]);
+    if (f2Notifs.rows.length === 0) {
+      pass('P0.5-2', 'Farmer 2 cannot read Farmer 1 notifications (RLS returned 0 rows)');
+    } else {
+      fail('P0.5-2', 'Farmer 2 read Farmer 1 notifications');
+    }
+
+    // AS FARMER 2: Attempt to update Farmer 1's notification read state
+    const f2UpdNotif = await pglite.query(`UPDATE public.notifications SET is_read = true WHERE id = $1`, [notifId]);
+    if (f2UpdNotif.affectedRows === 0) {
+      pass('P0.5-3', 'Farmer 2 cannot mark Farmer 1 notification as read (0 rows updated)');
+    } else {
+      fail('P0.5-3', 'Farmer 2 mutated Farmer 1 notification read state');
+    }
+
+    // AS FARMER 1: Can read and mark own notification as read
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+    `);
+    const f1UpdNotif = await pglite.query(`UPDATE public.notifications SET is_read = true WHERE id = $1 RETURNING id, is_read`, [notifId]);
+    if (f1UpdNotif.affectedRows === 1 && f1UpdNotif.rows[0].is_read === true) {
+      pass('P0.5-4', 'Farmer 1 successfully marked own notification as read');
+    } else {
+      fail('P0.5-4', 'Farmer 1 failed to update own notification');
+    }
+
+    // =========================================================================
+    // P0.2 TESTS: OBSERVABLE MIGRATION AUDIT TABLE VERIFICATION
+    // =========================================================================
+    await pglite.exec(`RESET ROLE;`);
+    const auditRes = await pglite.query(`SELECT COUNT(*)::int as count FROM public._migration_legacy_user_sync_audit`);
+    if (auditRes.rows[0].count >= 0) {
+      pass('P0.2-1', `_migration_legacy_user_sync_audit table exists and is queryable (entries: ${auditRes.rows[0].count})`);
+    } else {
+      fail('P0.2-1', '_migration_legacy_user_sync_audit not found');
+    }
+
   } catch (err) {
     fail('RLS-2', `RLS data isolation test failed: ${err.message}`);
   }

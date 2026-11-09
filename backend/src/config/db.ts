@@ -65,6 +65,8 @@ export const memoryStore = {
   cropSimulations: [] as any[],
   communityPosts: [] as any[],
   postLikes: [] as any[],
+  priceAlerts: [] as any[],
+  notifications: [] as any[],
   idempotencyKeys: new Map<string, any>()
 };
 
@@ -383,6 +385,123 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
 
   if (queryStr.includes('update public.community_posts set likes_count')) {
     return { rows: [] };
+  }
+
+  // 11. Price Alerts Operations
+  if (queryStr.includes('insert into public.price_alerts')) {
+    const newAlert = {
+      id: crypto.randomUUID(),
+      user_id: params[0],
+      crop: params[1],
+      commodity: params[2],
+      mandi: params[3],
+      target_price: Number(params[4]),
+      condition: params[5] || 'ABOVE',
+      status: 'ACTIVE',
+      idempotency_key: params[6] || null,
+      created_at: new Date(),
+      updated_at: new Date(),
+      triggered_at: null
+    };
+
+    if (newAlert.idempotency_key) {
+      const existing = memoryStore.priceAlerts.find(a => a.user_id === newAlert.user_id && a.idempotency_key === newAlert.idempotency_key);
+      if (existing) {
+        const dupErr: any = new Error('duplicate key value violates unique constraint "price_alerts_idempotency_key_key"');
+        dupErr.code = '23505';
+        throw dupErr;
+      }
+    }
+
+    memoryStore.priceAlerts.unshift(newAlert);
+    return { rows: [newAlert] };
+  }
+
+  if (queryStr.includes('from public.price_alerts') && queryStr.includes('user_id =')) {
+    const alerts = memoryStore.priceAlerts.filter(a => a.user_id === params[0] && a.status !== 'CANCELLED');
+    return { rows: alerts };
+  }
+
+  if (queryStr.includes('from public.price_alerts') && queryStr.includes('status = \'active\'')) {
+    const alerts = memoryStore.priceAlerts.filter(a => a.status === 'ACTIVE');
+    return { rows: alerts };
+  }
+
+  if (queryStr.includes('update public.price_alerts set status =')) {
+    const status = params[0];
+    const alertId = params[1];
+    const userId = params[2];
+    const alert = memoryStore.priceAlerts.find(a => a.id === alertId && (!userId || a.user_id === userId));
+    if (alert) {
+      alert.status = status;
+      alert.updated_at = new Date();
+      if (status === 'TRIGGERED') alert.triggered_at = new Date();
+      return { rows: [alert] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('delete from public.price_alerts where id =')) {
+    const alertId = params[0];
+    const userId = params[1];
+    const idx = memoryStore.priceAlerts.findIndex(a => a.id === alertId && (!userId || a.user_id === userId));
+    if (idx !== -1) {
+      const deleted = memoryStore.priceAlerts.splice(idx, 1);
+      return { rows: deleted };
+    }
+    return { rows: [] };
+  }
+
+  // 12. Notifications Operations
+  if (queryStr.includes('insert into public.notifications')) {
+    const newNotif = {
+      id: crypto.randomUUID(),
+      user_id: params[0],
+      event_source: params[1],
+      event_id: params[2],
+      category: params[3] || 'SYSTEM',
+      title: params[4],
+      body: params[5],
+      is_read: false,
+      created_at: new Date()
+    };
+    memoryStore.notifications.unshift(newNotif);
+    return { rows: [newNotif] };
+  }
+
+  if (queryStr.includes('from public.notifications') && queryStr.includes('is_read = false')) {
+    const userId = params[0];
+    const unread = memoryStore.notifications.filter(n => n.user_id === userId && !n.is_read);
+    return { rows: [{ unread_count: unread.length }] };
+  }
+
+  if (queryStr.includes('from public.notifications') && queryStr.includes('user_id =')) {
+    const userId = params[0];
+    const notifs = memoryStore.notifications.filter(n => n.user_id === userId);
+    return { rows: notifs };
+  }
+
+  if (queryStr.includes('update public.notifications set is_read = true where id =')) {
+    const notifId = params[0];
+    const userId = params[1];
+    const notif = memoryStore.notifications.find(n => n.id === notifId && (!userId || n.user_id === userId));
+    if (notif) {
+      notif.is_read = true;
+      return { rows: [notif] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('update public.notifications set is_read = true where user_id =')) {
+    const userId = params[0];
+    const updated: any[] = [];
+    memoryStore.notifications.forEach(n => {
+      if (n.user_id === userId && !n.is_read) {
+        n.is_read = true;
+        updated.push(n);
+      }
+    });
+    return { rows: updated };
   }
 
   return { rows: [] };

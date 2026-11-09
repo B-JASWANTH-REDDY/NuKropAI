@@ -3,53 +3,16 @@
 -- Migration: 20261109000001_canonical_identity_reconciliation.sql
 --
 -- Strict Additive & Safe Execution:
--- 1. Establishes auth.users as the canonical identity store.
--- 2. Safely adapts public.profiles from the tracked baseline schema without data loss.
--- 3. Automates profile synchronization via security-definer trigger with role whitelisting.
--- 4. Prevents privilege escalation (blocks self-assignment of 'admin' role).
--- 5. Implements real PostgreSQL Row Level Security (RLS) policies for tenant isolation.
+-- 1. Uses Supabase platform auth.users as canonical identity.
+-- 2. Respects Supabase platform auth functions (auth.uid, auth.role).
+-- 3. Strict privacy-by-default: Removes broad SELECT on public.profiles.
+-- 4. Creates restricted public.public_profiles view for non-sensitive discovery.
+-- 5. Adds durable public.price_alerts table with strict RLS and idempotency.
+-- 6. Adds durable public.notifications table with strict RLS.
+-- 7. Observable legacy user migration tracking with audit table.
 -- ============================================================================
 
--- Step 1: Ensure auth schema and functions exist (compatible with standalone Postgres & Supabase)
-CREATE SCHEMA IF NOT EXISTS auth;
-
-CREATE TABLE IF NOT EXISTS auth.users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE,
-  encrypted_password VARCHAR(255),
-  raw_user_meta_data JSONB DEFAULT '{}'::jsonb,
-  raw_app_meta_data JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Mock or ensure auth.uid() and auth.role() helper functions
-CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS $$
-BEGIN
-  RETURN COALESCE(
-    NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub',
-    NULLIF(current_setting('request.jwt.claim.sub', true), '')
-  )::uuid;
-EXCEPTION
-  WHEN OTHERS THEN
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql STABLE;
-
-CREATE OR REPLACE FUNCTION auth.role() RETURNS TEXT AS $$
-BEGIN
-  RETURN COALESCE(
-    NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role',
-    NULLIF(current_setting('request.jwt.claim.role', true), ''),
-    'anon'
-  )::text;
-EXCEPTION
-  WHEN OTHERS THEN
-    RETURN 'anon';
-END;
-$$ LANGUAGE plpgsql STABLE;
-
--- Step 2: Ensure public.users check constraint supports 'driver' role
+-- Step 1: Ensure public.users check constraint supports 'driver' role if table exists
 DO $$
 BEGIN
   IF EXISTS (
@@ -61,7 +24,7 @@ BEGIN
   END IF;
 END $$;
 
--- Step 3: Additive column expansion for public.profiles (guaranteed safe on tracked baseline)
+-- Step 2: Additive column expansion for public.profiles (guaranteed safe on tracked baseline)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   phone VARCHAR(30),
@@ -99,19 +62,10 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_timestamp TIME
 DO $$
 BEGIN
   ALTER TABLE public.profiles ALTER COLUMN phone DROP NOT NULL;
-EXCEPTION
-  WHEN OTHERS THEN
-    NULL;
 END $$;
 
--- Safely populate user_id from id for existing profiles where user_id is null
-DO $$
-BEGIN
-  UPDATE public.profiles SET user_id = id WHERE user_id IS NULL;
-EXCEPTION
-  WHEN OTHERS THEN
-    NULL;
-END $$;
+-- Populate user_id from id for existing profiles where user_id is null
+UPDATE public.profiles SET user_id = id WHERE user_id IS NULL;
 
 -- Enforce domain role check on profiles
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
@@ -123,7 +77,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
--- Step 4: Secure Auth Signup Trigger (Mapping auth.users -> public.profiles)
+-- Step 3: Secure Auth Signup Trigger (Mapping auth.users -> public.profiles)
 -- Prevents privilege escalation: only permits 'farmer' or 'driver' from user metadata.
 -- Administrative role ('admin') can NEVER be self-assigned during registration.
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
@@ -140,6 +94,7 @@ DECLARE
   v_farmer_id text;
   v_driver_id text;
 BEGIN
+  -- Extract metadata safely
   v_full_name := COALESCE(
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'name',
@@ -148,43 +103,59 @@ BEGIN
   );
   v_phone := COALESCE(
     NEW.raw_user_meta_data->>'phone',
-    NEW.raw_user_meta_data->>'phone_number'
+    NEW.raw_user_meta_data->>'phoneNumber',
+    to_jsonb(NEW)->>'phone'
   );
-
-  -- Role whitelist & privilege escalation prevention:
-  v_requested_role := lower(COALESCE(
+  
+  -- ROLE WHITELISTING & PRIVILEGE ESCALATION BLOCK
+  v_requested_role := LOWER(COALESCE(
     NEW.raw_app_meta_data->>'role',
     NEW.raw_user_meta_data->>'role',
     'farmer'
   ));
   
-  -- Administrative roles ('admin') can only be granted via server-authoritative service_role
-  IF v_requested_role = 'admin' AND COALESCE(NEW.raw_app_meta_data->>'role', '') <> 'admin' THEN
-    v_role := 'farmer';
-  ELSIF v_requested_role IN ('farmer', 'driver', 'buyer') THEN
-    v_role := v_requested_role;
+  IF v_requested_role = 'driver' THEN
+    v_role := 'driver';
+    v_driver_id := 'NKD-' || floor(1000 + random() * 8999)::text;
   ELSE
     v_role := 'farmer';
+    v_farmer_id := 'NKF-' || floor(10000 + random() * 89999)::text;
   END IF;
 
-  v_village := COALESCE(NEW.raw_user_meta_data->>'village', 'Warangal Rural');
+  v_village := COALESCE(NEW.raw_user_meta_data->>'village', 'Hanamkonda');
   v_district := COALESCE(NEW.raw_user_meta_data->>'district', 'Warangal');
 
-  IF v_role = 'driver' THEN
-    v_farmer_id := NULL;
-    v_driver_id := 'DRV-' || floor(10000 + random() * 89999)::text;
-  ELSE
-    v_farmer_id := 'NK-' || floor(10000 + random() * 89999)::text;
-    v_driver_id := NULL;
-  END IF;
-
   INSERT INTO public.profiles (
-    id, user_id, farmer_id, driver_id, email, full_name, phone, phone_number,
-    role, village, district, mandal, state, preferred_language, created_at, updated_at
+    id,
+    user_id,
+    email,
+    role,
+    full_name,
+    phone,
+    phone_number,
+    farmer_id,
+    driver_id,
+    village,
+    district,
+    state,
+    created_at,
+    updated_at
   )
   VALUES (
-    NEW.id, NEW.id, v_farmer_id, v_driver_id, NEW.email, v_full_name,
-    v_phone, v_phone, v_role, v_village, v_district, 'Warangal', 'Telangana', 'te', NOW(), NOW()
+    NEW.id,
+    NEW.id,
+    NEW.email,
+    v_role,
+    v_full_name,
+    v_phone,
+    v_phone,
+    v_farmer_id,
+    v_driver_id,
+    v_village,
+    v_district,
+    'Telangana',
+    NOW(),
+    NOW()
   )
   ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.id,
@@ -204,68 +175,102 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_auth_user();
 
--- Step 5: Legacy Account Synchronization (public.users -> auth.users & public.profiles)
--- Seamlessly backfills existing public.users into auth.users (if absent) and public.profiles
+-- Step 4: Observable Legacy Account Migration with Audit Log
+CREATE TABLE IF NOT EXISTS public._migration_legacy_user_sync_audit (
+  user_id UUID PRIMARY KEY,
+  email TEXT,
+  role TEXT,
+  status TEXT NOT NULL, -- 'MIGRATED', 'ALREADY_EXISTS', 'PASSWORD_RECOVERY_REQUIRED'
+  details TEXT,
+  migrated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 DO $$
 DECLARE
   rec RECORD;
+  v_migrated INT := 0;
+  v_existing INT := 0;
+  v_recovery INT := 0;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
     FOR rec IN SELECT id, email, password_hash, role, created_at FROM public.users LOOP
-      -- Insert into auth.users if not present
-      INSERT INTO auth.users (id, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-      VALUES (
-        rec.id,
-        rec.email,
-        rec.password_hash,
-        jsonb_build_object('role', rec.role, 'legacy_migrated', true),
-        jsonb_build_object('role', rec.role),
-        rec.created_at,
-        NOW()
-      )
-      ON CONFLICT (id) DO UPDATE SET
-        email = EXCLUDED.email,
-        raw_app_meta_data = EXCLUDED.raw_app_meta_data;
+      IF EXISTS (SELECT 1 FROM auth.users WHERE id = rec.id) THEN
+        v_existing := v_existing + 1;
+        INSERT INTO public._migration_legacy_user_sync_audit (user_id, email, role, status, details)
+        VALUES (rec.id, rec.email, rec.role, 'ALREADY_EXISTS', 'Account already present in auth.users')
+        ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details;
+      ELSE
+        -- Validate password hash compatibility (bcrypt prefix $2a$ or $2b$)
+        IF rec.password_hash IS NOT NULL AND rec.password_hash ~ '^\$2[ab]\$[0-9]{2}\$' THEN
+          INSERT INTO auth.users (id, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+          VALUES (
+            rec.id,
+            rec.email,
+            rec.password_hash,
+            jsonb_build_object('role', rec.role, 'legacy_migrated', true),
+            jsonb_build_object('role', rec.role),
+            rec.created_at,
+            NOW()
+          );
+          v_migrated := v_migrated + 1;
+          INSERT INTO public._migration_legacy_user_sync_audit (user_id, email, role, status, details)
+          VALUES (rec.id, rec.email, rec.role, 'MIGRATED', 'Migrated successfully with compatible bcrypt hash')
+          ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details;
+        ELSE
+          -- Incompatible or legacy cleartext/SHA hash -> insert with disabled password and require recovery
+          INSERT INTO auth.users (id, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+          VALUES (
+            rec.id,
+            rec.email,
+            jsonb_build_object('role', rec.role, 'legacy_migrated', true, 'password_recovery_required', true),
+            jsonb_build_object('role', rec.role),
+            rec.created_at,
+            NOW()
+          );
+          v_recovery := v_recovery + 1;
+          INSERT INTO public._migration_legacy_user_sync_audit (user_id, email, role, status, details)
+          VALUES (rec.id, rec.email, rec.role, 'PASSWORD_RECOVERY_REQUIRED', 'Hash incompatible with bcrypt; password recovery required')
+          ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details;
+        END IF;
 
-      -- Insert into public.profiles
-      INSERT INTO public.profiles (id, user_id, email, role, full_name, created_at, updated_at)
-      VALUES (
-        rec.id,
-        rec.id,
-        rec.email,
-        rec.role,
-        split_part(rec.email, '@', 1),
-        rec.created_at,
-        NOW()
-      )
-      ON CONFLICT (id) DO UPDATE SET
-        user_id = EXCLUDED.user_id,
-        email = EXCLUDED.email,
-        role = EXCLUDED.role,
-        updated_at = NOW();
+        -- Ensure public.profiles has corresponding record
+        INSERT INTO public.profiles (id, user_id, email, role, full_name, created_at, updated_at)
+        VALUES (
+          rec.id,
+          rec.id,
+          rec.email,
+          rec.role,
+          split_part(rec.email, '@', 1),
+          rec.created_at,
+          NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          user_id = EXCLUDED.user_id,
+          email = EXCLUDED.email,
+          role = EXCLUDED.role,
+          updated_at = NOW();
+      END IF;
     END LOOP;
+    RAISE NOTICE 'Legacy user migration observable audit: migrated=%, already_exists=%, recovery_required=%', v_migrated, v_existing, v_recovery;
   END IF;
-EXCEPTION
-  WHEN OTHERS THEN
-    NULL;
 END $$;
 
--- Step 6: Explicit Row Level Security (RLS) Policies on Core Tables
+-- Step 5: Strict Privacy-by-Default Row Level Security (RLS) Policies
 
--- 1. PROFILES RLS
+-- 1. PROFILES RLS (Strict Owner-Only & Admin/Service-Role Access)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "profiles_select_own_or_public" ON public.profiles;
-CREATE POLICY "profiles_select_own_or_public"
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+CREATE POLICY "profiles_select_own"
   ON public.profiles FOR SELECT
   USING (
-    auth.role() = 'authenticated' AND (
+    (auth.role() = 'authenticated' AND (
       auth.uid() = id 
       OR auth.uid() = user_id
-      OR role IN ('farmer', 'driver') -- Public profile card visible for matching
       OR (SELECT NULLIF(current_setting('request.jwt.claims', true), '')::jsonb->'app_metadata'->>'role') = 'admin'
-    )
+    ))
     OR auth.role() = 'service_role'
   );
 
@@ -295,7 +300,25 @@ CREATE POLICY "profiles_delete_own"
     auth.uid() = id OR auth.uid() = user_id OR auth.role() = 'service_role'
   );
 
--- 2. DISEASE SCANS RLS
+-- 2. RESTRICTED PUBLIC PROFILES VIEW (Approved Non-Sensitive Public Discovery Only)
+-- Excludes: email, phone, land_acres, kcc_credit_limit, kcc_balance, soil_type, agristack_id, dpdp_consent
+CREATE OR REPLACE VIEW public.public_profiles AS
+SELECT 
+  id,
+  user_id,
+  full_name,
+  role,
+  avatar_url,
+  village,
+  district,
+  state,
+  agristack_verified,
+  created_at
+FROM public.profiles;
+
+GRANT SELECT ON public.public_profiles TO authenticated, anon, service_role;
+
+-- 3. DISEASE SCANS RLS
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'disease_scans') THEN
@@ -316,7 +339,7 @@ BEGIN
   END IF;
 END $$;
 
--- 3. KHATA TRANSACTIONS RLS
+-- 4. KHATA TRANSACTIONS RLS
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'khata_transactions') THEN
@@ -341,7 +364,7 @@ BEGIN
   END IF;
 END $$;
 
--- 4. COMMUNITY POSTS RLS
+-- 5. COMMUNITY POSTS RLS
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'community_posts') THEN
@@ -366,7 +389,7 @@ BEGIN
   END IF;
 END $$;
 
--- 5. POST LIKES TABLE & RLS
+-- 6. POST LIKES TABLE & RLS
 CREATE TABLE IF NOT EXISTS public.post_likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID REFERENCES public.community_posts(id) ON DELETE CASCADE,
@@ -390,7 +413,121 @@ DROP POLICY IF EXISTS "likes_delete_own" ON public.post_likes;
 CREATE POLICY "likes_delete_own" ON public.post_likes FOR DELETE
   USING (auth.uid() = user_id OR auth.role() = 'service_role');
 
--- Step 7: Grant appropriate permissions to authenticated and service_role
+-- 7. PRICE ALERTS TABLE & RLS (Genuinely Persistent Agrarian Market Alerts)
+CREATE TABLE IF NOT EXISTS public.price_alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  crop VARCHAR(100) NOT NULL,
+  commodity VARCHAR(100) NOT NULL,
+  mandi VARCHAR(150) NOT NULL,
+  target_price NUMERIC(10,2) NOT NULL CHECK (target_price > 0),
+  condition VARCHAR(20) NOT NULL DEFAULT 'ABOVE' CHECK (condition IN ('ABOVE', 'BELOW')),
+  status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'TRIGGERED', 'PAUSED', 'CANCELLED')),
+  idempotency_key VARCHAR(100) UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  triggered_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON public.price_alerts(user_id);
+CREATE INDEX IF NOT EXISTS idx_price_alerts_status ON public.price_alerts(status);
+CREATE INDEX IF NOT EXISTS idx_price_alerts_eval ON public.price_alerts(commodity, mandi, status);
+
+ALTER TABLE public.price_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.price_alerts FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "price_alerts_select_own" ON public.price_alerts;
+CREATE POLICY "price_alerts_select_own"
+  ON public.price_alerts FOR SELECT
+  USING (
+    (auth.role() = 'authenticated' AND (auth.uid() = user_id OR (SELECT NULLIF(current_setting('request.jwt.claims', true), '')::jsonb->'app_metadata'->>'role') = 'admin'))
+    OR auth.role() = 'service_role'
+  );
+
+DROP POLICY IF EXISTS "price_alerts_insert_own" ON public.price_alerts;
+CREATE POLICY "price_alerts_insert_own"
+  ON public.price_alerts FOR INSERT
+  WITH CHECK (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  );
+
+DROP POLICY IF EXISTS "price_alerts_update_own" ON public.price_alerts;
+CREATE POLICY "price_alerts_update_own"
+  ON public.price_alerts FOR UPDATE
+  USING (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  )
+  WITH CHECK (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  );
+
+DROP POLICY IF EXISTS "price_alerts_delete_own" ON public.price_alerts;
+CREATE POLICY "price_alerts_delete_own"
+  ON public.price_alerts FOR DELETE
+  USING (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  );
+
+-- 8. NOTIFICATIONS TABLE & RLS (Genuinely Persistent Domain Event Notifications)
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  event_source VARCHAR(50) NOT NULL,
+  event_id VARCHAR(100),
+  category VARCHAR(50) NOT NULL DEFAULT 'SYSTEM' CHECK (category IN ('PRICE_ALERT', 'WEATHER_WARNING', 'COMMUNITY', 'SYSTEM')),
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON public.notifications(user_id, created_at DESC);
+
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "notifications_select_own" ON public.notifications;
+CREATE POLICY "notifications_select_own"
+  ON public.notifications FOR SELECT
+  USING (
+    (auth.role() = 'authenticated' AND (auth.uid() = user_id OR (SELECT NULLIF(current_setting('request.jwt.claims', true), '')::jsonb->'app_metadata'->>'role') = 'admin'))
+    OR auth.role() = 'service_role'
+  );
+
+DROP POLICY IF EXISTS "notifications_insert_service" ON public.notifications;
+CREATE POLICY "notifications_insert_service"
+  ON public.notifications FOR INSERT
+  WITH CHECK (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  );
+
+DROP POLICY IF EXISTS "notifications_update_own" ON public.notifications;
+CREATE POLICY "notifications_update_own"
+  ON public.notifications FOR UPDATE
+  USING (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  )
+  WITH CHECK (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  );
+
+DROP POLICY IF EXISTS "notifications_delete_own" ON public.notifications;
+CREATE POLICY "notifications_delete_own"
+  ON public.notifications FOR DELETE
+  USING (
+    (auth.role() = 'authenticated' AND auth.uid() = user_id)
+    OR auth.role() = 'service_role'
+  );
+
+-- Step 6: Grant appropriate permissions to authenticated and service_role
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
@@ -406,4 +543,3 @@ BEGIN
     GRANT ALL ON ALL ROUTINES IN SCHEMA public TO service_role;
   END IF;
 END $$;
-

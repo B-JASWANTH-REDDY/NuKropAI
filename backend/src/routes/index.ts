@@ -13,11 +13,13 @@ import dispatchRoutes from './dispatch.routes';
 import landSurveyRoutes from './land_survey.routes';
 import communityRoutes from './community.routes';
 import weatherRoutes from './weather.routes';
+import notificationRoutes from './notification.routes';
 
 export default async function apiRoutes(fastify: FastifyInstance) {
   fastify.register(authRoutes, { prefix: '/auth' });
   fastify.register(communityRoutes, { prefix: '/community' });
   fastify.register(weatherRoutes, { prefix: '/weather' });
+  fastify.register(notificationRoutes, { prefix: '/notifications' });
   fastify.register(mandiRoutes, { prefix: '/mandi' });
   // Frontend calls /pests/... so prefix must be /pests
   fastify.register(pestRoutes, { prefix: '/pests' });

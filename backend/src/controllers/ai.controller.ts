@@ -219,10 +219,53 @@ Respond strictly in valid JSON matching this schema:
             });
         }
 
+        // P1.1: Strict Validation Contract for AI Scanner Output
+        if (typeof prediction !== 'object' || prediction === null) {
+            return reply.status(502).send({
+                status: 'error',
+                code: 'MALFORMED_AI_RESPONSE',
+                message: 'AI provider output is not a valid JSON object'
+            });
+        }
+
+        const isPlantOrSoil = Boolean(prediction.isPlantOrSoil);
+
+        let rawConfidence = parseFloat(prediction.confidence);
+        if (isNaN(rawConfidence)) {
+            rawConfidence = 0.0;
+        } else if (rawConfidence > 1.0 && rawConfidence <= 100.0) {
+            rawConfidence = rawConfidence / 100.0;
+        } else if (rawConfidence < 0 || rawConfidence > 100) {
+            rawConfidence = 0.0;
+        }
+
+        const validSeverities = ['None', 'Low', 'Medium', 'High', 'Critical'];
+        const severity = validSeverities.includes(prediction.severity) ? prediction.severity : (isPlantOrSoil ? 'Medium' : 'None');
+
+        let diagnosticStatus = 'CONFIRMED';
+        if (!isPlantOrSoil) {
+            diagnosticStatus = 'REJECTED_NON_CROP';
+        } else if (rawConfidence < 0.5) {
+            diagnosticStatus = 'INCONCLUSIVE_LOW_CONFIDENCE';
+        }
+
+        const validatedPrediction = {
+            isPlantOrSoil,
+            crop: isPlantOrSoil ? (prediction.crop || targetCrop) : null,
+            diseaseName: prediction.diseaseName ? String(prediction.diseaseName).trim() : (isPlantOrSoil ? 'Unidentified Foliar Condition' : 'Unknown / Non-Crop Image'),
+            severity,
+            confidence: Number(rawConfidence.toFixed(2)),
+            diagnosticStatus,
+            pathogen: prediction.pathogen ? String(prediction.pathogen).trim() : 'Unspecified',
+            symptoms: prediction.symptoms ? String(prediction.symptoms).trim() : 'No symptomatic details provided',
+            organicSolution: prediction.organicSolution ? String(prediction.organicSolution).trim() : null,
+            chemicalSolution: prediction.chemicalSolution ? String(prediction.chemicalSolution).trim() : null,
+            sprayAdvisory: prediction.sprayAdvisory ? String(prediction.sprayAdvisory).trim() : null
+        };
+
         // Persist scan to database under authenticated user
         const client = await pool.connect();
         let persistedScan = null;
-        const scanStatus = prediction.isPlantOrSoil === false ? 'REJECTED_NON_CROP' : 'CONFIRMED';
         try {
             const dbResult = await client.query(`
                 INSERT INTO disease_scans (user_id, crop_type, disease_detected, confidence_score, severity, treatment_recommendation, status)
@@ -231,11 +274,11 @@ Respond strictly in valid JSON matching this schema:
             `, [
                 user.id,
                 targetCrop,
-                prediction.diseaseName || 'Foliar Anomaly',
-                parseFloat(prediction.confidence) || 0.0,
-                prediction.severity || 'None',
-                prediction.chemicalSolution || prediction.organicSolution || 'No prescription',
-                scanStatus
+                validatedPrediction.diseaseName,
+                validatedPrediction.confidence,
+                validatedPrediction.severity,
+                validatedPrediction.chemicalSolution || validatedPrediction.organicSolution || 'No prescription',
+                diagnosticStatus
             ]);
             persistedScan = dbResult.rows[0];
         } catch (dbErr) {
@@ -246,7 +289,7 @@ Respond strictly in valid JSON matching this schema:
 
         return reply.status(200).send({
             status: 'success',
-            ai_prediction: prediction,
+            ai_prediction: validatedPrediction,
             persisted_scan_id: persistedScan?.id || null,
             provenance: providerProvenance,
             disclaimer: 'AI-generated optical prediction. Not a certified laboratory chemical or pathological diagnosis.',
@@ -255,6 +298,13 @@ Respond strictly in valid JSON matching this schema:
 
     } catch (err: any) {
         request.log.error(err);
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+            return reply.status(504).send({
+                status: 'error',
+                code: 'PROVIDER_TIMEOUT',
+                message: 'Vision inference provider timed out while analyzing image.'
+            });
+        }
         const statusCode = err.response?.status || 500;
         const msg = err.response?.data?.error?.message || err.message || 'Error communicating with vision inference provider';
         return reply.status(statusCode >= 400 && statusCode < 600 ? statusCode : 500).send({

@@ -386,6 +386,19 @@ CREATE TABLE IF NOT EXISTS public.price_alerts (
   CONSTRAINT price_alerts_pkey PRIMARY KEY (id)
 );
 
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id text NOT NULL DEFAULT (gen_random_uuid())::text,
+  user_id text REFERENCES public.profiles(id) ON DELETE CASCADE,
+  event_source text NOT NULL,
+  event_id text,
+  category text NOT NULL DEFAULT 'SYSTEM'::text,
+  title text NOT NULL,
+  body text NOT NULL,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id)
+);
+
 -- 12. HAUL BOOKINGS (GramHaul Logistics Workflow)
 CREATE TABLE IF NOT EXISTS public.haul_bookings (
   id text NOT NULL DEFAULT (gen_random_uuid())::text,
@@ -1167,6 +1180,13 @@ CREATE POLICY "price_alerts_owner" ON public.price_alerts FOR ALL USING (
   auth.uid() IS NOT NULL AND auth.uid()::text = user_id
 );
 
+DROP POLICY IF EXISTS "notifications_owner" ON public.notifications;
+CREATE POLICY "notifications_owner" ON public.notifications FOR ALL USING (
+  auth.uid() IS NOT NULL AND auth.uid()::text = user_id
+) WITH CHECK (
+  auth.uid() IS NOT NULL AND auth.uid()::text = user_id
+);
+
 -- Chat Messages
 DROP POLICY IF EXISTS "chat_isolation" ON public.chat_messages;
 DROP POLICY IF EXISTS "chat_messages_owner" ON public.chat_messages;
@@ -1542,9 +1562,9 @@ BEGIN
     'Farmer'
   );
   v_phone := COALESCE(
-    NEW.phone,
     NEW.raw_user_meta_data->>'phone',
-    NEW.raw_user_meta_data->>'phone_number'
+    NEW.raw_user_meta_data->>'phone_number',
+    to_jsonb(NEW)->>'phone'
   );
 
   -- Role whitelist & privilege escalation prevention:

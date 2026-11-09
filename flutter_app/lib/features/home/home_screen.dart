@@ -767,7 +767,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         Text(
-                          'H: ${weather.tempHigh.toInt()}°C  L: ${weather.tempLow.toInt()}°C • ${weather.location}',
+                          weather.tempHigh != null && weather.tempLow != null
+                              ? 'H: ${weather.tempHigh!.toInt()}°C  L: ${weather.tempLow!.toInt()}°C • ${weather.location}'
+                              : weather.location,
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppConstants.textMuted,

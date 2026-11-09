@@ -27,3 +27,4 @@ This directory contains enterprise automation, migration, remediation, and opera
 1. **Production Safety**: Never run database remediation scripts against the production Supabase reference without prior validation via `simulations/mirofish_adapter/target_validator.py`.
 2. **Deterministic Outputs**: All migration and data transformation scripts must be idempotent.
 3. **No Direct Execution in CI**: CI runs use dedicated test suites under `tests/`; scripts in this directory are reserved for operator workflows and automated remediation passes.
+

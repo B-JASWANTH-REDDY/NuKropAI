@@ -234,6 +234,104 @@ async function main() {
     assert.strictEqual(res.statusCode, 400);
   });
 
+  await testAsync('ID-11: Adversarial payload cannot tamper with another user profile via injected parameters', async () => {
+    // Farmer attempts to pass Driver ID in body
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: { enabled: true, user_id: driverId, id: driverId }
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    // Verify driver profile discovery remains FALSE (unchanged)
+    const driverRes = await app.inject({
+      method: 'GET',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${driverToken}` }
+    });
+    assert.strictEqual(driverRes.statusCode, 200);
+    const driverBody = JSON.parse(driverRes.body);
+    assert.strictEqual(driverBody.public_profile_enabled, false);
+  });
+
+  await testAsync('ID-12: Missing enabled or null payload rejected with 400 Bad Request', async () => {
+    const resNull = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: { enabled: null }
+    });
+    assert.strictEqual(resNull.statusCode, 400);
+
+    const resEmpty = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: {}
+    });
+    assert.strictEqual(resEmpty.statusCode, 400);
+
+    const resNumber = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: { enabled: 1 }
+    });
+    assert.strictEqual(resNumber.statusCode, 400);
+  });
+
+  await testAsync('ID-13: Expired token to discovery API is rejected with 401 Unauthorized', async () => {
+    const expiredToken = jwt.sign(
+      { sub: farmerId, role: 'authenticated', exp: Math.floor(Date.now() / 1000) - 3600 },
+      process.env.JWT_SECRET,
+      { audience: 'authenticated', issuer: 'https://nukrop-agri-test.supabase.co/auth/v1' }
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${expiredToken}` }
+    });
+    assert.strictEqual(res.statusCode, 401);
+  });
+
+  await testAsync('ID-14: Tampered signature to discovery API is rejected with 401 Unauthorized', async () => {
+    const tamperedToken = farmerToken.substring(0, farmerToken.length - 5) + 'xxxxx';
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${tamperedToken}` },
+      payload: { enabled: true }
+    });
+    assert.strictEqual(res.statusCode, 401);
+  });
+
+  await testAsync('ID-15: Non-existent profile returns 404 without crashing', async () => {
+    const phantomUserId = '99999999-9999-9999-9999-999999999999';
+    const phantomToken = jwt.sign(
+      { sub: phantomUserId, role: 'authenticated', app_metadata: { role: 'farmer' } },
+      process.env.JWT_SECRET,
+      { audience: 'authenticated', issuer: 'https://nukrop-agri-test.supabase.co/auth/v1', expiresIn: '1h' }
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${phantomToken}` }
+    });
+    assert.strictEqual(res.statusCode, 404);
+
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${phantomToken}` },
+      payload: { enabled: true }
+    });
+    assert.strictEqual(patchRes.statusCode, 404);
+  });
+
   console.log('\n================================================================================');
   console.log(`📊 CANONICAL IDENTITY AUDIT: ${passed}/${total} PASSED`);
   console.log('================================================================================\n');

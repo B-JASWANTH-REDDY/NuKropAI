@@ -354,7 +354,15 @@ export const updateProfileDiscovery = async (request: FastifyRequest, reply: Fas
 
   try {
     const result = await pool.query(
-      'UPDATE public.profiles SET public_profile_enabled = $1 WHERE (id = $2 OR user_id = $2) RETURNING id, public_profile_enabled',
+      `UPDATE public.profiles 
+       SET public_profile_enabled = $1, updated_at = NOW() 
+       WHERE id = (
+         SELECT p.id FROM public.profiles p 
+         WHERE (p.id = $2 OR p.user_id = $2) 
+         ORDER BY (p.id = $2) DESC, p.created_at ASC 
+         LIMIT 1
+       ) 
+       RETURNING id, public_profile_enabled`,
       [enabled, userId]
     );
 
@@ -386,7 +394,10 @@ export const getProfileDiscovery = async (request: FastifyRequest, reply: Fastif
 
   try {
     const result = await pool.query(
-      'SELECT public_profile_enabled FROM public.profiles WHERE (id = $1 OR user_id = $1)',
+      `SELECT public_profile_enabled FROM public.profiles 
+       WHERE (id = $1 OR user_id = $1) 
+       ORDER BY (id = $1) DESC, created_at ASC 
+       LIMIT 1`,
       [userId]
     );
 

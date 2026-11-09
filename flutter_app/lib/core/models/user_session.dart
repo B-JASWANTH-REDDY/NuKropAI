@@ -13,6 +13,7 @@ class UserSession {
   final String? accessToken;
   final String? refreshToken;
   final bool isVerified;
+  final bool publicProfileEnabled;
 
   const UserSession({
     required this.userId,
@@ -27,10 +28,43 @@ class UserSession {
     this.accessToken,
     this.refreshToken,
     this.isVerified = true,
+    this.publicProfileEnabled = false,
   });
 
   bool get isDriver => role == UserRole.driver;
   bool get isFarmer => role == UserRole.farmer;
+
+  UserSession copyWith({
+    String? userId,
+    String? name,
+    String? phone,
+    String? email,
+    UserRole? role,
+    String? state,
+    String? district,
+    List<String>? activeCrops,
+    String? languageCode,
+    String? accessToken,
+    String? refreshToken,
+    bool? isVerified,
+    bool? publicProfileEnabled,
+  }) {
+    return UserSession(
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      role: role ?? this.role,
+      state: state ?? this.state,
+      district: district ?? this.district,
+      activeCrops: activeCrops ?? this.activeCrops,
+      languageCode: languageCode ?? this.languageCode,
+      accessToken: accessToken ?? this.accessToken,
+      refreshToken: refreshToken ?? this.refreshToken,
+      isVerified: isVerified ?? this.isVerified,
+      publicProfileEnabled: publicProfileEnabled ?? this.publicProfileEnabled,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'userId': userId,
@@ -45,6 +79,7 @@ class UserSession {
         'accessToken': accessToken,
         'refreshToken': refreshToken,
         'isVerified': isVerified,
+        'publicProfileEnabled': publicProfileEnabled,
       };
 
   factory UserSession.fromJson(Map<String, dynamic> json) {
@@ -62,6 +97,7 @@ class UserSession {
       accessToken: json['accessToken'],
       refreshToken: json['refreshToken'],
       isVerified: json['isVerified'] ?? true,
+      publicProfileEnabled: json['publicProfileEnabled'] == true,
     );
   }
 
@@ -74,5 +110,6 @@ class UserSession {
     state: 'Telangana',
     district: 'Warangal Rural',
     activeCrops: ['Cotton', 'Chilli'],
+    publicProfileEnabled: false,
   );
 }

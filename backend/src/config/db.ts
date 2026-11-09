@@ -91,7 +91,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     throw new Error('SERVICE_UNAVAILABLE: Database is offline in production mode.');
   }
 
-  const queryStr = text.toLowerCase().trim();
+  const queryStr = text.toLowerCase().replace(/\s+/g, ' ').trim();
 
   // 1. Users & Profiles Operations
   if (queryStr.includes('insert into public.users')) {

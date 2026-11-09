@@ -32,6 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _publicProfileEnabled = widget.session.publicProfileEnabled;
     _fetchDiscoverySetting();
   }
 
@@ -41,40 +42,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
         '/auth/profile/discovery',
       );
       if (mounted && res['public_profile_enabled'] != null) {
+        final serverValue = res['public_profile_enabled'] == true;
         setState(() {
-          _publicProfileEnabled = res['public_profile_enabled'] == true;
+          _publicProfileEnabled = serverValue;
         });
+        if (serverValue != widget.session.publicProfileEnabled) {
+          await SecureStorage.saveSession(
+            widget.session.copyWith(publicProfileEnabled: serverValue),
+          );
+        }
       }
     } catch (_) {
-      // Default to false on error or offline
+      // Retain session value on error or offline
     }
   }
 
   Future<void> _toggleDiscovery(bool enabled) async {
-    setState(() => _isLoadingDiscovery = true);
+    final previousValue = _publicProfileEnabled;
+    setState(() {
+      _isLoadingDiscovery = true;
+      _publicProfileEnabled = enabled;
+    });
     try {
       final res = await ApiClient.patch<Map<String, dynamic>>(
         '/auth/profile/discovery',
         body: {'enabled': enabled},
       );
       if (mounted) {
+        final serverValue = res['public_profile_enabled'] == true;
         setState(() {
-          _publicProfileEnabled = res['public_profile_enabled'] == true;
+          _publicProfileEnabled = serverValue;
           _isLoadingDiscovery = false;
         });
+        await SecureStorage.saveSession(
+          widget.session.copyWith(publicProfileEnabled: serverValue),
+        );
+        if (!mounted) return;
         LuxuryToast.show(
           context,
-          message: enabled
+          message: serverValue
               ? 'Public discovery enabled: You are now discoverable.'
               : 'Public discovery revoked: Your profile is immediately hidden.',
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoadingDiscovery = false);
+        setState(() {
+          _publicProfileEnabled = previousValue;
+          _isLoadingDiscovery = false;
+        });
         LuxuryToast.show(
           context,
-          message: 'Failed to update visibility setting: $e',
+          message:
+              'Failed to update visibility setting. Reverted to previous state.',
         );
       }
     }

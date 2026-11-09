@@ -341,6 +341,69 @@ BEGIN
   END IF;
 END $$;
 
+-- Step 4B: Historical Profile Provenance Audit & Safe Data Remediation Plan
+-- Problem: Earlier schemas applied blanket column defaults ('Hanamkonda', 'Warangal', 'Telangana', 4.50).
+-- Removing column defaults prevents future synthetic values, but historical rows may contain unverified defaults.
+-- Solution:
+-- 1. Create an immutable, observable audit table `_profile_provenance_audit`.
+-- 2. Identify rows with boilerplate combinations (village='Hanamkonda', district='Warangal', state='Telangana', land_extent_acres=4.50).
+-- 3. If genuine provenance is verified (e.g., active linked parcels or user metadata), preserve as PRESERVED_GENUINE.
+-- 4. If provenance cannot be verified, record exact original values in audit table and safely nullify unverified fields,
+--    while PRESERVING user account, login credentials, khata transactions, and genuine DPDP consent status.
+CREATE TABLE IF NOT EXISTS public._profile_provenance_audit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id TEXT NOT NULL,
+  field_name TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  action TEXT NOT NULL, -- 'RESET_TO_NULL', 'PRESERVED_GENUINE', 'FLAGGED_UNVERIFIED'
+  reason TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+DECLARE
+  p_rec RECORD;
+  v_has_land_doc BOOLEAN;
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN
+    FOR p_rec IN 
+      SELECT id, village, district, state, land_extent_acres, land_acres, full_name, email 
+      FROM public.profiles 
+      WHERE village = 'Hanamkonda' AND district = 'Warangal' AND state = 'Telangana' 
+        AND (land_extent_acres = 4.50 OR land_acres = 4.50)
+    LOOP
+      v_has_land_doc := false;
+      -- Check if user has authentic linked land parcels or documents dynamically
+      IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'land_documents'
+      ) THEN
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.land_documents WHERE user_id::text = $1)'
+        INTO v_has_land_doc
+        USING p_rec.id::text;
+      END IF;
+
+      IF v_has_land_doc THEN
+        INSERT INTO public._profile_provenance_audit (profile_id, field_name, old_value, new_value, action, reason)
+        VALUES (p_rec.id::text, 'all_location_fields', 'Warangal/Hanamkonda/4.5', 'Warangal/Hanamkonda/4.5', 'PRESERVED_GENUINE', 'Verified by linked land documents');
+      ELSE
+        -- Log audit trail for each suspect field before resetting
+        INSERT INTO public._profile_provenance_audit (profile_id, field_name, old_value, new_value, action, reason)
+        VALUES 
+          (p_rec.id::text, 'village', p_rec.village, NULL, 'RESET_TO_NULL', 'Legacy boilerplate default without provenance'),
+          (p_rec.id::text, 'land_extent_acres', p_rec.land_extent_acres::text, NULL, 'RESET_TO_NULL', 'Legacy boilerplate default without provenance');
+
+        UPDATE public.profiles
+        SET village = NULL,
+            land_extent_acres = NULL,
+            land_acres = CASE WHEN land_acres = 4.50 THEN NULL ELSE land_acres END,
+            updated_at = NOW()
+        WHERE id = p_rec.id;
+      END IF;
+    END LOOP;
+  END IF;
+END $$;
+
 -- Step 5: Strict Privacy-by-Default Row Level Security (RLS) Policies
 
 -- 1. PROFILES RLS (Strict Owner-Only & Admin/Service-Role Access)
@@ -413,6 +476,63 @@ ALTER VIEW public.public_profiles OWNER TO postgres;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
 REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated, anon;
 GRANT SELECT ON public.public_profiles TO authenticated, service_role;
+
+-- 2B. PREVENT DIRECT CLIENT MUTATION OF DISCOVERY FLAG
+-- Protects public_profile_enabled from direct client table mutation via PostgREST/raw UPDATE.
+-- Setting or revoking discovery must be performed via the authenticated backend API
+-- or through the audited SECURITY DEFINER RPC function (set_my_profile_discovery).
+CREATE OR REPLACE FUNCTION public.prevent_direct_discovery_mutation()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF (current_user = 'authenticated') THEN
+    IF (OLD.public_profile_enabled IS DISTINCT FROM NEW.public_profile_enabled) THEN
+      RAISE EXCEPTION 'PERMISSION_DENIED: Direct table mutation of public_profile_enabled is prohibited. Use the authenticated discovery endpoint or audited function.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_prevent_direct_discovery_mutation ON public.profiles;
+CREATE TRIGGER trg_prevent_direct_discovery_mutation
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.prevent_direct_discovery_mutation();
+
+-- Audited SECURITY DEFINER RPC function for setting authenticated user's own discovery flag
+CREATE OR REPLACE FUNCTION public.set_my_profile_discovery(p_enabled boolean)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_uid uuid;
+  v_rows_affected int;
+BEGIN
+  v_uid := auth.uid();
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Authentication required to set discovery visibility';
+  END IF;
+
+  UPDATE public.profiles
+  SET public_profile_enabled = p_enabled, updated_at = NOW()
+  WHERE (id::text = v_uid::text OR user_id::text = v_uid::text);
+
+  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+  IF v_rows_affected = 0 THEN
+    RAISE EXCEPTION 'PROFILE_NOT_FOUND: No canonical profile found for authenticated user';
+  END IF;
+
+  RETURN p_enabled;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.set_my_profile_discovery(boolean) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.set_my_profile_discovery(boolean) FROM anon, PUBLIC;
 
 -- 3. DISEASE SCANS RLS
 DO $$

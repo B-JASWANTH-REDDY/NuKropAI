@@ -10,10 +10,12 @@ class WeatherInfo {
   final double windSpeed;
   final double? windGusts;
   final String
-      sprayAdvisory; // 'OPTIMAL TO SPRAY', 'UNSAFE TO SPRAY', 'Advisory unavailable'
+      sprayAdvisory; // 'OPTIMAL TO SPRAY', 'UNSAFE TO SPRAY', 'ADVISORY_UNAVAILABLE'
   final String sprayWindow;
   final String source;
-  final DateTime observationTime;
+  final DateTime? observationTime;
+  final DateTime? modelTime;
+  final DateTime? retrievedAt;
   final bool isAvailable;
 
   const WeatherInfo({
@@ -29,8 +31,10 @@ class WeatherInfo {
     this.windGusts,
     required this.sprayAdvisory,
     required this.sprayWindow,
-    this.source = 'Open-Meteo Weather API (NWP Forecast Model)',
-    required this.observationTime,
+    this.source = 'Open-Meteo Weather API (NWP Numerical Forecast Model)',
+    this.observationTime,
+    this.modelTime,
+    this.retrievedAt,
     this.isAvailable = true,
   });
 
@@ -48,20 +52,44 @@ class WeatherInfo {
     final tempLow = (weather['tempLow'] as num?)?.toDouble();
     final pressure = (weather['pressure'] as num?)?.toInt();
     final condition = weather['condition']?.toString() ?? 'Clear';
-    final district = locationMap['district']?.toString() ?? 'Warangal';
-    final state = locationMap['state']?.toString() ?? 'Telangana';
+    final district = locationMap['district']?.toString();
+    final state = locationMap['state']?.toString();
+    final location = (district != null && state != null)
+        ? '$district, $state'
+        : (district ?? state ?? 'Agricultural Location');
 
     final isSafe = advisory['isSafe'] == true;
-    final advisoryStatus = advisory['status']?.toString() ??
+    final advisoryStatus = advisory['reason']?.toString() ??
+        advisory['status']?.toString() ??
         (isSafe ? 'OPTIMAL TO SPRAY' : 'Advisory unavailable');
     final window = advisory['window']?.toString() ??
-        'Condition-dependent: apply while parameters remain within safe ranges';
+        (isSafe ? 'Condition-dependent: apply while parameters remain within safe ranges' : 'Unavailable');
 
-    DateTime obsTime;
-    try {
-      obsTime = DateTime.parse(json['observationTime'] ?? '');
-    } catch (_) {
-      obsTime = DateTime.now();
+    DateTime? obsTime;
+    if (json['observationTime'] != null) {
+      try {
+        obsTime = DateTime.parse(json['observationTime'].toString());
+      } catch (_) {
+        obsTime = null;
+      }
+    }
+
+    DateTime? modelTime;
+    if (json['modelTime'] != null) {
+      try {
+        modelTime = DateTime.parse(json['modelTime'].toString());
+      } catch (_) {
+        modelTime = null;
+      }
+    }
+
+    DateTime? retrievedAt;
+    if (json['retrievedAt'] != null) {
+      try {
+        retrievedAt = DateTime.parse(json['retrievedAt'].toString());
+      } catch (_) {
+        retrievedAt = null;
+      }
     }
 
     return WeatherInfo(
@@ -69,7 +97,7 @@ class WeatherInfo {
       tempHigh: tempHigh,
       tempLow: tempLow,
       condition: condition,
-      location: '$district, $state',
+      location: location,
       humidity: humidity,
       rainfall: precipitation,
       pressure: pressure,
@@ -78,8 +106,10 @@ class WeatherInfo {
       sprayAdvisory: advisoryStatus,
       sprayWindow: window,
       source: json['source']?.toString() ??
-          'Open-Meteo Weather API (NWP Forecast Model)',
+          'Open-Meteo Weather API (NWP Numerical Forecast Model)',
       observationTime: obsTime,
+      modelTime: modelTime,
+      retrievedAt: retrievedAt,
       isAvailable: json['status'] == 'AVAILABLE',
     );
   }
@@ -99,7 +129,9 @@ class WeatherInfo {
     sprayAdvisory: 'Advisory unavailable',
     sprayWindow: 'Telemetry offline',
     source: 'Weather Provider Offline',
-    observationTime: DateTime.now(),
+    observationTime: null,
+    modelTime: null,
+    retrievedAt: null,
     isAvailable: false,
   );
 }

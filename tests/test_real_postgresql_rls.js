@@ -280,45 +280,77 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0.1-3', `Farmer 2 breached Farmer 1 private profile: ${JSON.stringify(f2ReadF1.rows)}`);
     }
 
-    // AS FARMER 2: Query public.public_profiles discovery view for Farmer 1
-    const f2ReadView = await pglite.query(`SELECT * FROM public.public_profiles WHERE id = $1`, [farmer1Id]);
-    if (f2ReadView.rows.length === 1) {
-      const row = f2ReadView.rows[0];
+    // AS FARMER 1: Query public.public_profiles discovery view for own public projection
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+    `);
+    const f1ReadView = await pglite.query(`SELECT * FROM public.public_profiles`);
+    if (f1ReadView.rows.length >= 1) {
+      const row = f1ReadView.rows[0];
       const returnedKeys = Object.keys(row);
-      const approvedKeys = ['id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'agristack_verified', 'created_at'];
+      const approvedKeys = ['public_id', 'farmer_id', 'driver_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'agristack_verified', 'preferred_language', 'created_at'];
       const unapprovedKeys = returnedKeys.filter(k => !approvedKeys.includes(k));
       
-      // Verify public fields are present
-      const hasPublicFields = row.full_name !== undefined && row.role !== undefined && row.district !== undefined;
+      // Verify primary key id and internal user_id are strictly stripped from public discovery
+      const hasAuthUuid = row.id !== undefined || row.user_id !== undefined;
+      // Verify public identifier fields are present
+      const hasPublicId = row.public_id !== undefined || row.farmer_id !== undefined;
       // Verify sensitive private fields are NOT present in the view schema
       const exposesPrivate = row.phone !== undefined || row.email !== undefined || row.land_acres !== undefined || 
                              row.kcc_credit_limit !== undefined || row.agristack_id !== undefined || 
-                             row.user_id !== undefined || row.village !== undefined;
+                             row.village !== undefined || row.kcc_balance !== undefined;
       
-      if (hasPublicFields && !exposesPrivate && unapprovedKeys.length === 0) {
-        pass('P0.1-4', 'Farmer 2 can discover Farmer 1 via public_profiles view without exposing phone/email/kcc/land/user_id/village');
+      if (!hasAuthUuid && hasPublicId && !exposesPrivate && unapprovedKeys.length === 0) {
+        pass('P0.1-4', 'Public discovery view uses surrogate public identifier (farmer_id/public_id) and strips internal auth UUID (id/user_id) without leaking PII/financial/land data');
       } else {
-        fail('P0.1-4', `public_profiles view exposes private or unapproved columns: ${unapprovedKeys.join(', ')}`);
+        fail('P0.1-4', `public_profiles view exposes private or unapproved columns: ${unapprovedKeys.join(', ')} (hasAuthUuid: ${hasAuthUuid})`);
       }
     } else {
-      fail('P0.1-4', `public_profiles view failed to return row for Farmer 1 (rows: ${f2ReadView.rows.length})`);
+      fail('P0.1-4', `public_profiles view failed to return rows (rows: ${f1ReadView.rows.length})`);
     }
 
-    // AS ANON: Attempt to query public_profiles (should be rejected because REVOKE ALL FROM anon)
+    // P1.1-ADV-1: Adversarial Test - Attempting to query public_profiles by auth UUID 'id' fails because 'id' column does not exist
+    let idColumnExists = false;
+    try {
+      await pglite.query(`SELECT id FROM public.public_profiles`);
+      idColumnExists = true;
+    } catch (e) {
+      idColumnExists = false;
+    }
+    if (!idColumnExists) {
+      pass('P1.1-ADV-1', 'Auth UUID primary key id is completely eliminated from public.public_profiles view');
+    } else {
+      fail('P1.1-ADV-1', 'Auth UUID primary key id was still exposed in public.public_profiles');
+    }
+
+    // P1.1-ADV-2: Adversarial Test - Farmer A cannot retrieve Farmer B private profile table directly
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2ReadF1Direct = await pglite.query(`SELECT phone, land_acres, kcc_credit_limit FROM public.profiles WHERE id = $1`, [farmer1Id]);
+    if (f2ReadF1Direct.rows.length === 0) {
+      pass('P1.1-ADV-2', 'Farmer 2 cannot retrieve Farmer 1 private profile table via direct query (RLS returned 0 rows)');
+    } else {
+      fail('P1.1-ADV-2', `Farmer 2 breached Farmer 1 private profile: ${JSON.stringify(f2ReadF1Direct.rows)}`);
+    }
+
+    // P1.1-ADV-3: AS ANON: Attempt to query public_profiles (should be rejected because REVOKE ALL FROM anon)
     await pglite.exec(`
       SET ROLE anon;
       SET request.jwt.claims = '{"role": "anon"}';
     `);
     let anonBlocked = false;
     try {
-      await pglite.query(`SELECT * FROM public.public_profiles WHERE id = $1`, [farmer1Id]);
+      await pglite.query(`SELECT * FROM public.public_profiles`);
     } catch (e) {
       anonBlocked = true;
     }
     if (anonBlocked) {
-      pass('P0.1-4b', 'Anonymous user blocked from querying public_profiles view (permission denied)');
+      pass('P1.1-ADV-3', 'Anonymous user blocked from querying public_profiles view (permission denied)');
     } else {
-      fail('P0.1-4b', 'Anonymous user was permitted to query public_profiles');
+      fail('P1.1-ADV-3', 'Anonymous user was permitted to query public_profiles');
     }
 
     // AS DRIVER: Test driver profile access

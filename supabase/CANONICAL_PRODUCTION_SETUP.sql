@@ -927,7 +927,9 @@ END $$;
 -- Projects only approved public attributes for community identity.
 CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
 SELECT 
+  COALESCE(farmer_id, driver_id, 'NK-' || substring(encode(sha256(id::text::bytea), 'hex') from 1 for 10)) AS public_id,
   farmer_id,
+  driver_id,
   full_name,
   avatar_url,
   district,

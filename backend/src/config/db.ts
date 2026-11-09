@@ -519,6 +519,53 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   return { rows: [] };
 }
 
+function createMemoryTransactionClient() {
+  let inTransaction = false;
+  let snapshotAlerts: any[] | null = null;
+  let snapshotNotifications: any[] | null = null;
+
+  return {
+    query: async (text: string, params: any[] = []) => {
+      const q = text.toLowerCase().trim();
+      if (q === 'begin') {
+        inTransaction = true;
+        snapshotAlerts = JSON.parse(JSON.stringify(memoryStore.priceAlerts));
+        snapshotNotifications = JSON.parse(JSON.stringify(memoryStore.notifications));
+        return { rows: [] };
+      }
+      if (q === 'commit') {
+        inTransaction = false;
+        snapshotAlerts = null;
+        snapshotNotifications = null;
+        return { rows: [] };
+      }
+      if (q === 'rollback') {
+        if (inTransaction) {
+          if (snapshotAlerts !== null) {
+            memoryStore.priceAlerts = snapshotAlerts;
+          }
+          if (snapshotNotifications !== null) {
+            memoryStore.notifications = snapshotNotifications;
+          }
+          inTransaction = false;
+          snapshotAlerts = null;
+          snapshotNotifications = null;
+        }
+        return { rows: [] };
+      }
+      return query(text, params);
+    },
+    release: () => {
+      if (inTransaction && snapshotAlerts !== null) {
+        memoryStore.priceAlerts = snapshotAlerts;
+        if (snapshotNotifications !== null) {
+          memoryStore.notifications = snapshotNotifications;
+        }
+      }
+    }
+  };
+}
+
 // Export wrapper matching standard Pool class interface
 export const pool = {
   query: query,
@@ -532,18 +579,12 @@ export const pool = {
         if (process.env.NODE_ENV === 'production') {
           throw new Error(`SERVICE_UNAVAILABLE: Database offline: Cannot establish client connection or transaction in production: ${(err as Error).message}`);
         }
-        return {
-          query: query,
-          release: () => {}
-        };
+        return createMemoryTransactionClient();
       }
     }
     if (process.env.NODE_ENV === 'production') {
       throw new Error('SERVICE_UNAVAILABLE: Database offline: Cannot establish client connection or transaction in production: DATABASE_URL not configured.');
     }
-    return {
-      query: query,
-      release: () => {}
-    };
+    return createMemoryTransactionClient();
   }
 };

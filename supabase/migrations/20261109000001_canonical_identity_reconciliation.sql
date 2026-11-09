@@ -339,20 +339,27 @@ CREATE POLICY "profiles_delete_own"
   );
 
 -- 2. RESTRICTED PUBLIC PROFILES VIEW (Approved Non-Sensitive Public Discovery Only)
--- Excludes: email, phone, user_id, village, land_acres, kcc_credit_limit, kcc_balance, soil_type, agristack_id, dpdp_consent
-CREATE OR REPLACE VIEW public.public_profiles AS
+-- Defined WITH (security_invoker = true) to strictly honor row-level security.
+-- Excludes internal auth identifiers (id, user_id) and confidential attributes
+-- (phone, email, village, mandal, land_acres, kcc_balance, kcc_credit_limit, agristack_id, dpdp_consent).
+-- Exposes distinct public identifier (farmer_id / driver_id / surrogate public_id) without auth UUIDs.
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
 SELECT 
-  id,
+  COALESCE(farmer_id, driver_id, 'NK-' || substring(encode(sha256(id::text::bytea), 'hex') from 1 for 10)) AS public_id,
+  farmer_id,
+  driver_id,
   full_name,
   role,
   avatar_url,
   district,
   state,
   agristack_verified,
+  preferred_language,
   created_at
 FROM public.profiles;
 
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
 GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 -- 3. DISEASE SCANS RLS

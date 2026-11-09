@@ -106,6 +106,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     memoryStore.profiles.push({
       id: newUser.id,
       user_id: newUser.id,
+      public_id: `nk_pub_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`,
       email: newUser.email,
       role: newUser.role,
       full_name: newUser.email.split('@')[0],
@@ -115,15 +116,10 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     return { rows: [newUser] };
   }
 
-  if (queryStr.includes('select * from public.profiles where') && (queryStr.includes('user_id =') || queryStr.includes('id ='))) {
-    const profile = memoryStore.profiles.find(p => p.id === params[0] || p.user_id === params[0]);
-    return { rows: profile ? [profile] : [] };
-  }
-
   if (queryStr.includes('update public.profiles set public_profile_enabled =')) {
     const enabled = params[0];
-    const targetUserId = params[1];
-    const profile = memoryStore.profiles.find(p => p.id === targetUserId || p.user_id === targetUserId);
+    const targetId = params[1];
+    const profile = memoryStore.profiles.find(p => p.id === targetId || p.user_id === targetId);
     if (profile) {
       profile.public_profile_enabled = enabled;
       return { rows: [{ id: profile.id, public_profile_enabled: enabled }] };
@@ -131,22 +127,17 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     return { rows: [] };
   }
 
-  if (queryStr.includes('select public_profile_enabled from public.profiles where')) {
+  if (queryStr.includes('from public.profiles') && (queryStr.includes('id =') || queryStr.includes('user_id ='))) {
     const targetUserId = params[0];
-    const profile = memoryStore.profiles.find(p => p.id === targetUserId || p.user_id === targetUserId);
-    if (profile) {
-      return { rows: [{ public_profile_enabled: profile.public_profile_enabled ?? false }] };
-    }
-    return { rows: [] };
+    const matchingProfiles = memoryStore.profiles.filter(p => p.id === targetUserId || p.user_id === targetUserId);
+    return { rows: matchingProfiles };
   }
 
   if (queryStr.includes('from public.public_profiles')) {
     const optedIn = memoryStore.profiles
       .filter(p => p.public_profile_enabled === true)
       .map(p => ({
-        public_id: p.farmer_id || p.driver_id || `NK-${String(p.id).substring(0, 8)}`,
-        farmer_id: p.farmer_id || null,
-        driver_id: p.driver_id || null,
+        public_id: p.public_id || `nk_pub_${String(p.id).replace(/-/g, '').substring(0, 16)}`,
         full_name: p.full_name,
         role: p.role,
         avatar_url: p.avatar_url || null,

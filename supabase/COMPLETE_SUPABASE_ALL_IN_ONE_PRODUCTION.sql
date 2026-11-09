@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS user_id text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS farmer_id text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS public_id text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS public_profile_enabled boolean NOT NULL DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name text DEFAULT 'Farmer';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone text;
@@ -910,23 +911,36 @@ END $$;
 -- ─────────────────────────────────────────────────────────────────
 -- STEP 4A2: HISTORICAL PROFILE PROVENANCE AUDIT & DATA RECONCILIATION
 -- ─────────────────────────────────────────────────────────────────
--- Auditable cleanup of historical legacy boilerplate defaults (Hanamkonda, Warangal, 4.5 acres)
--- while preserving user account IDs, credentials, khata balances, and genuine DPDP consent status.
+-- Non-destructive audit: Identifies and records legacy default boilerplate patterns
+-- while preserving all farmer data, accounts, credentials, and transactions intact.
 CREATE TABLE IF NOT EXISTS public._profile_provenance_audit (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id TEXT NOT NULL,
   field_name TEXT NOT NULL,
+  current_value TEXT,
   old_value TEXT,
   new_value TEXT,
-  action TEXT NOT NULL, -- 'RESET_TO_NULL', 'PRESERVED_GENUINE', 'FLAGGED_UNVERIFIED'
+  provenance_status TEXT NOT NULL, -- 'FLAGGED_UNVERIFIED_DEFAULT', 'PRESERVED_GENUINE', 'USER_CONFIRMED'
+  action TEXT NOT NULL,            -- 'PRESERVED_FOR_USER_CONFIRMATION', 'PRESERVED_GENUINE'
   reason TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_provenance_audit_unique 
+  ON public._profile_provenance_audit (profile_id, field_name);
+
+-- Populate public_id with dedicated opaque random identifier if null
+UPDATE public.profiles 
+SET public_id = 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16)
+WHERE public_id IS NULL;
+
+ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT ('nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id_unique ON public.profiles(public_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
+
 DO $$
 DECLARE
   p_rec RECORD;
-  v_has_land_doc BOOLEAN;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN
     FOR p_rec IN 
@@ -935,33 +949,17 @@ BEGIN
       WHERE village = 'Hanamkonda' AND district = 'Warangal' AND state = 'Telangana' 
         AND (land_extent_acres = 4.50 OR land_acres = 4.50)
     LOOP
-      v_has_land_doc := false;
-      -- Check if user has authentic linked land parcels or documents dynamically
-      IF EXISTS (
-        SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'land_documents'
-      ) THEN
-        EXECUTE 'SELECT EXISTS (SELECT 1 FROM public.land_documents WHERE user_id::text = $1)'
-        INTO v_has_land_doc
-        USING p_rec.id::text;
-      END IF;
-
-      IF v_has_land_doc THEN
-        INSERT INTO public._profile_provenance_audit (profile_id, field_name, old_value, new_value, action, reason)
-        VALUES (p_rec.id::text, 'all_location_fields', 'Warangal/Hanamkonda/4.5', 'Warangal/Hanamkonda/4.5', 'PRESERVED_GENUINE', 'Verified by linked land documents');
-      ELSE
-        -- Log audit trail for each suspect field before resetting
-        INSERT INTO public._profile_provenance_audit (profile_id, field_name, old_value, new_value, action, reason)
-        VALUES 
-          (p_rec.id::text, 'village', p_rec.village, NULL, 'RESET_TO_NULL', 'Legacy boilerplate default without provenance'),
-          (p_rec.id::text, 'land_extent_acres', p_rec.land_extent_acres::text, NULL, 'RESET_TO_NULL', 'Legacy boilerplate default without provenance');
-
-        UPDATE public.profiles
-        SET village = NULL,
-            land_extent_acres = NULL,
-            land_acres = CASE WHEN land_acres = 4.50 THEN NULL ELSE land_acres END,
-            updated_at = NOW()
-        WHERE id = p_rec.id;
-      END IF;
+      -- NON-DESTRUCTIVE AUDIT LOGGING:
+      -- Preserves all existing farmer-provided values intact in profiles table.
+      INSERT INTO public._profile_provenance_audit (
+        profile_id, field_name, current_value, old_value, new_value, provenance_status, action, reason
+      )
+      VALUES 
+        (p_rec.id::text, 'village', p_rec.village, p_rec.village, p_rec.village, 'FLAGGED_UNVERIFIED_DEFAULT', 'PRESERVED_FOR_USER_CONFIRMATION', 'Matches legacy boilerplate default; preserved intact pending user profile confirmation'),
+        (p_rec.id::text, 'district', p_rec.district, p_rec.district, p_rec.district, 'FLAGGED_UNVERIFIED_DEFAULT', 'PRESERVED_FOR_USER_CONFIRMATION', 'Matches legacy boilerplate default; preserved intact pending user profile confirmation'),
+        (p_rec.id::text, 'state', p_rec.state, p_rec.state, p_rec.state, 'FLAGGED_UNVERIFIED_DEFAULT', 'PRESERVED_FOR_USER_CONFIRMATION', 'Matches legacy boilerplate default; preserved intact pending user profile confirmation'),
+        (p_rec.id::text, 'land_extent_acres', COALESCE(p_rec.land_extent_acres::text, p_rec.land_acres::text), COALESCE(p_rec.land_extent_acres::text, p_rec.land_acres::text), COALESCE(p_rec.land_extent_acres::text, p_rec.land_acres::text), 'FLAGGED_UNVERIFIED_DEFAULT', 'PRESERVED_FOR_USER_CONFIRMATION', 'Matches legacy boilerplate default 4.50; preserved intact pending user profile confirmation')
+      ON CONFLICT (profile_id, field_name) DO NOTHING;
     END LOOP;
   END IF;
 END $$;
@@ -976,12 +974,11 @@ END $$;
 -- Excludes internal auth identifiers (id, user_id) and confidential attributes
 -- (phone, village, mandal, email, land_acres, kcc_balance, government identity tags).
 -- Excludes unverified claims (agristack_verified) and private preferences (preferred_language).
--- Projects only approved public attributes for community identity.
+-- Excludes internal operational haul identifiers (farmer_id, driver_id).
+-- Exposes dedicated opaque public_id for community identity.
 CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true, security_invoker = false) AS
 SELECT 
-  COALESCE(farmer_id, driver_id, 'NK-' || substring(encode(sha256(id::text::bytea), 'hex') from 1 for 10)) AS public_id,
-  farmer_id,
-  driver_id,
+  public_id,
   full_name,
   role,
   avatar_url,
@@ -1019,6 +1016,8 @@ CREATE TRIGGER trg_prevent_direct_discovery_mutation
   EXECUTE FUNCTION public.prevent_direct_discovery_mutation();
 
 -- Audited SECURITY DEFINER RPC function for setting authenticated user's own discovery flag
+-- Enforces canonical identity uniqueness: rejects ambiguous mappings (v_match_count > 1)
+-- Updates strictly by canonical primary key.
 CREATE OR REPLACE FUNCTION public.set_my_profile_discovery(p_enabled boolean)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -1027,21 +1026,30 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_uid uuid;
-  v_rows_affected int;
+  v_match_count int;
+  v_profile_id text;
 BEGIN
   v_uid := auth.uid();
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'UNAUTHORIZED: Authentication required to set discovery visibility';
   END IF;
 
-  UPDATE public.profiles
-  SET public_profile_enabled = p_enabled, updated_at = NOW()
+  -- Canonical identity check: verify single unambiguous profile mapping for caller
+  SELECT count(*), min(id::text) 
+  INTO v_match_count, v_profile_id
+  FROM public.profiles
   WHERE (id::text = v_uid::text OR user_id::text = v_uid::text);
 
-  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
-  IF v_rows_affected = 0 THEN
+  IF v_match_count = 0 THEN
     RAISE EXCEPTION 'PROFILE_NOT_FOUND: No canonical profile found for authenticated user';
+  ELSIF v_match_count > 1 THEN
+    RAISE EXCEPTION 'AMBIGUOUS_IDENTITY: Multiple profile mappings found for authenticated user. Ambiguous update rejected.';
   END IF;
+
+  -- Strictly update by unique canonical primary key
+  UPDATE public.profiles
+  SET public_profile_enabled = p_enabled, updated_at = NOW()
+  WHERE id::text = v_profile_id;
 
   RETURN p_enabled;
 END;
@@ -1657,6 +1665,7 @@ DECLARE
   v_state text;
   v_farmer_id text;
   v_driver_id text;
+  v_public_id text;
 BEGIN
   v_full_name := COALESCE(
     NEW.raw_user_meta_data->>'full_name',
@@ -1669,6 +1678,9 @@ BEGIN
     NEW.raw_user_meta_data->>'phone',
     NEW.raw_user_meta_data->>'phone_number'
   );
+
+  -- Dedicated opaque public identifier
+  v_public_id := 'nk_pub_' || substring(replace(gen_random_uuid()::text, '-', ''), 1, 16);
 
   -- Role whitelist & privilege escalation prevention:
   v_requested_role := lower(COALESCE(NEW.raw_user_meta_data->>'role', 'farmer'));
@@ -1693,15 +1705,16 @@ BEGIN
   END IF;
 
   INSERT INTO public.profiles (
-    id, user_id, farmer_id, driver_id, email, full_name, phone, phone_number,
+    id, user_id, public_id, farmer_id, driver_id, email, full_name, phone, phone_number,
     role, village, district, mandal, state, preferred_language, created_at, updated_at
   )
   VALUES (
-    NEW.id::text, NEW.id::text, v_farmer_id, v_driver_id, NEW.email, v_full_name,
+    NEW.id::text, NEW.id::text, v_public_id, v_farmer_id, v_driver_id, NEW.email, v_full_name,
     v_phone, v_phone, v_role, v_village, v_district, v_mandal, v_state, 'en', NOW(), NOW()
   )
   ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.id,
+    public_id = COALESCE(public.profiles.public_id, EXCLUDED.public_id),
     email = COALESCE(public.profiles.email, EXCLUDED.email),
     full_name = CASE WHEN public.profiles.full_name IS NULL OR public.profiles.full_name = 'Farmer' THEN EXCLUDED.full_name ELSE public.profiles.full_name END,
     phone = COALESCE(public.profiles.phone, EXCLUDED.phone),

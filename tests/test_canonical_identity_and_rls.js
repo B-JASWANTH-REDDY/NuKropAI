@@ -332,6 +332,72 @@ async function main() {
     assert.strictEqual(patchRes.statusCode, 404);
   });
 
+  await testAsync('ID-16: Ambiguous identity mapping (multiple profiles matching user_id) returns 409 Conflict with AMBIGUOUS_IDENTITY', async () => {
+    const ambiguousUserId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    // Simulate ambiguous duplicate profile records
+    memoryStore.profiles.push({
+      id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01',
+      user_id: ambiguousUserId,
+      public_id: 'nk_pub_ambiguous_01',
+      full_name: 'Ambiguous User Duplicate 1',
+      role: 'farmer',
+      public_profile_enabled: false,
+      created_at: new Date()
+    });
+    memoryStore.profiles.push({
+      id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02',
+      user_id: ambiguousUserId,
+      public_id: 'nk_pub_ambiguous_02',
+      full_name: 'Ambiguous User Duplicate 2',
+      role: 'farmer',
+      public_profile_enabled: true,
+      created_at: new Date()
+    });
+
+    const ambiguousToken = jwt.sign(
+      { sub: ambiguousUserId, role: 'authenticated', app_metadata: { role: 'farmer' } },
+      process.env.JWT_SECRET,
+      { audience: 'authenticated', issuer: 'https://nukrop-agri-test.supabase.co/auth/v1', expiresIn: '1h' }
+    );
+
+    const getRes = await app.inject({
+      method: 'GET',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${ambiguousToken}` }
+    });
+    assert.strictEqual(getRes.statusCode, 409);
+    const getBody = JSON.parse(getRes.body);
+    assert.strictEqual(getBody.code, 'AMBIGUOUS_IDENTITY');
+
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${ambiguousToken}` },
+      payload: { enabled: true }
+    });
+    assert.strictEqual(patchRes.statusCode, 409);
+    const patchBody = JSON.parse(patchRes.body);
+    assert.strictEqual(patchBody.code, 'AMBIGUOUS_IDENTITY');
+  });
+
+  await testAsync('ID-17: Discovery API does not accept public_id in Bearer token or URL to mutate private profile', async () => {
+    // Attempting to authorize using a public_id instead of authenticated user UUID is rejected
+    const publicIdToken = jwt.sign(
+      { sub: 'nk_pub_fake_public_id_value', role: 'authenticated', app_metadata: { role: 'farmer' } },
+      process.env.JWT_SECRET,
+      { audience: 'authenticated', issuer: 'https://nukrop-agri-test.supabase.co/auth/v1', expiresIn: '1h' }
+    );
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${publicIdToken}` },
+      payload: { enabled: true }
+    });
+    // Public ID is not a canonical auth user_id, profile not found
+    assert.strictEqual(res.statusCode, 404);
+  });
+
   console.log('\n================================================================================');
   console.log(`📊 CANONICAL IDENTITY AUDIT: ${passed}/${total} PASSED`);
   console.log('================================================================================\n');

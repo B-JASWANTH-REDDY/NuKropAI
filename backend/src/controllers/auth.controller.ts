@@ -353,22 +353,32 @@ export const updateProfileDiscovery = async (request: FastifyRequest, reply: Fas
   }
 
   try {
+    const matchingProfiles = await pool.query(
+      `SELECT id, user_id, public_profile_enabled FROM public.profiles 
+       WHERE (id = $1 OR user_id = $1)`,
+      [userId]
+    );
+
+    if (matchingProfiles.rows.length === 0) {
+      return reply.status(404).send({ error: 'Profile not found for authenticated user' });
+    }
+
+    if (matchingProfiles.rows.length > 1) {
+      return reply.status(409).send({ 
+        error: 'Ambiguous identity mapping: Multiple profiles match authenticated user. Ambiguous update rejected.',
+        code: 'AMBIGUOUS_IDENTITY'
+      });
+    }
+
+    const canonicalProfile = matchingProfiles.rows[0];
+
     const result = await pool.query(
       `UPDATE public.profiles 
        SET public_profile_enabled = $1, updated_at = NOW() 
-       WHERE id = (
-         SELECT p.id FROM public.profiles p 
-         WHERE (p.id = $2 OR p.user_id = $2) 
-         ORDER BY (p.id = $2) DESC, p.created_at ASC 
-         LIMIT 1
-       ) 
+       WHERE id = $2 
        RETURNING id, public_profile_enabled`,
-      [enabled, userId]
+      [enabled, canonicalProfile.id]
     );
-
-    if (result.rows.length === 0) {
-      return reply.status(404).send({ error: 'Profile not found for authenticated user' });
-    }
 
     return reply.send({
       success: true,
@@ -393,21 +403,26 @@ export const getProfileDiscovery = async (request: FastifyRequest, reply: Fastif
   }
 
   try {
-    const result = await pool.query(
-      `SELECT public_profile_enabled FROM public.profiles 
-       WHERE (id = $1 OR user_id = $1) 
-       ORDER BY (id = $1) DESC, created_at ASC 
-       LIMIT 1`,
+    const matchingProfiles = await pool.query(
+      `SELECT id, user_id, public_profile_enabled FROM public.profiles 
+       WHERE (id = $1 OR user_id = $1)`,
       [userId]
     );
 
-    if (result.rows.length === 0) {
+    if (matchingProfiles.rows.length === 0) {
       return reply.status(404).send({ error: 'Profile not found for authenticated user' });
+    }
+
+    if (matchingProfiles.rows.length > 1) {
+      return reply.status(409).send({ 
+        error: 'Ambiguous identity mapping: Multiple profiles match authenticated user.',
+        code: 'AMBIGUOUS_IDENTITY'
+      });
     }
 
     return reply.send({
       success: true,
-      public_profile_enabled: Boolean(result.rows[0].public_profile_enabled)
+      public_profile_enabled: Boolean(matchingProfiles.rows[0].public_profile_enabled)
     });
   } catch (err: any) {
     request.log.error(err, 'Failed to fetch profile discovery setting');

@@ -97,12 +97,36 @@ $$ LANGUAGE plpgsql STABLE;`
     await pglite.exec(initialSql);
     pass('MIG-1.1', '20260901000001_initial_schema_and_rls executed on clean DB');
 
-    // 2. Insert pre-existing profile in baseline schema
+    // 2. Insert pre-existing profiles in baseline schema to verify non-destructive data preservation
     const baselineUserId = 'a0000000-0000-0000-0000-000000000001';
+    const genuineHanamkondaId = 'a0000000-0000-0000-0000-000000000002';
+    const withLandDocId = 'a0000000-0000-0000-0000-000000000003';
+    const partialDefaultId = 'a0000000-0000-0000-0000-000000000004';
+
     await pglite.exec(`
-      INSERT INTO auth.users (id, email) VALUES ('${baselineUserId}', 'existing_farmer@nukrop.ai');
-      INSERT INTO public.profiles (id, phone, full_name, state, district)
-      VALUES ('${baselineUserId}', '+919876543210', 'Legacy Preexisting Farmer', 'Telangana', 'Warangal');
+      INSERT INTO auth.users (id, email) VALUES 
+        ('${baselineUserId}', 'existing_farmer@nukrop.ai'),
+        ('${genuineHanamkondaId}', 'genuine_warangal_farmer@nukrop.ai'),
+        ('${withLandDocId}', 'farmer_landdoc@nukrop.ai'),
+        ('${partialDefaultId}', 'farmer_partial@nukrop.ai');
+
+      INSERT INTO public.profiles (id, phone, full_name, state, district, village, land_extent_acres)
+      VALUES 
+        ('${baselineUserId}', '+919876543210', 'Legacy Preexisting Farmer', 'Telangana', 'Warangal', NULL, NULL),
+        ('${genuineHanamkondaId}', '+919876543211', 'Genuine Hanamkonda Farmer', 'Telangana', 'Warangal', 'Hanamkonda', 4.50),
+        ('${withLandDocId}', '+919876543212', 'Farmer With Land Document', 'Telangana', 'Warangal', 'Hanamkonda', 4.50),
+        ('${partialDefaultId}', '+919876543213', 'Partial Default Farmer', 'Telangana', 'Karimnagar', 'Hanamkonda', 2.00);
+
+      -- Create land document for withLandDocId
+      CREATE TABLE IF NOT EXISTS public.land_documents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        document_type TEXT,
+        document_number TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      INSERT INTO public.land_documents (user_id, document_type, document_number)
+      VALUES ('${withLandDocId}', 'Pattadar Passbook', 'TS-WRG-2026-9988');
 
       -- Create legacy public.users table to verify P0.3 migration safety & admin escalation blocking
       CREATE TABLE IF NOT EXISTS public.users (
@@ -116,7 +140,7 @@ $$ LANGUAGE plpgsql STABLE;`
         ('88888888-8888-8888-8888-888888888888', 'legacy_admin@nukrop.ai', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6FeVnZ4pZ5x8kGyGG', 'admin'),
         ('77777777-7777-7777-7777-777777777777', 'legacy_incompatible@nukrop.ai', 'incompatible_md5_hash_sample', 'farmer');
     `);
-    pass('MIG-1.2', 'Pre-existing profile and legacy accounts inserted into baseline schema');
+    pass('MIG-1.2', 'Pre-existing profiles and legacy accounts inserted into baseline schema');
 
     // 3. Run reconciliation migration on top of baseline
     await pglite.exec(reconSql);
@@ -135,6 +159,68 @@ $$ LANGUAGE plpgsql STABLE;`
       pass('MIG-1.4', 'Pre-existing profile preserved with additive user_id backfilled');
     } else {
       fail('MIG-1.4', 'Pre-existing data corrupted or user_id not backfilled');
+    }
+
+    // 4a-1. P0 Historical Data Preservation: Genuine farmer in Hanamkonda with 4.5 acres has data preserved intact
+    const resGenuine = await pglite.query(
+      `SELECT village, district, state, land_extent_acres, land_acres FROM public.profiles WHERE id = $1`,
+      [genuineHanamkondaId]
+    );
+    const gRow = resGenuine.rows[0];
+    if (
+      gRow &&
+      gRow.village === 'Hanamkonda' &&
+      gRow.district === 'Warangal' &&
+      gRow.state === 'Telangana' &&
+      Number(gRow.land_extent_acres) === 4.5
+    ) {
+      pass('P0-PROV-1', 'Genuine farmer in Hanamkonda with 4.50 acres and no land doc preserved intact in public.profiles (zero destructive NULL overwrites)');
+    } else {
+      fail('P0-PROV-1', `Genuine farmer profile data was destructively modified: ${JSON.stringify(gRow)}`);
+    }
+
+    // 4a-2. P0 Audit Trail: Provenance uncertainty recorded as FLAGGED_UNVERIFIED_DEFAULT with action PRESERVED_FOR_USER_CONFIRMATION
+    const resAudit = await pglite.query(
+      `SELECT field_name, current_value, provenance_status, action FROM public._profile_provenance_audit WHERE profile_id = $1 ORDER BY field_name`,
+      [genuineHanamkondaId]
+    );
+    if (
+      resAudit.rows.length >= 4 &&
+      resAudit.rows.every(r => r.provenance_status === 'FLAGGED_UNVERIFIED_DEFAULT' && r.action === 'PRESERVED_FOR_USER_CONFIRMATION')
+    ) {
+      pass('P0-PROV-2', 'Unverified legacy defaults flagged in provenance audit table with action PRESERVED_FOR_USER_CONFIRMATION (zero destructive NULL overwrites)');
+    } else {
+      fail('P0-PROV-2', `Audit trail missing or unexpected: ${JSON.stringify(resAudit.rows)}`);
+    }
+
+    // 4a-3. P0 Farmer with land doc preserved
+    const resDoc = await pglite.query(
+      `SELECT village, district, state, land_extent_acres FROM public.profiles WHERE id = $1`,
+      [withLandDocId]
+    );
+    if (resDoc.rows[0]?.village === 'Hanamkonda' && Number(resDoc.rows[0]?.land_extent_acres) === 4.5) {
+      pass('P0-PROV-3', 'Farmer with linked land document preserved intact in public.profiles');
+    } else {
+      fail('P0-PROV-3', `Farmer with land document corrupted: ${JSON.stringify(resDoc.rows)}`);
+    }
+
+    // 4a-4. P0 Profile with partial default fields untouched
+    const resPartial = await pglite.query(
+      `SELECT village, district, state, land_extent_acres FROM public.profiles WHERE id = $1`,
+      [partialDefaultId]
+    );
+    const resPartialAudit = await pglite.query(
+      `SELECT COUNT(*)::int as count FROM public._profile_provenance_audit WHERE profile_id = $1`,
+      [partialDefaultId]
+    );
+    if (
+      resPartial.rows[0]?.village === 'Hanamkonda' &&
+      resPartial.rows[0]?.district === 'Karimnagar' &&
+      resPartialAudit.rows[0]?.count === 0
+    ) {
+      pass('P0-PROV-4', 'Profile with partial default-looking fields untouched and not logged in audit');
+    } else {
+      fail('P0-PROV-4', `Partial default profile handled incorrectly: profile=${JSON.stringify(resPartial.rows)}, audit=${JSON.stringify(resPartialAudit.rows)}`);
     }
 
     // 4b. Verify P0.3: Legacy admin role escalation prevented during migration
@@ -170,8 +256,14 @@ $$ LANGUAGE plpgsql STABLE;`
     }
 
     // 5. Idempotency test: Re-run reconciliation migration a second time
+    const auditCountBeforeRerun = (await pglite.query(`SELECT COUNT(*)::int as count FROM public._profile_provenance_audit`)).rows[0]?.count;
     await pglite.exec(reconSql);
-    pass('MIG-1.5', 'Reconciliation migration re-applied idempotently without errors');
+    const auditCountAfterRerun = (await pglite.query(`SELECT COUNT(*)::int as count FROM public._profile_provenance_audit`)).rows[0]?.count;
+    if (auditCountBeforeRerun === auditCountAfterRerun) {
+      pass('MIG-1.5', 'Reconciliation migration re-applied idempotently without errors or duplicate audit rows');
+    } else {
+      fail('MIG-1.5', `Migration rerun generated duplicate audit rows: before=${auditCountBeforeRerun}, after=${auditCountAfterRerun}`);
+    }
   } catch (err) {
     fail('MIG-1', `Migration execution error: ${err.message}`);
   }
@@ -376,14 +468,15 @@ $$ LANGUAGE plpgsql STABLE;`
       const discRow = f2DiscoverF1.rows[0];
       const hasNoUuid = discRow.id === undefined && discRow.user_id === undefined;
       const hasNoPii = discRow.phone === undefined && discRow.email === undefined && discRow.land_acres === undefined && discRow.village === undefined && discRow.kcc_balance === undefined;
-      const hasPublicFields = discRow.public_id !== undefined && discRow.farmer_id !== undefined && discRow.full_name === 'Farmer One';
-      const approvedKeys = ['public_id', 'farmer_id', 'driver_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'created_at'];
+      const hasNoInternalIds = discRow.farmer_id === undefined && discRow.driver_id === undefined;
+      const hasOpaquePublicId = typeof discRow.public_id === 'string' && discRow.public_id.startsWith('nk_pub_');
+      const approvedKeys = ['public_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'created_at'];
       const returnedKeys = Object.keys(discRow);
       const unapprovedKeys = returnedKeys.filter(k => !approvedKeys.includes(k));
-      if (hasNoUuid && hasNoPii && hasPublicFields && unapprovedKeys.length === 0) {
-        pass('P1.1-DISC-1', 'Farmer 2 discovers Farmer 1 after opt-in (approved projection only: no UUIDs, no PII, no unverified claims)');
+      if (hasNoUuid && hasNoPii && hasNoInternalIds && hasOpaquePublicId && unapprovedKeys.length === 0) {
+        pass('P1.1-DISC-1', 'Farmer 2 discovers Farmer 1 after opt-in (opaque public_id only, zero internal farmer/driver IDs, zero UUIDs, zero PII)');
       } else {
-        fail('P1.1-DISC-1', `Discovery returned unexpected fields: ${JSON.stringify(discRow)}`);
+        fail('P1.1-DISC-1', `Discovery returned unexpected fields or exposed internal identifiers: ${JSON.stringify(discRow)}`);
       }
     } else {
       fail('P1.1-DISC-1', `Farmer 2 could not discover Farmer 1 via public.public_profiles (rows returned: ${f2DiscoverF1.rows.length})`);
@@ -443,22 +536,23 @@ $$ LANGUAGE plpgsql STABLE;`
     if (f3ReadView.rows.length === 1) {
       const row = f3ReadView.rows[0];
       const returnedKeys = Object.keys(row);
-      const approvedKeys = ['public_id', 'farmer_id', 'driver_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'created_at'];
+      const approvedKeys = ['public_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'created_at'];
       const unapprovedKeys = returnedKeys.filter(k => !approvedKeys.includes(k));
       
       // Verify primary key id and internal user_id are strictly stripped from public discovery
       const hasAuthUuid = row.id !== undefined || row.user_id !== undefined;
-      // Verify public identifier fields are present
-      const hasPublicId = row.public_id !== undefined || row.farmer_id !== undefined;
+      // Verify opaque public_id is present and internal IDs (farmer_id, driver_id) are removed
+      const hasOpaquePublicId = typeof row.public_id === 'string' && row.public_id.startsWith('nk_pub_');
+      const hasNoInternalIds = row.farmer_id === undefined && row.driver_id === undefined;
       // Verify sensitive private fields are NOT present in the view schema
       const exposesPrivate = row.phone !== undefined || row.email !== undefined || row.land_acres !== undefined || 
                              row.kcc_credit_limit !== undefined || row.agristack_id !== undefined || 
                              row.village !== undefined || row.kcc_balance !== undefined;
       
-      if (!hasAuthUuid && hasPublicId && !exposesPrivate && unapprovedKeys.length === 0) {
-        pass('P0.1-4', 'Public discovery view uses surrogate public identifier (farmer_id/public_id) and strips internal auth UUID without leaking PII/financial/land data');
+      if (!hasAuthUuid && hasOpaquePublicId && hasNoInternalIds && !exposesPrivate && unapprovedKeys.length === 0) {
+        pass('P0.1-4', 'Public discovery view uses opaque public identifier (nk_pub_*) and strips internal farmer_id/driver_id/auth UUIDs without leaking PII/financial/land data');
       } else {
-        fail('P0.1-4', `public_profiles view exposes private or unapproved columns: ${unapprovedKeys.join(', ')} (hasAuthUuid: ${hasAuthUuid})`);
+        fail('P0.1-4', `public_profiles view exposes private or unapproved columns: ${unapprovedKeys.join(', ')} (hasAuthUuid: ${hasAuthUuid}, hasNoInternalIds: ${hasNoInternalIds})`);
       }
     } else {
       fail('P0.1-4', `public_profiles view failed to return rows for opted-in user (rows: ${f3ReadView.rows.length})`);
@@ -506,6 +600,86 @@ $$ LANGUAGE plpgsql STABLE;`
     } else {
       fail('P1.1-ADV-3', 'Anonymous user was permitted to query public_profiles');
     }
+
+    // P1-RPC-ANON-BLOCKED: Anonymous caller cannot execute set_my_profile_discovery
+    let rpcAnonBlocked = false;
+    try {
+      await pglite.query(`SELECT public.set_my_profile_discovery(true)`);
+    } catch (e) {
+      rpcAnonBlocked = true;
+    }
+    if (rpcAnonBlocked) {
+      pass('P1-RPC-ANON-BLOCKED', 'Anonymous user blocked from executing set_my_profile_discovery RPC (permission denied)');
+    } else {
+      fail('P1-RPC-ANON-BLOCKED', 'Anonymous user was permitted to execute set_my_profile_discovery');
+    }
+
+    // P1-UNIQUE-USERID: Database uniqueness constraint idx_profiles_user_id_unique blocks duplicate user_id
+    await pglite.exec(`RESET ROLE;`);
+    let duplicateUserIdBlocked = false;
+    try {
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, full_name, role)
+        VALUES ('99999999-9999-9999-9999-999999999991', '${farmer1Id}', 'Duplicate User Profile', 'farmer')
+      `);
+    } catch (e) {
+      if (e.message.includes('unique') || e.message.includes('duplicate key') || e.message.includes('idx_profiles_user_id_unique')) {
+        duplicateUserIdBlocked = true;
+      }
+    }
+    if (duplicateUserIdBlocked) {
+      pass('P1-UNIQUE-USERID', 'Unique index idx_profiles_user_id_unique successfully blocks duplicate profile user_id mappings');
+    } else {
+      fail('P1-UNIQUE-USERID', 'Duplicate user_id profile mapping was NOT blocked by unique index');
+    }
+
+    // P1-PUBID-ISOLATION: public_id cannot be used as an auth credential to query private profile data
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f3PublicId = f3ReadView.rows[0]?.public_id;
+    const leakViaPubId = await pglite.query(
+      `SELECT phone, email FROM public.profiles WHERE id::text = $1 OR user_id::text = $1`,
+      [f3PublicId]
+    );
+    if (leakViaPubId.rows.length === 0) {
+      pass('P1-PUBID-ISOLATION', 'public_id cannot be used as authorization credential or primary key to query private data (0 rows)');
+    } else {
+      fail('P1-PUBID-ISOLATION', 'Private profile data was accessible via public_id!');
+    }
+
+    // P1-AMBIGUOUS-RPC: Audited RPC rejects ambiguous profiles with AMBIGUOUS_IDENTITY
+    // Temporarily drop unique index to simulate ambiguous duplicate profile rows
+    await pglite.exec(`
+      RESET ROLE;
+      DROP INDEX IF EXISTS public.idx_profiles_user_id_unique;
+      INSERT INTO auth.users (id, email) VALUES ('88888888-8888-8888-8888-888888888899', 'dup@nukrop.ai') ON CONFLICT (id) DO NOTHING;
+      UPDATE public.profiles SET user_id = '${farmer1Id}' WHERE id = '88888888-8888-8888-8888-888888888899';
+    `);
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+    `);
+    let ambiguousRpcThrown = false;
+    try {
+      await pglite.query(`SELECT public.set_my_profile_discovery(true)`);
+    } catch (e) {
+      if (e.message.includes('AMBIGUOUS_IDENTITY')) {
+        ambiguousRpcThrown = true;
+      }
+    }
+    if (ambiguousRpcThrown) {
+      pass('P1-AMBIGUOUS-RPC', 'set_my_profile_discovery safely raises AMBIGUOUS_IDENTITY when multiple profiles match authenticated user');
+    } else {
+      fail('P1-AMBIGUOUS-RPC', 'set_my_profile_discovery did not reject ambiguous multiple profile mappings');
+    }
+    // Clean up duplicate profile and restore unique index
+    await pglite.exec(`
+      RESET ROLE;
+      DELETE FROM public.profiles WHERE id = '88888888-8888-8888-8888-888888888899';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
+    `);
 
     // AS DRIVER: Test driver profile access
     await pglite.exec(`

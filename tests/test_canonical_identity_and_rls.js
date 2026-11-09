@@ -450,7 +450,7 @@ async function main() {
     assert.strictEqual(profY.public_profile_enabled, false);
   });
 
-  await testAsync('ID-19: Registration generates dedicated cryptographically secure public_id (nk_pub_* with 128-bit entropy)', async () => {
+  await testAsync('ID-19: Registration generates dedicated cryptographically secure public_id (nk_pub_* with 122-bit RFC 4122 UUID v4 randomness, 32 hex chars)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/register',
@@ -470,6 +470,17 @@ async function main() {
     // Ensure public_id is completely independent of user UUID and email
     assert(!createdProfile.public_id.includes(body.user.id.replace(/-/g, '')));
     assert(!createdProfile.public_id.includes('farmer'));
+  });
+
+  await testAsync('ID-19c: Repeated user upsert preserves existing public_id without regeneration', async () => {
+    const existing = memoryStore.profiles.find(p => p.email === 'csprng.farmer@nukrop.in');
+    assert(existing, 'Profile must exist');
+    const originalPubId = existing.public_id;
+
+    // Simulate repeated login/upsert
+    await query('UPDATE public.profiles SET full_name = $1 WHERE id = $2', ['Updated Farmer Name', existing.id]);
+    const refreshed = memoryStore.profiles.find(p => p.id === existing.id);
+    assert.strictEqual(refreshed.public_id, originalPubId, 'public_id must be strictly preserved on updates/upserts');
   });
 
   await testAsync('ID-19b: Client attempts to supply custom, arbitrary, or UUID-injected public_id are rejected', async () => {

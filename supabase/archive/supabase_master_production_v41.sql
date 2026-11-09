@@ -91,15 +91,31 @@ FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- Automatic Profile Creation upon auth.users signup
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   v_fid TEXT;
+  v_role TEXT;
+  v_public_id TEXT;
 BEGIN
   v_fid := 'NK-' || floor(10000 + random() * 89999)::text;
   
+  -- Dedicated opaque public identifier (122 bits of cryptographic randomness via RFC 4122 UUID v4)
+  v_public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
+
+  -- Role whitelist
+  v_role := LOWER(COALESCE(NEW.raw_user_meta_data->>'role', 'farmer'));
+  IF v_role NOT IN ('farmer', 'driver') THEN
+    v_role := 'farmer';
+  END IF;
+
   INSERT INTO public.profiles (
     id,
     user_id,
+    public_id,
     email,
     full_name,
     farmer_id,
@@ -108,19 +124,22 @@ BEGIN
   ) VALUES (
     NEW.id,
     NEW.id,
+    v_public_id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(COALESCE(NEW.email, 'farmer@nukrop.ai'), '@', 1)),
     v_fid,
-    COALESCE(NEW.raw_user_meta_data->>'role', 'farmer'),
+    v_role,
     COALESCE(NEW.raw_user_meta_data->>'preferred_lang', 'te')
   )
   ON CONFLICT (id) DO UPDATE SET
+    user_id = EXCLUDED.id,
+    public_id = COALESCE(profiles.public_id, EXCLUDED.public_id),
     email = EXCLUDED.email,
     full_name = CASE WHEN profiles.full_name = 'Farmer' THEN EXCLUDED.full_name ELSE profiles.full_name END;
     
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -527,7 +546,8 @@ BEGIN
     )
   ORDER BY distance_km ASC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 -- Active Online Drivers Fetch RPC
 CREATE OR REPLACE FUNCTION public.get_active_driver_telemetry()
@@ -561,7 +581,8 @@ BEGIN
     AND dt.last_ping >= (NOW() - INTERVAL '10 minutes')
   ORDER BY dt.last_ping DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 -- Authentic AgriStack Registry Search RPC
 CREATE OR REPLACE FUNCTION public.fetch_authentic_agristack_registry(p_search_token TEXT)
@@ -605,7 +626,8 @@ BEGIN
      OR l.survey_number = p_search_token
   GROUP BY p.id, p.full_name, p.fid, p.farmer_id, p.is_ekyc_verified;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 -- Atomicity Increment/Decrement RPCs for Likes/Counters
 CREATE OR REPLACE FUNCTION public.increment(x INT)

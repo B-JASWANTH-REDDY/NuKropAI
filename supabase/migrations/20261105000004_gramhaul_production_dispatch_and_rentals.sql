@@ -157,7 +157,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_farmer_geog geography;
@@ -232,7 +232,7 @@ CREATE OR REPLACE FUNCTION public.atomic_accept_booking(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -364,7 +364,7 @@ CREATE OR REPLACE FUNCTION public.atomic_cancel_booking(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -449,7 +449,7 @@ CREATE OR REPLACE FUNCTION public.atomic_verify_booking_otp(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -546,7 +546,7 @@ CREATE OR REPLACE FUNCTION public.check_rental_conflict(
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_conflict_count INT := 0;

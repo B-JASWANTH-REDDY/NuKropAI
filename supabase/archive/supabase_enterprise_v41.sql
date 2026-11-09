@@ -356,7 +356,8 @@ BEGIN
         'verified_acres', v_land_acres
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 -- ============================================================================
 -- 17. REALTIME PUBLICATION

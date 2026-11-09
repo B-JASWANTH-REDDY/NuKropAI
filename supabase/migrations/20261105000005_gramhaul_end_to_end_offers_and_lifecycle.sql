@@ -72,7 +72,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -145,7 +145,7 @@ CREATE OR REPLACE FUNCTION public.atomic_reject_offer(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_offer RECORD;
@@ -190,7 +190,7 @@ CREATE OR REPLACE FUNCTION public.atomic_accept_booking(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -334,7 +334,7 @@ CREATE OR REPLACE FUNCTION public.atomic_cancel_booking(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -425,7 +425,7 @@ CREATE OR REPLACE FUNCTION public.atomic_extend_rental(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_rental RECORD;
@@ -509,7 +509,7 @@ CREATE OR REPLACE FUNCTION public.atomic_return_rental(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_rental RECORD;

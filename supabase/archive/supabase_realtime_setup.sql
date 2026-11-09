@@ -261,7 +261,8 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 DROP TRIGGER IF EXISTS trigger_sync_post_likes ON public.community_likes;
 CREATE TRIGGER trigger_sync_post_likes
@@ -287,7 +288,8 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 DROP TRIGGER IF EXISTS trigger_sync_post_comments ON public.community_comments;
 CREATE TRIGGER trigger_sync_post_comments
@@ -308,7 +310,8 @@ BEGIN
 
     RETURN COALESCE(v_new_likes, 0);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 -- STEP 4: ROW LEVEL SECURITY (RLS) & UNRESTRICTED ANONYMOUS ACCESS
 

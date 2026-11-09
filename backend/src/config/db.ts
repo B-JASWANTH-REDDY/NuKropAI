@@ -103,7 +103,8 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
       created_at: new Date()
     };
     memoryStore.users.push(newUser);
-    const generatedPublicId = `nk_pub_${crypto.randomBytes(16).toString('hex')}`;
+    // 122 bits of cryptographic randomness via RFC 4122 UUID v4 (32 hex characters)
+    const generatedPublicId = `nk_pub_${crypto.randomUUID().replace(/-/g, '').toLowerCase()}`;
     memoryStore.profiles.push({
       id: newUser.id,
       user_id: newUser.id,
@@ -159,7 +160,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     const optedIn = memoryStore.profiles
       .filter(p => p.public_profile_enabled === true)
       .map(p => ({
-        public_id: p.public_id || (p.public_id = `nk_pub_${crypto.randomBytes(16).toString('hex')}`),
+        public_id: p.public_id || (p.public_id = `nk_pub_${crypto.randomUUID().replace(/-/g, '').toLowerCase()}`),
         full_name: p.full_name,
         role: p.role,
         avatar_url: p.avatar_url || null,

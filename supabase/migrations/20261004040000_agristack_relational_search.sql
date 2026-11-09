@@ -190,7 +190,7 @@ CREATE OR REPLACE FUNCTION public.search_farmer_land_registry(p_query text)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_owner JSONB;

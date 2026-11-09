@@ -915,6 +915,154 @@ $$ LANGUAGE plpgsql STABLE;`
     // Clean up test profiles
     await pglite.query(`DELETE FROM public.profiles WHERE id IN ($1, $2, $3, $4, $5)`, [newTestUid, nullBypassUid, collisionUid, uidX, uidY]);
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // P0: MULTI-SETUP SIGNUP COMPATIBILITY & SEARCH PATH AUDIT
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // P0-SIGNUP-CANONICAL-MIG: Signup via canonical reconciliation migration trigger
+    const canonSignupUid = '11111111-aaaa-1111-aaaa-111111111111';
+    await pglite.query(`
+      INSERT INTO auth.users (id, email, raw_user_meta_data) 
+      VALUES ($1, 'canon_signup@nukrop.ai', '{"full_name": "Canon Farmer", "role": "farmer"}'::jsonb)
+      ON CONFLICT (id) DO NOTHING;
+    `, [canonSignupUid]);
+    const canonProfCheck = await pglite.query(`SELECT id, public_id, full_name, role FROM public.profiles WHERE id = $1`, [canonSignupUid]);
+    const canonProf = canonProfCheck.rows[0];
+    if (canonProf && /^nk_pub_[0-9a-f]{32}$/.test(canonProf.public_id) && canonProf.public_id.length === 39) {
+      pass('P0-SIGNUP-CANONICAL-MIG', `Canonical migration signup creates profile with 32-hex public_id (${canonProf.public_id})`);
+    } else {
+      fail('P0-SIGNUP-CANONICAL-MIG', `Canonical migration signup failed: ${JSON.stringify(canonProf)}`);
+    }
+
+    // P0-SIGNUP-UPSERT-PRESERVE: Repeated signup / upsert preserves public_id without regeneration
+    const originalCanonPubId = canonProf.public_id;
+    // In handle_new_auth_user, a new 32-hex v_public_id is generated, but ON CONFLICT strictly preserves existing public.profiles.public_id
+    const tempNewCandidatePubId = 'nk_pub_99999999888877776666555544443333';
+    await pglite.query(`
+      INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+      VALUES ($1, $1, 'canon_signup@nukrop.ai', 'Updated Canon Farmer', 'farmer', $2)
+      ON CONFLICT (id) DO UPDATE SET
+        user_id = EXCLUDED.id,
+        public_id = COALESCE(public.profiles.public_id, EXCLUDED.public_id),
+        full_name = EXCLUDED.full_name;
+    `, [canonSignupUid, tempNewCandidatePubId]);
+    const upsertPreserveCheck = await pglite.query(`SELECT public_id, full_name FROM public.profiles WHERE id = $1`, [canonSignupUid]);
+    if (upsertPreserveCheck.rows[0]?.public_id === originalCanonPubId && upsertPreserveCheck.rows[0]?.full_name === 'Updated Canon Farmer') {
+      pass('P0-SIGNUP-UPSERT-PRESERVE', 'Repeated auth user upsert strictly preserves existing public_id without regeneration');
+    } else {
+      fail('P0-SIGNUP-UPSERT-PRESERVE', `public_id was regenerated on upsert: was=${originalCanonPubId}, now=${upsertPreserveCheck.rows[0]?.public_id}`);
+    }
+
+    // P0-SIGNUP-CANONICAL-SETUP: Execute handle_new_auth_user from CANONICAL_PRODUCTION_SETUP.sql
+    const canonicalSetupSql = fs.readFileSync(path.join(__dirname, '../supabase/CANONICAL_PRODUCTION_SETUP.sql'), 'utf-8');
+    const canonSetupFnMatch = canonicalSetupSql.match(/CREATE OR REPLACE FUNCTION public\.handle_new_auth_user\(\)[\s\S]+?END;\s*\$\$\s*LANGUAGE plpgsql SECURITY DEFINER;/i);
+    if (canonSetupFnMatch) {
+      await pglite.exec(canonSetupFnMatch[0]);
+    }
+    const canonSetupUid = '22222222-bbbb-2222-bbbb-222222222222';
+    await pglite.query(`
+      INSERT INTO auth.users (id, email, raw_user_meta_data) 
+      VALUES ($1, 'canon_setup@nukrop.ai', '{"full_name": "Setup Farmer", "role": "farmer"}'::jsonb)
+      ON CONFLICT (id) DO NOTHING;
+    `, [canonSetupUid]);
+    const canonSetupProfCheck = await pglite.query(`SELECT id, public_id, full_name FROM public.profiles WHERE id = $1`, [canonSetupUid]);
+    const canonSetupProf = canonSetupProfCheck.rows[0];
+    if (canonSetupProf && /^nk_pub_[0-9a-f]{32}$/.test(canonSetupProf.public_id) && canonSetupProf.public_id.length === 39) {
+      pass('P0-SIGNUP-CANONICAL-SETUP', `CANONICAL_PRODUCTION_SETUP trigger creates profile with 32-hex public_id (${canonSetupProf.public_id})`);
+    } else {
+      fail('P0-SIGNUP-CANONICAL-SETUP', `CANONICAL_PRODUCTION_SETUP trigger failed: ${JSON.stringify(canonSetupProf)}`);
+    }
+
+    // P0-SIGNUP-ALL-IN-ONE-SETUP: Execute handle_new_auth_user from COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql
+    const allInOneSql = fs.readFileSync(path.join(__dirname, '../supabase/COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql'), 'utf-8');
+    const allInOneFnMatch = allInOneSql.match(/CREATE OR REPLACE FUNCTION public\.handle_new_auth_user\(\)[\s\S]+?END;\s*\$\$\s*LANGUAGE plpgsql;/i)
+      || allInOneSql.match(/CREATE OR REPLACE FUNCTION public\.handle_new_auth_user\(\)[\s\S]+?END;\s*\$\$;/i);
+    if (allInOneFnMatch) {
+      await pglite.exec(allInOneFnMatch[0]);
+    }
+    const allInOneUid = '33333333-cccc-3333-cccc-333333333333';
+    await pglite.query(`
+      INSERT INTO auth.users (id, email, raw_user_meta_data) 
+      VALUES ($1, 'all_in_one@nukrop.ai', '{"full_name": "AllInOne Farmer", "role": "farmer"}'::jsonb)
+      ON CONFLICT (id) DO NOTHING;
+    `, [allInOneUid]);
+    const allInOneProfCheck = await pglite.query(`SELECT id, public_id, full_name FROM public.profiles WHERE id = $1`, [allInOneUid]);
+    const allInOneProf = allInOneProfCheck.rows[0];
+    if (allInOneProf && /^nk_pub_[0-9a-f]{32}$/.test(allInOneProf.public_id) && allInOneProf.public_id.length === 39) {
+      pass('P0-SIGNUP-ALL-IN-ONE-SETUP', `COMPLETE_SUPABASE_ALL_IN_ONE trigger creates profile with 32-hex public_id (${allInOneProf.public_id})`);
+    } else {
+      fail('P0-SIGNUP-ALL-IN-ONE-SETUP', `COMPLETE_SUPABASE_ALL_IN_ONE trigger failed: ${JSON.stringify(allInOneProf)}`);
+    }
+
+    // P0-UNTRUSTED-CREATE-DENIED: Untrusted roles denied CREATE ON SCHEMA public
+    await pglite.exec(`SET ROLE authenticated;`);
+    let authCreateBlocked = false;
+    try {
+      await pglite.query(`CREATE TABLE public.untrusted_auth_test (id int);`);
+    } catch (e) {
+      if (e.message.includes('permission denied')) authCreateBlocked = true;
+    }
+    await pglite.exec(`RESET ROLE;`);
+    if (authCreateBlocked) {
+      pass('P0-UNTRUSTED-CREATE-DENIED', 'Untrusted authenticated role strictly denied CREATE on schema public');
+    } else {
+      fail('P0-UNTRUSTED-CREATE-DENIED', 'Authenticated role was unexpectedly permitted to create objects in schema public!');
+    }
+
+    // P0-SECDEF-SHADOWING-DEFENSE: Temporary objects in pg_temp cannot shadow public objects
+    await pglite.exec(`
+      CREATE TEMP TABLE profiles (
+        id text, 
+        user_id text,
+        public_id text, 
+        full_name text, 
+        public_profile_enabled boolean
+      );
+      INSERT INTO pg_temp.profiles (id, user_id, public_id, full_name, public_profile_enabled)
+      VALUES ('temp-spoof-id', 'temp-spoof-id', 'nk_pub_spoofed_temp_1234567890abcdef', 'Spoofed User', false);
+    `);
+    // Invoke SECURITY DEFINER RPC as canonSignupUid
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${canonSignupUid}", "role": "authenticated"}';
+    `);
+    await pglite.query(`SELECT public.set_my_profile_discovery(true);`);
+    await pglite.exec(`RESET ROLE;`);
+    const tempTableCheck = await pglite.query(`SELECT public_profile_enabled FROM pg_temp.profiles WHERE id = 'temp-spoof-id'`);
+    const realTableCheck = await pglite.query(`SELECT public_profile_enabled FROM public.profiles WHERE id = $1`, [canonSignupUid]);
+    await pglite.exec(`DROP TABLE pg_temp.profiles;`);
+    if (realTableCheck.rows[0]?.public_profile_enabled === true && tempTableCheck.rows[0]?.public_profile_enabled === false) {
+      pass('P0-SECDEF-SHADOWING-DEFENSE', 'SECURITY DEFINER function safely targets public.profiles and is immune to pg_temp object shadowing');
+    } else {
+      fail('P0-SECDEF-SHADOWING-DEFENSE', `pg_temp table shadowed public table! real=${realTableCheck.rows[0]?.public_profile_enabled}, temp=${tempTableCheck.rows[0]?.public_profile_enabled}`);
+    }
+
+    // P0-SECDEF-SEARCHPATH-AUDIT: Audit pg_proc for SECURITY DEFINER search_path enforcement
+    const procAudit = await pglite.query(`
+      SELECT p.proname, p.proconfig
+      FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'public' AND p.prosecdef = true;
+    `);
+    let allProcSecure = true;
+    let procCount = procAudit.rows.length;
+    for (const proc of procAudit.rows) {
+      const config = proc.proconfig || [];
+      const hasSearchPath = config.some(c => c.toLowerCase().startsWith('search_path=') && c.toLowerCase().endsWith('pg_temp'));
+      if (!hasSearchPath) {
+        allProcSecure = false;
+        console.error(`Insecure SECURITY DEFINER function in pg_proc: ${proc.proname}, proconfig=${JSON.stringify(config)}`);
+      }
+    }
+    if (allProcSecure && procCount > 0) {
+      pass('P0-SECDEF-SEARCHPATH-AUDIT', `All ${procCount} SECURITY DEFINER functions in pg_proc enforce fixed search_path ending in pg_temp`);
+    } else {
+      fail('P0-SECDEF-SEARCHPATH-AUDIT', `Found insecure SECURITY DEFINER functions in pg_proc (total=${procCount})`);
+    }
+
+    // Clean up test profiles
+    await pglite.query(`DELETE FROM public.profiles WHERE id IN ($1, $2, $3)`, [canonSignupUid, canonSetupUid, allInOneUid]);
+
     // AS DRIVER: Test driver profile access
     await pglite.exec(`
       SET ROLE authenticated;

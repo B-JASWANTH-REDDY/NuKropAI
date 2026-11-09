@@ -929,11 +929,18 @@ CREATE TABLE IF NOT EXISTS public._profile_provenance_audit (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_provenance_audit_unique 
   ON public._profile_provenance_audit (profile_id, field_name);
 
--- Secure schema permissions: untrusted roles cannot create objects in public schema
+-- Secure schema permissions: untrusted roles cannot create objects in public or extensions schemas
 REVOKE CREATE ON SCHEMA public FROM PUBLIC, anon, authenticated;
 GRANT CREATE ON SCHEMA public TO postgres, service_role;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'extensions') THEN
+    EXECUTE 'REVOKE CREATE ON SCHEMA extensions FROM PUBLIC, anon, authenticated';
+    EXECUTE 'GRANT CREATE ON SCHEMA extensions TO postgres, service_role';
+  END IF;
+END $$;
 
--- Populate public_id with dedicated opaque random identifier if null (128 bits entropy)
+-- Populate public_id with dedicated opaque random identifier if null (122 bits of cryptographic randomness via RFC 4122 UUID v4, 32 hex chars)
 UPDATE public.profiles 
 SET public_id = 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''))
 WHERE public_id IS NULL;
@@ -950,7 +957,7 @@ LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  -- 1. If public_id is omitted or explicitly passed as NULL, generate 128-bit CSPRNG server identifier
+  -- 1. If public_id is omitted or explicitly passed as NULL, generate 122-bit CSPRNG server identifier (RFC 4122 UUID v4)
   IF NEW.public_id IS NULL THEN
     NEW.public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
     RETURN NEW;
@@ -961,7 +968,7 @@ BEGIN
     RAISE EXCEPTION 'MALFORMED_PUBLIC_ID: public_id cannot be an empty string';
   END IF;
 
-  -- 3. Reject UUID injection (e.g. attempting to inject internal auth UUID as public identifier)
+  -- 3. Reject UUID injection (e.g. attempting to inject internal auth UUID with hyphens as public identifier)
   IF NEW.public_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
     RAISE EXCEPTION 'UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id';
   END IF;
@@ -972,9 +979,9 @@ BEGIN
   END IF;
 
   -- 5. Reject arbitrary strings, user-selected vanity names, or malformed/predictable strings
-  -- Only exact 128-bit hex format 'nk_pub_[32 hex]' is permitted from trusted internal callers/triggers
+  -- Only exact 32-hex format 'nk_pub_[32 hex]' is permitted from trusted internal callers/triggers
   IF NOT (NEW.public_id ~ '^nk_pub_[0-9a-f]{32}$') THEN
-    RAISE EXCEPTION 'INVALID_PUBLIC_ID: Caller-supplied public_id "%" is prohibited. Must be server-generated with 128-bit randomness.', NEW.public_id;
+    RAISE EXCEPTION 'INVALID_PUBLIC_ID: Caller-supplied public_id "%" is prohibited. Must be server-generated with 122-bit UUIDv4 randomness.', NEW.public_id;
   END IF;
 
   RETURN NEW;
@@ -1748,7 +1755,7 @@ BEGIN
     NEW.raw_user_meta_data->>'phone_number'
   );
 
-  -- Dedicated opaque public identifier (128 bits entropy)
+  -- Dedicated opaque public identifier (122 bits of cryptographic randomness via RFC 4122 UUID v4)
   v_public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
 
   -- Role whitelist & privilege escalation prevention:
@@ -1778,7 +1785,7 @@ BEGIN
     role, village, district, mandal, state, preferred_language, created_at, updated_at
   )
   VALUES (
-    NEW.id::text, NEW.id::text, v_public_id, v_farmer_id, v_driver_id, NEW.email, v_full_name,
+    NEW.id, NEW.id, v_public_id, v_farmer_id, v_driver_id, NEW.email, v_full_name,
     v_phone, v_phone, v_role, v_village, v_district, v_mandal, v_state, 'en', NOW(), NOW()
   )
   ON CONFLICT (id) DO UPDATE SET

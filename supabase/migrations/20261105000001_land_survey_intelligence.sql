@@ -292,7 +292,7 @@ CREATE OR REPLACE FUNCTION public.search_land_parcels(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_results JSONB;
@@ -382,7 +382,7 @@ CREATE OR REPLACE FUNCTION public.get_land_survey_coverage()
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_sources JSONB;

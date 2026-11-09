@@ -101,16 +101,29 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_role text;
+  v_public_id text;
+  v_dpdp_consent boolean;
 BEGIN
+  -- Dedicated opaque public identifier (122 bits of cryptographic randomness via RFC 4122 UUID v4)
+  v_public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
+
   -- Strict whitelist: Deny 'admin' self-assignment, default to 'farmer'
   v_role := LOWER(COALESCE(NEW.raw_user_meta_data->>'role', 'farmer'));
   IF v_role NOT IN ('farmer', 'driver') THEN
     v_role := 'farmer';
   END IF;
 
+  -- DPDP Consent: unknown or missing consent defaults strictly to FALSE (never fabricated as TRUE)
+  IF (NEW.raw_user_meta_data->>'dpdp_consent_given') IS NOT NULL THEN
+    v_dpdp_consent := (NEW.raw_user_meta_data->>'dpdp_consent_given')::boolean;
+  ELSE
+    v_dpdp_consent := FALSE;
+  END IF;
+
   INSERT INTO public.profiles (
     id, 
     user_id, 
+    public_id,
     email, 
     full_name, 
     phone, 
@@ -122,19 +135,22 @@ BEGIN
     updated_at
   )
   VALUES (
-    NEW.id::text,
-    NEW.id::text,
+    NEW.id,
+    NEW.id,
+    v_public_id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', 'Farmer'),
     COALESCE(NEW.raw_user_meta_data->>'phone', NEW.phone, NULL),
     COALESCE(NEW.raw_user_meta_data->>'phone', NEW.phone, NULL),
     v_role,
-    true,
-    now(),
+    v_dpdp_consent,
+    CASE WHEN v_dpdp_consent THEN now() ELSE NULL END,
     now(),
     now()
   )
   ON CONFLICT (id) DO UPDATE SET
+    user_id = EXCLUDED.id,
+    public_id = COALESCE(public.profiles.public_id, EXCLUDED.public_id),
     email = COALESCE(EXCLUDED.email, public.profiles.email),
     phone = COALESCE(EXCLUDED.phone, public.profiles.phone),
     phone_number = COALESCE(EXCLUDED.phone_number, public.profiles.phone_number),

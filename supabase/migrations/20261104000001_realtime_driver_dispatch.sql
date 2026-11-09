@@ -95,7 +95,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_farmer_geog geography;
@@ -158,7 +158,7 @@ CREATE OR REPLACE FUNCTION public.set_driver_duty_status(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_driver_verified TEXT;
@@ -292,7 +292,7 @@ CREATE OR REPLACE FUNCTION public.accept_haul_booking(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -388,7 +388,7 @@ CREATE OR REPLACE FUNCTION public.update_haul_trip_status(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_booking RECORD;
@@ -467,7 +467,7 @@ CREATE OR REPLACE FUNCTION public.record_driver_gps_ping(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_loc RECORD;

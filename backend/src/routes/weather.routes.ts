@@ -9,19 +9,20 @@ import {
   markNotificationRead,
   markAllNotificationsRead
 } from '../controllers/weather.controller';
+import { authenticate } from '../middleware/auth';
 
 export default async function weatherRoutes(fastify: FastifyInstance) {
-  // Weather
+  // Public Meteorological Telemetry
   fastify.get('/current', getCurrentWeather);
 
-  // Price Alerts
-  fastify.post('/price-alerts', createPriceAlert);
-  fastify.get('/price-alerts', getPriceAlerts);
-  fastify.delete('/price-alerts/:id', cancelPriceAlert);
+  // Protected Price Alerts (Authentic JWT Bearer Required)
+  fastify.post('/price-alerts', { preHandler: [authenticate] }, createPriceAlert);
+  fastify.get('/price-alerts', { preHandler: [authenticate] }, getPriceAlerts);
+  fastify.delete('/price-alerts/:id', { preHandler: [authenticate] }, cancelPriceAlert);
 
-  // Notifications (mounted under /weather for existing frontend/flutter backward compatibility)
-  fastify.get('/notifications', getNotifications);
-  fastify.get('/notifications/unread-count', getUnreadNotificationsCount);
-  fastify.patch('/notifications/:id/read', markNotificationRead);
-  fastify.post('/notifications/mark-all-read', markAllNotificationsRead);
+  // Protected Notifications (Authentic JWT Bearer Required)
+  fastify.get('/notifications', { preHandler: [authenticate] }, getNotifications);
+  fastify.get('/notifications/unread-count', { preHandler: [authenticate] }, getUnreadNotificationsCount);
+  fastify.patch('/notifications/:id/read', { preHandler: [authenticate] }, markNotificationRead);
+  fastify.post('/notifications/mark-all-read', { preHandler: [authenticate] }, markAllNotificationsRead);
 }

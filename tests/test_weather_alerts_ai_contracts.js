@@ -1,6 +1,6 @@
 /**
  * NuKropAI — Weather, Price Alerts, Notifications & AI Scanner Contracts Suite
- * Verifies P0.3, P0.4, P0.5, and P1.1 implementation contracts
+ * Verifies P0.1, P0.3, P0.4, P0.5, P0.6, and P1.1 implementation contracts
  */
 
 const assert = require('assert');
@@ -9,10 +9,13 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..');
 const backendDir = path.join(repoRoot, 'backend');
 
-process.env.JWT_SECRET = 'nukrop-production-access-signing-key-998877665544';
+const JWT_SECRET = 'nukrop-production-access-signing-key-998877665544';
+process.env.JWT_SECRET = JWT_SECRET;
 process.env.JWT_REFRESH_SECRET = 'nukrop-production-refresh-signing-key-112233445566';
 
 const fastify = require(path.join(backendDir, 'node_modules', 'fastify'));
+const jwt = require(path.join(backendDir, 'node_modules', 'jsonwebtoken'));
+
 const {
   getCurrentWeather,
   createPriceAlert,
@@ -29,6 +32,7 @@ const {
   diagnoseCropFoliar
 } = require(path.join(backendDir, 'dist', 'controllers', 'ai.controller'));
 
+const { authenticate, getJwtSecret, getJwtIssuer, getJwtAudience } = require(path.join(backendDir, 'dist', 'middleware', 'auth'));
 const { memoryStore, pool } = require(path.join(backendDir, 'dist', 'config', 'db'));
 
 let passed = 0;
@@ -44,38 +48,132 @@ function fail(name, reason) {
   console.error(`  ❌ [FAIL] ${name}: ${reason}`);
 }
 
+function createTestToken(userId, role = 'farmer', options = {}) {
+  const secret = getJwtSecret();
+  return jwt.sign(
+    {
+      sub: userId,
+      email: `${userId}@nukrop.ai`,
+      role: role,
+      aud: getJwtAudience(),
+      iss: getJwtIssuer()
+    },
+    secret,
+    {
+      expiresIn: options.expiresIn || '1h',
+      algorithm: 'HS256'
+    }
+  );
+}
+
 async function runContractsSuite() {
   console.log('\n================================================================================');
   console.log('🌦️  NUKROPAI WEATHER, PRICE ALERTS, NOTIFICATIONS & AI CONTRACTS SUITE');
   console.log('================================================================================\n');
 
-  // Build Fastify App
+  // Build Fastify App with Genuine Auth Middleware
   const app = fastify({ logger: false });
 
-  // Decorate user
-  app.addHook('onRequest', async (req) => {
-    const userId = req.headers['x-user-id'] || 'test-user-1111';
-    req.user = { id: userId, email: 'test@nukrop.ai', role: 'farmer' };
-  });
-
-  // Register routes
+  // Public Routes
   app.get('/weather/current', getCurrentWeather);
-  app.post('/weather/price-alerts', createPriceAlert);
-  app.get('/weather/price-alerts', getPriceAlerts);
-  app.delete('/weather/price-alerts/:id', cancelPriceAlert);
-  app.get('/weather/notifications', getNotifications);
-  app.get('/weather/notifications/unread-count', getUnreadNotificationsCount);
-  app.patch('/weather/notifications/:id/read', markNotificationRead);
-  app.post('/weather/notifications/mark-all-read', markAllNotificationsRead);
 
-  app.post('/ai/diagnose', diagnoseCropFoliar);
+  // Protected AI Diagnostics
+  app.post('/ai/diagnose', { preHandler: [authenticate] }, diagnoseCropFoliar);
+
+  // Protected Price Alerts
+  app.post('/weather/price-alerts', { preHandler: [authenticate] }, createPriceAlert);
+  app.get('/weather/price-alerts', { preHandler: [authenticate] }, getPriceAlerts);
+  app.delete('/weather/price-alerts/:id', { preHandler: [authenticate] }, cancelPriceAlert);
+
+  // Protected Notifications
+  app.get('/weather/notifications', { preHandler: [authenticate] }, getNotifications);
+  app.get('/weather/notifications/unread-count', { preHandler: [authenticate] }, getUnreadNotificationsCount);
+  app.patch('/weather/notifications/:id/read', { preHandler: [authenticate] }, markNotificationRead);
+  app.post('/weather/notifications/mark-all-read', { preHandler: [authenticate] }, markAllNotificationsRead);
 
   await app.ready();
+
+  const farmer1Id = 'farmer-uuid-001';
+  const farmer2Id = 'farmer-uuid-002';
+  const farmer1Token = createTestToken(farmer1Id, 'farmer');
+  const farmer2Token = createTestToken(farmer2Id, 'farmer');
+
+  // ---------------------------------------------------------------------------
+  // P0.1: Adversarial Authentication & Route Guard Tests
+  // ---------------------------------------------------------------------------
+  console.log('▶ P0.1: Adversarial Route Authentication & Spoofing Defense');
+
+  // AUTH-1: No token on private route returns 401
+  const resNoAuth = await app.inject({
+    method: 'POST',
+    url: '/weather/price-alerts',
+    payload: { crop: 'Cotton', targetPrice: 7000 }
+  });
+  if (resNoAuth.statusCode === 401) {
+    pass('AUTH-1', 'Missing authorization header rejected with 401 Unauthorized');
+  } else {
+    fail('AUTH-1', `Expected 401, got ${resNoAuth.statusCode}: ${resNoAuth.body}`);
+  }
+
+  // AUTH-2: Invalid token returns 401
+  const resInvalidAuth = await app.inject({
+    method: 'GET',
+    url: '/weather/price-alerts',
+    headers: { authorization: 'Bearer invalid.token.value' }
+  });
+  if (resInvalidAuth.statusCode === 401) {
+    pass('AUTH-2', 'Malformed token rejected with 401 Unauthorized');
+  } else {
+    fail('AUTH-2', `Expected 401, got ${resInvalidAuth.statusCode}`);
+  }
+
+  // AUTH-3: Expired token returns 401
+  const expiredToken = createTestToken(farmer1Id, 'farmer', { expiresIn: '-10s' });
+  const resExpired = await app.inject({
+    method: 'GET',
+    url: '/weather/notifications',
+    headers: { authorization: `Bearer ${expiredToken}` }
+  });
+  if (resExpired.statusCode === 401) {
+    pass('AUTH-3', 'Expired JWT rejected with 401 Unauthorized');
+  } else {
+    fail('AUTH-3', `Expected 401, got ${resExpired.statusCode}`);
+  }
+
+  // AUTH-4: Spoofed x-user-id header is ignored; identity derived strictly from JWT
+  const resSpoofed = await app.inject({
+    method: 'POST',
+    url: '/weather/price-alerts',
+    headers: {
+      authorization: `Bearer ${farmer1Token}`,
+      'x-user-id': farmer2Id, // Attacker tries to impersonate farmer2
+      'x-idempotency-key': 'alert-spoof-defense-001'
+    },
+    payload: { crop: 'Cotton', commodity: 'Cotton', mandi: 'Warangal', targetPrice: 7100, condition: 'ABOVE' }
+  });
+  if (resSpoofed.statusCode === 201) {
+    const created = resSpoofed.json();
+    assert.strictEqual(created.success, true);
+    // Verify farmer2 does NOT see this alert
+    const resFarmer2Alerts = await app.inject({
+      method: 'GET',
+      url: '/weather/price-alerts',
+      headers: { authorization: `Bearer ${farmer2Token}` }
+    });
+    const f2HasAlert = resFarmer2Alerts.json().alerts?.some(a => a.id === created.alertId);
+    if (!f2HasAlert) {
+      pass('AUTH-4', 'Spoofed x-user-id header safely ignored; alert bound strictly to authenticated JWT subject');
+    } else {
+      fail('AUTH-4', 'Spoofed x-user-id header contaminated alert ownership');
+    }
+  } else {
+    fail('AUTH-4', `Alert creation failed: ${resSpoofed.statusCode}: ${resSpoofed.body}`);
+  }
 
   // ---------------------------------------------------------------------------
   // P0.3: Weather Controller Tests
   // ---------------------------------------------------------------------------
-  console.log('▶ P0.3: Weather Telemetry & Foliar Spray Contract');
+  console.log('\n▶ P0.3: Weather Telemetry & Foliar Spray Contract');
 
   // W-1: Missing location returns 400 MISSING_LOCATION
   const resW1 = await app.inject({
@@ -99,7 +197,7 @@ async function runContractsSuite() {
     fail('W-2', `Expected 400 INVALID_COORDINATES, got ${resW2.statusCode}: ${resW2.body}`);
   }
 
-  // W-3: Valid district coordinates lookup
+  // W-3: Valid district coordinates lookup & NWP attribution
   const resW3 = await app.inject({
     method: 'GET',
     url: '/weather/current?district=Warangal'
@@ -107,7 +205,7 @@ async function runContractsSuite() {
   if (resW3.statusCode === 200) {
     const data = resW3.json();
     assert.strictEqual(data.status, 'AVAILABLE');
-    assert.strictEqual(data.source, 'Open-Meteo Weather API (NWP Forecast Model)');
+    assert.strictEqual(data.source, 'Open-Meteo Weather API (NWP Numerical Forecast Model)');
     assert.strictEqual(data.provider, 'Open-Meteo');
     assert.ok(data.units);
     assert.strictEqual(data.units.temperature, '°C');
@@ -124,16 +222,16 @@ async function runContractsSuite() {
   }
 
   // ---------------------------------------------------------------------------
-  // P0.4: Price Alerts Controller Tests
+  // P0.4 & P0.5: Persistent Price Alerts & Idempotency Tests
   // ---------------------------------------------------------------------------
-  console.log('\n▶ P0.4: Persistent Price Alerts & Evaluation');
+  console.log('\n▶ P0.4: Persistent Price Alerts, Scoped Idempotency & Validation');
 
   // PA-1: Validation - negative target price
   const resPA1 = await app.inject({
     method: 'POST',
     url: '/weather/price-alerts',
-    headers: { 'x-user-id': 'farmer-001' },
-    payload: { crop: 'Cotton', targetPrice: -500 }
+    headers: { authorization: `Bearer ${farmer1Token}`, 'x-idempotency-key': 'idem-neg-1' },
+    payload: { crop: 'Cotton', mandi: 'Warangal', targetPrice: -500 }
   });
   if (resPA1.statusCode === 400 && resPA1.json().error === 'VALIDATION_ERROR') {
     pass('PA-1', 'Negative target price rejected with 400 VALIDATION_ERROR');
@@ -145,8 +243,8 @@ async function runContractsSuite() {
   const resPA2 = await app.inject({
     method: 'POST',
     url: '/weather/price-alerts',
-    headers: { 'x-user-id': 'farmer-001' },
-    payload: { targetPrice: 7500 }
+    headers: { authorization: `Bearer ${farmer1Token}`, 'x-idempotency-key': 'idem-nocrop-1' },
+    payload: { mandi: 'Warangal', targetPrice: 7500 }
   });
   if (resPA2.statusCode === 400 && resPA2.json().error === 'VALIDATION_ERROR') {
     pass('PA-2', 'Missing crop rejected with 400 VALIDATION_ERROR');
@@ -154,100 +252,127 @@ async function runContractsSuite() {
     fail('PA-2', `Expected 400 VALIDATION_ERROR, got ${resPA2.statusCode}`);
   }
 
-  // PA-3: Valid price alert creation
-  const resPA3 = await app.inject({
+  // PA-3: Validation - missing idempotency key
+  const resPA3NoIdem = await app.inject({
     method: 'POST',
     url: '/weather/price-alerts',
-    headers: { 'x-user-id': 'farmer-001', 'x-idempotency-key': 'idem-alert-101' },
+    headers: { authorization: `Bearer ${farmer1Token}` },
+    payload: { crop: 'Cotton', mandi: 'Warangal', targetPrice: 7200 }
+  });
+  if (resPA3NoIdem.statusCode === 400 && resPA3NoIdem.json().error === 'MISSING_IDEMPOTENCY_KEY') {
+    pass('PA-3', 'Missing x-idempotency-key rejected with 400 MISSING_IDEMPOTENCY_KEY');
+  } else {
+    fail('PA-3', `Expected 400 MISSING_IDEMPOTENCY_KEY, got ${resPA3NoIdem.statusCode}`);
+  }
+
+  // PA-4: Validation - missing mandi
+  const resPA4NoMandi = await app.inject({
+    method: 'POST',
+    url: '/weather/price-alerts',
+    headers: { authorization: `Bearer ${farmer1Token}`, 'x-idempotency-key': 'idem-nomandi-1' },
+    payload: { crop: 'Cotton', targetPrice: 7200 }
+  });
+  if (resPA4NoMandi.statusCode === 400 && resPA4NoMandi.json().error === 'MISSING_MANDI') {
+    pass('PA-4', 'Missing mandi rejected with 400 MISSING_MANDI');
+  } else {
+    fail('PA-4', `Expected 400 MISSING_MANDI, got ${resPA4NoMandi.statusCode}`);
+  }
+
+  // PA-5: Valid price alert creation
+  const resPA5 = await app.inject({
+    method: 'POST',
+    url: '/weather/price-alerts',
+    headers: { authorization: `Bearer ${farmer1Token}`, 'x-idempotency-key': 'idem-alert-101' },
     payload: { crop: 'Cotton', commodity: 'Cotton', mandi: 'Warangal', targetPrice: 7200, condition: 'ABOVE' }
   });
   let createdAlertId = null;
-  if (resPA3.statusCode === 201) {
-    const body = resPA3.json();
+  if (resPA5.statusCode === 201) {
+    const body = resPA5.json();
     assert.strictEqual(body.success, true);
     assert.strictEqual(body.status, 'ACTIVE');
     assert.strictEqual(body.crop, 'Cotton');
     assert.strictEqual(body.targetPrice, 7200);
     createdAlertId = body.alertId;
-    pass('PA-3', `Created persistent price alert (${createdAlertId}) with status ACTIVE`);
+    pass('PA-5', `Created persistent price alert (${createdAlertId}) with status ACTIVE`);
   } else {
-    fail('PA-3', `Expected 201 Created, got ${resPA3.statusCode}: ${resPA3.body}`);
+    fail('PA-5', `Expected 201 Created, got ${resPA5.statusCode}: ${resPA5.body}`);
   }
 
-  // PA-4: Idempotency Key deduplication
-  const resPA4 = await app.inject({
+  // PA-6: Idempotency Key deduplication (same user, same key -> 409)
+  const resPA6Dup = await app.inject({
     method: 'POST',
     url: '/weather/price-alerts',
-    headers: { 'x-user-id': 'farmer-001', 'x-idempotency-key': 'idem-alert-101' },
+    headers: { authorization: `Bearer ${farmer1Token}`, 'x-idempotency-key': 'idem-alert-101' },
     payload: { crop: 'Cotton', commodity: 'Cotton', mandi: 'Warangal', targetPrice: 7200, condition: 'ABOVE' }
   });
-  if (resPA4.statusCode === 409 && resPA4.json().error === 'DUPLICATE_ALERT') {
-    pass('PA-4', 'Duplicate price alert with same idempotency key rejected with 409 DUPLICATE_ALERT');
+  if (resPA6Dup.statusCode === 409 && resPA6Dup.json().error === 'DUPLICATE_ALERT') {
+    pass('PA-6', 'Duplicate price alert with same idempotency key for same user rejected with 409 DUPLICATE_ALERT');
   } else {
-    fail('PA-4', `Expected 409 DUPLICATE_ALERT, got ${resPA4.statusCode}: ${resPA4.body}`);
+    fail('PA-6', `Expected 409 DUPLICATE_ALERT, got ${resPA6Dup.statusCode}: ${resPA6Dup.body}`);
   }
 
-  // PA-5: Retrieve alerts
-  const resPA5 = await app.inject({
-    method: 'GET',
-    url: '/weather/price-alerts',
-    headers: { 'x-user-id': 'farmer-001' }
-  });
-  if (resPA5.statusCode === 200 && resPA5.json().alerts.length >= 1) {
-    pass('PA-5', `Retrieved ${resPA5.json().alerts.length} active price alerts for user`);
-  } else {
-    fail('PA-5', `Expected 200 OK with alerts, got ${resPA5.statusCode}`);
-  }
-
-  // PA-6: Cancel alert
-  const resPA6 = await app.inject({
-    method: 'DELETE',
-    url: `/weather/price-alerts/${createdAlertId}`,
-    headers: { 'x-user-id': 'farmer-001' }
-  });
-  if (resPA6.statusCode === 200 && resPA6.json().alert.status === 'CANCELLED') {
-    pass('PA-6', `Cancelled price alert (${createdAlertId})`);
-  } else {
-    fail('PA-6', `Failed to cancel alert: ${resPA6.body}`);
-  }
-
-  // PA-7: Create another alert and evaluate price triggering
-  const resPA7 = await app.inject({
+  // PA-7: Scoped Idempotency Key (Farmer 2 using SAME idempotency key succeeds!)
+  const resPA7OtherUser = await app.inject({
     method: 'POST',
     url: '/weather/price-alerts',
-    headers: { 'x-user-id': 'farmer-002', 'x-idempotency-key': 'idem-alert-202' },
+    headers: { authorization: `Bearer ${farmer2Token}`, 'x-idempotency-key': 'idem-alert-101' },
     payload: { crop: 'Chilli', commodity: 'Chilli', mandi: 'Khammam', targetPrice: 18000, condition: 'ABOVE' }
   });
-  assert.strictEqual(resPA7.statusCode, 201);
-  const evalAlertId = resPA7.json().alertId;
-
-  // Run alert evaluation with current price reaching 18500
-  await evaluatePriceAlerts('Chilli', 'Khammam', 18500);
-
-  // Check that notification was generated for farmer-002
-  const resNotifCheck = await app.inject({
-    method: 'GET',
-    url: '/weather/notifications',
-    headers: { 'x-user-id': 'farmer-002' }
-  });
-  const notifs = resNotifCheck.json().notifications || [];
-  const triggeredNotif = notifs.find(n => n.event_id === evalAlertId && n.category === 'PRICE_ALERT');
-  if (triggeredNotif) {
-    pass('PA-7', `Price evaluation triggered notification: "${triggeredNotif.title}"`);
+  let farmer2AlertId = null;
+  if (resPA7OtherUser.statusCode === 201) {
+    farmer2AlertId = resPA7OtherUser.json().alertId;
+    pass('PA-7', 'Independent user can reuse idempotency key without collision (scoped per user_id)');
   } else {
-    fail('PA-7', 'evaluatePriceAlerts did not create expected notification');
+    fail('PA-7', `Expected 201 Created for different user, got ${resPA7OtherUser.statusCode}: ${resPA7OtherUser.body}`);
+  }
+
+  // PA-8: Cross-User Authorization: Farmer 2 cannot delete Farmer 1's price alert
+  const resPA8CrossDel = await app.inject({
+    method: 'DELETE',
+    url: `/weather/price-alerts/${createdAlertId}`,
+    headers: { authorization: `Bearer ${farmer2Token}` }
+  });
+  if (resPA8CrossDel.statusCode === 404) {
+    pass('PA-8', 'Farmer 2 rejected with 404 when attempting to delete Farmer 1 price alert');
+  } else {
+    fail('PA-8', `Expected 404, got ${resPA8CrossDel.statusCode}: ${resPA8CrossDel.body}`);
+  }
+
+  // PA-9: Owner can delete own price alert
+  const resPA9OwnerDel = await app.inject({
+    method: 'DELETE',
+    url: `/weather/price-alerts/${createdAlertId}`,
+    headers: { authorization: `Bearer ${farmer1Token}` }
+  });
+  if (resPA9OwnerDel.statusCode === 200 && resPA9OwnerDel.json().alert?.status === 'CANCELLED') {
+    pass('PA-9', `Owner successfully cancelled price alert (${createdAlertId})`);
+  } else {
+    fail('PA-9', `Failed to cancel alert: ${resPA9OwnerDel.body}`);
+  }
+
+  // PA-10: Concurrency in Price Alert Evaluation
+  // Evaluate price alert for Chilli in Khammam concurrently with price = 18500
+  const evalResults = await Promise.all([
+    evaluatePriceAlerts('Chilli', 'Khammam', 18500),
+    evaluatePriceAlerts('Chilli', 'Khammam', 18500)
+  ]);
+  const totalTriggered = evalResults.reduce((sum, r) => sum + r.triggeredCount, 0);
+  if (totalTriggered === 1) {
+    pass('PA-10', 'Concurrent evaluatePriceAlerts atomic UPDATE prevented duplicate trigger execution (triggered once)');
+  } else {
+    fail('PA-10', `Expected exactly 1 trigger across concurrent evaluations, got ${totalTriggered}`);
   }
 
   // ---------------------------------------------------------------------------
-  // P0.5: Notifications Controller Tests
+  // P0.5 & P0.6: Notifications Controller Tests
   // ---------------------------------------------------------------------------
-  console.log('\n▶ P0.5: Notifications API & Unread Counters');
+  console.log('\n▶ P0.5: Notifications API, Ownership & Resilience');
 
-  // N-1: Unread count
+  // N-1: Unread count for Farmer 2
   const resN1 = await app.inject({
     method: 'GET',
     url: '/weather/notifications/unread-count',
-    headers: { 'x-user-id': 'farmer-002' }
+    headers: { authorization: `Bearer ${farmer2Token}` }
   });
   if (resN1.statusCode === 200 && resN1.json().unreadCount >= 1) {
     pass('N-1', `Authentic unread count returned: ${resN1.json().unreadCount}`);
@@ -255,29 +380,58 @@ async function runContractsSuite() {
     fail('N-1', `Failed to retrieve unread count: ${resN1.body}`);
   }
 
-  // N-2: Mark single notification as read
-  const notifIdToMark = triggeredNotif.id;
-  const resN2 = await app.inject({
-    method: 'PATCH',
-    url: `/weather/notifications/${notifIdToMark}/read`,
-    headers: { 'x-user-id': 'farmer-002' }
+  // Retrieve Farmer 2's triggered notification
+  const resF2Notifs = await app.inject({
+    method: 'GET',
+    url: '/weather/notifications',
+    headers: { authorization: `Bearer ${farmer2Token}` }
   });
-  if (resN2.statusCode === 200 && resN2.json().notification.is_read === true) {
-    pass('N-2', `Marked notification ${notifIdToMark} as read`);
+  const notifsList = resF2Notifs.json().notifications || [];
+  const triggeredNotif = notifsList.find(n => n.event_id === farmer2AlertId);
+  assert.ok(triggeredNotif, 'Expected triggered notification to exist for Farmer 2');
+
+  // N-2: Farmer 1 cannot mark Farmer 2's notification as read (Cross-user isolation)
+  const resN2Cross = await app.inject({
+    method: 'PATCH',
+    url: `/weather/notifications/${triggeredNotif.id}/read`,
+    headers: { authorization: `Bearer ${farmer1Token}` }
+  });
+  if (resN2Cross.statusCode === 404) {
+    pass('N-2', 'Farmer 1 rejected with 404 when attempting to mutate Farmer 2 notification read state');
   } else {
-    fail('N-2', `Failed to mark notification read: ${resN2.body}`);
+    fail('N-2', `Expected 404, got ${resN2Cross.statusCode}`);
   }
 
-  // N-3: Mark all notifications read
-  const resN3 = await app.inject({
-    method: 'POST',
-    url: '/weather/notifications/mark-all-read',
-    headers: { 'x-user-id': 'farmer-002' }
+  // N-3: Farmer 2 marks own notification as read
+  const resN3Owner = await app.inject({
+    method: 'PATCH',
+    url: `/weather/notifications/${triggeredNotif.id}/read`,
+    headers: { authorization: `Bearer ${farmer2Token}` }
   });
-  if (resN3.statusCode === 200) {
-    pass('N-3', 'Marked all unread notifications read');
+  if (resN3Owner.statusCode === 200 && resN3Owner.json().notification?.is_read === true) {
+    pass('N-3', `Farmer 2 successfully marked own notification (${triggeredNotif.id}) as read`);
   } else {
-    fail('N-3', `Failed to mark all read: ${resN3.body}`);
+    fail('N-3', `Failed to mark notification read: ${resN3Owner.body}`);
+  }
+
+  // N-4: DB Outage Resilience: getUnreadNotificationsCount returns 503 SERVICE_UNAVAILABLE on failure (never 200 with fake 0)
+  const originalPoolQuery = pool.query;
+  try {
+    pool.query = async () => {
+      throw new Error('SIMULATED_DATABASE_DISCONNECTION');
+    };
+    const resOutage = await app.inject({
+      method: 'GET',
+      url: '/weather/notifications/unread-count',
+      headers: { authorization: `Bearer ${farmer2Token}` }
+    });
+    if (resOutage.statusCode === 503 && (resOutage.json().error === 'SERVICE_UNAVAILABLE' || resOutage.json().code === 'SERVICE_UNAVAILABLE')) {
+      pass('N-4', 'Database failure returns 503 SERVICE_UNAVAILABLE honestly (never returns fake unread count of 0)');
+    } else {
+      fail('N-4', `Expected 503 SERVICE_UNAVAILABLE, got ${resOutage.statusCode}: ${resOutage.body}`);
+    }
+  } finally {
+    pool.query = originalPoolQuery;
   }
 
   // ---------------------------------------------------------------------------
@@ -289,7 +443,7 @@ async function runContractsSuite() {
   const resAI1 = await app.inject({
     method: 'POST',
     url: '/ai/diagnose',
-    headers: { 'x-user-id': 'farmer-001' },
+    headers: { authorization: `Bearer ${farmer1Token}` },
     payload: { cropName: 'cotton' }
   });
   if (resAI1.statusCode === 400 && resAI1.json().error === 'INVALID_INPUT') {
@@ -306,7 +460,7 @@ async function runContractsSuite() {
   const resAI2 = await app.inject({
     method: 'POST',
     url: '/ai/diagnose',
-    headers: { 'x-user-id': 'farmer-001' },
+    headers: { authorization: `Bearer ${farmer1Token}` },
     payload: { imageBase64: 'data:image/jpeg;base64,samplebase64data', cropName: 'cotton' }
   });
   if (resAI2.statusCode === 503 && resAI2.json().code === 'PROVIDER_NOT_CONFIGURED') {
@@ -328,4 +482,3 @@ runContractsSuite().catch(err => {
   console.error('FATAL CONTRACTS SUITE FAILURE:', err);
   process.exit(1);
 });
-

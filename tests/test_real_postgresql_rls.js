@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS auth.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE,
   phone VARCHAR(50),
+  encrypted_password VARCHAR(255),
   raw_user_meta_data JSONB DEFAULT '{}'::jsonb,
   raw_app_meta_data JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -102,8 +103,20 @@ $$ LANGUAGE plpgsql STABLE;`
       INSERT INTO auth.users (id, email) VALUES ('${baselineUserId}', 'existing_farmer@nukrop.ai');
       INSERT INTO public.profiles (id, phone, full_name, state, district)
       VALUES ('${baselineUserId}', '+919876543210', 'Legacy Preexisting Farmer', 'Telangana', 'Warangal');
+
+      -- Create legacy public.users table to verify P0.3 migration safety & admin escalation blocking
+      CREATE TABLE IF NOT EXISTS public.users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash TEXT,
+        role VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      INSERT INTO public.users (id, email, password_hash, role) VALUES
+        ('88888888-8888-8888-8888-888888888888', 'legacy_admin@nukrop.ai', '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQmG6FeVnZ4pZ5x8kGyGG', 'admin'),
+        ('77777777-7777-7777-7777-777777777777', 'legacy_incompatible@nukrop.ai', 'incompatible_md5_hash_sample', 'farmer');
     `);
-    pass('MIG-1.2', 'Pre-existing profile inserted into baseline schema');
+    pass('MIG-1.2', 'Pre-existing profile and legacy accounts inserted into baseline schema');
 
     // 3. Run reconciliation migration on top of baseline
     await pglite.exec(reconSql);
@@ -122,6 +135,38 @@ $$ LANGUAGE plpgsql STABLE;`
       pass('MIG-1.4', 'Pre-existing profile preserved with additive user_id backfilled');
     } else {
       fail('MIG-1.4', 'Pre-existing data corrupted or user_id not backfilled');
+    }
+
+    // 4b. Verify P0.3: Legacy admin role escalation prevented during migration
+    const resLegacyAdminAuth = await pglite.query(
+      `SELECT id, email, raw_app_meta_data FROM auth.users WHERE id = '88888888-8888-8888-8888-888888888888'`
+    );
+    const resLegacyAdminProfile = await pglite.query(
+      `SELECT id, role FROM public.profiles WHERE id = '88888888-8888-8888-8888-888888888888'`
+    );
+    const resLegacyAdminAudit = await pglite.query(
+      `SELECT status, details FROM public._migration_legacy_user_sync_audit WHERE user_id = '88888888-8888-8888-8888-888888888888'`
+    );
+    const appMeta = resLegacyAdminAuth.rows[0]?.raw_app_meta_data;
+    if (
+      appMeta?.role === 'farmer' &&
+      appMeta?.admin_verification_required === true &&
+      resLegacyAdminProfile.rows[0]?.role === 'farmer' &&
+      resLegacyAdminAudit.rows[0]?.status === 'ADMIN_VERIFICATION_REQUIRED'
+    ) {
+      pass('P0.3-MIG', 'Legacy admin downgraded to farmer, marked for admin verification, recorded in audit table');
+    } else {
+      fail('P0.3-MIG', `Legacy admin was not safely downgraded: ${JSON.stringify(appMeta)}`);
+    }
+
+    // 4c. Verify P0.3: Incompatible password hash marked for recovery
+    const resIncompatibleAudit = await pglite.query(
+      `SELECT status FROM public._migration_legacy_user_sync_audit WHERE user_id = '77777777-7777-7777-7777-777777777777'`
+    );
+    if (resIncompatibleAudit.rows[0]?.status === 'PASSWORD_RECOVERY_REQUIRED') {
+      pass('P0.3-REC', 'Incompatible password hash flagged as PASSWORD_RECOVERY_REQUIRED');
+    } else {
+      fail('P0.3-REC', `Incompatible password not flagged properly: ${resIncompatibleAudit.rows[0]?.status}`);
     }
 
     // 5. Idempotency test: Re-run reconciliation migration a second time
@@ -239,18 +284,41 @@ $$ LANGUAGE plpgsql STABLE;`
     const f2ReadView = await pglite.query(`SELECT * FROM public.public_profiles WHERE id = $1`, [farmer1Id]);
     if (f2ReadView.rows.length === 1) {
       const row = f2ReadView.rows[0];
+      const returnedKeys = Object.keys(row);
+      const approvedKeys = ['id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'agristack_verified', 'created_at'];
+      const unapprovedKeys = returnedKeys.filter(k => !approvedKeys.includes(k));
+      
       // Verify public fields are present
       const hasPublicFields = row.full_name !== undefined && row.role !== undefined && row.district !== undefined;
       // Verify sensitive private fields are NOT present in the view schema
-      const exposesPrivate = row.phone !== undefined || row.email !== undefined || row.land_acres !== undefined || row.kcc_credit_limit !== undefined || row.agristack_id !== undefined;
+      const exposesPrivate = row.phone !== undefined || row.email !== undefined || row.land_acres !== undefined || 
+                             row.kcc_credit_limit !== undefined || row.agristack_id !== undefined || 
+                             row.user_id !== undefined || row.village !== undefined;
       
-      if (hasPublicFields && !exposesPrivate) {
-        pass('P0.1-4', 'Farmer 2 can discover Farmer 1 via public_profiles view without exposing phone/email/kcc/land');
+      if (hasPublicFields && !exposesPrivate && unapprovedKeys.length === 0) {
+        pass('P0.1-4', 'Farmer 2 can discover Farmer 1 via public_profiles view without exposing phone/email/kcc/land/user_id/village');
       } else {
-        fail('P0.1-4', `public_profiles view exposes private columns: exposesPrivate=${exposesPrivate}, fields=${Object.keys(row)}`);
+        fail('P0.1-4', `public_profiles view exposes private or unapproved columns: ${unapprovedKeys.join(', ')}`);
       }
     } else {
       fail('P0.1-4', `public_profiles view failed to return row for Farmer 1 (rows: ${f2ReadView.rows.length})`);
+    }
+
+    // AS ANON: Attempt to query public_profiles (should be rejected because REVOKE ALL FROM anon)
+    await pglite.exec(`
+      SET ROLE anon;
+      SET request.jwt.claims = '{"role": "anon"}';
+    `);
+    let anonBlocked = false;
+    try {
+      await pglite.query(`SELECT * FROM public.public_profiles WHERE id = $1`, [farmer1Id]);
+    } catch (e) {
+      anonBlocked = true;
+    }
+    if (anonBlocked) {
+      pass('P0.1-4b', 'Anonymous user blocked from querying public_profiles view (permission denied)');
+    } else {
+      fail('P0.1-4b', 'Anonymous user was permitted to query public_profiles');
     }
 
     // AS DRIVER: Test driver profile access
@@ -350,10 +418,30 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0.4-4', 'Duplicate price alert was allowed');
     }
 
+    // AS FARMER 2: Create alert with SAME idempotency key as Farmer 1 (allowed because scoped per (user_id, idempotency_key))
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2AlertRes = await pglite.query(`
+      INSERT INTO public.price_alerts (user_id, crop, commodity, mandi, target_price, condition, idempotency_key)
+      VALUES ($1, 'Cotton', 'Cotton', 'Warangal', 7600.00, 'ABOVE', 'alert-idem-farmer1-001')
+      RETURNING id;
+    `, [farmer2Id]);
+    if (f2AlertRes.rows.length === 1) {
+      pass('P0.4-5', 'Farmer 2 can reuse same idempotency key without collision (scoped per user_id)');
+    } else {
+      fail('P0.4-5', 'Cross-user idempotency key caused unexpected conflict');
+    }
+
     // =========================================================================
     // P0.5 TESTS: GENUINE NOTIFICATIONS TABLE RLS & STATE INTEGRITY
     // =========================================================================
-    // Insert notification for Farmer 1
+    // AS SERVICE_ROLE: Background price alert engine inserts notification for Farmer 1
+    await pglite.exec(`
+      SET ROLE service_role;
+      SET request.jwt.claims = '{"role": "service_role"}';
+    `);
     const notifRes = await pglite.query(`
       INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
       VALUES ($1, 'PRICE_ALERT_ENGINE', 'alert-idem-farmer1-001', 'PRICE_ALERT', 'Cotton Price Target Met', 'Warangal mandi reached ₹7,550/Q')
@@ -392,6 +480,26 @@ $$ LANGUAGE plpgsql STABLE;`
       pass('P0.5-4', 'Farmer 1 successfully marked own notification as read');
     } else {
       fail('P0.5-4', 'Farmer 1 failed to update own notification');
+    }
+
+    // AS SERVICE_ROLE: Attempt duplicate notification insert with same (user_id, event_source, event_id)
+    await pglite.exec(`
+      SET ROLE service_role;
+      SET request.jwt.claims = '{"role": "service_role"}';
+    `);
+    let dupNotifBlocked = false;
+    try {
+      await pglite.query(`
+        INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+        VALUES ($1, 'PRICE_ALERT_ENGINE', 'alert-idem-farmer1-001', 'PRICE_ALERT', 'Cotton Target Duplicate', 'Should be blocked')
+      `, [farmer1Id]);
+    } catch (e) {
+      dupNotifBlocked = true;
+    }
+    if (dupNotifBlocked) {
+      pass('P0.5-5', 'Duplicate notification with same (user_id, event_source, event_id) blocked by unique constraint');
+    } else {
+      fail('P0.5-5', 'Duplicate notification was allowed');
     }
 
     // =========================================================================

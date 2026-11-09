@@ -433,6 +433,9 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     const userId = params[2];
     const alert = memoryStore.priceAlerts.find(a => a.id === alertId && (!userId || a.user_id === userId));
     if (alert) {
+      if (queryStr.includes("status = 'active'") && alert.status !== 'ACTIVE') {
+        return { rows: [] };
+      }
       alert.status = status;
       alert.updated_at = new Date();
       if (status === 'TRIGGERED') alert.triggered_at = new Date();
@@ -454,6 +457,15 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
 
   // 12. Notifications Operations
   if (queryStr.includes('insert into public.notifications')) {
+    // ON CONFLICT (user_id, event_source, event_id) DO NOTHING
+    if (queryStr.includes('on conflict (user_id, event_source, event_id) do nothing')) {
+      const exists = memoryStore.notifications.some(
+        n => n.user_id === params[0] && n.event_source === params[1] && n.event_id === params[2]
+      );
+      if (exists) {
+        return { rows: [] };
+      }
+    }
     const newNotif = {
       id: crypto.randomUUID(),
       user_id: params[0],

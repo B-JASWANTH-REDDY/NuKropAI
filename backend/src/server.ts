@@ -107,12 +107,12 @@ fastify.get('/health', async (request, reply) => {
 fastify.register(apiRoutes, { prefix: '/api/v1' });
 
 // Global Error Handler
-fastify.setErrorHandler((error, request, reply) => {
+fastify.setErrorHandler((error: any, request, reply) => {
   fastify.log.error(error);
   
-  if (error.statusCode) {
+  if (error && error.statusCode) {
     return reply.status(error.statusCode).send({
-      error: error.name,
+      error: error.name || 'Error',
       message: error.message
     });
   }

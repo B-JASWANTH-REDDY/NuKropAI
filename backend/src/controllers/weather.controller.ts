@@ -16,7 +16,23 @@ export const DISTRICT_COORDINATES: Record<string, { lat: number; lon: number }> 
 };
 
 /**
- * P0.3: Truthful, source-backed weather with strict location validation
+ * P0.1: Derives authenticated user ID strictly from verified JWT token.
+ * Never trusts client headers (e.g. x-user-id) and never uses fallback default identities.
+ */
+function getAuthenticatedUserId(request: FastifyRequest): string {
+  const reqUser = (request as any).user;
+  if (!reqUser || !reqUser.id) {
+    throw {
+      statusCode: 401,
+      name: 'UnauthorizedError',
+      message: 'Authentication required: Valid JWT bearer token missing or expired'
+    };
+  }
+  return String(reqUser.id);
+}
+
+/**
+ * P0.4: Truthful, source-backed weather with strict location validation
  * and conservative agronomic foliar spray advisory.
  */
 export async function getCurrentWeather(request: FastifyRequest, reply: FastifyReply) {
@@ -62,39 +78,47 @@ export async function getCurrentWeather(request: FastifyRequest, reply: FastifyR
       });
     }
 
-    const temp = current.temperature_2m;
-    const humidity = current.relative_humidity_2m;
-    const windSpeed = current.wind_speed_10m;
+    const temp = current.temperature_2m ?? null;
+    const humidity = current.relative_humidity_2m ?? null;
+    const windSpeed = current.wind_speed_10m ?? null;
     const windGusts = current.wind_gusts_10m ?? null;
-    const precipitation = current.precipitation ?? 0;
-    const code = current.weather_code;
+    // Never convert missing precipitation into zero! Represent null if unobserved
+    const precipitation = current.precipitation !== undefined ? current.precipitation : null;
+    const code = current.weather_code ?? null;
 
     // Interpret WMO Weather Code
-    let condition = 'Clear Sky';
-    if (code >= 1 && code <= 3) condition = 'Partly Cloudy';
-    else if (code >= 45 && code <= 48) condition = 'Foggy';
-    else if (code >= 51 && code <= 67) condition = 'Rain / Drizzle';
-    else if (code >= 80 && code <= 82) condition = 'Rain Showers';
-    else if (code >= 95) condition = 'Thunderstorm';
+    let condition = 'Unknown';
+    if (code !== null) {
+      if (code === 0) condition = 'Clear Sky';
+      else if (code >= 1 && code <= 3) condition = 'Partly Cloudy';
+      else if (code >= 45 && code <= 48) condition = 'Foggy';
+      else if (code >= 51 && code <= 67) condition = 'Rain / Drizzle';
+      else if (code >= 80 && code <= 82) condition = 'Rain Showers';
+      else if (code >= 95) condition = 'Thunderstorm';
+    }
 
-    // Conservative foliar spray suitability evaluation based on ICAR standards:
-    // Safe foliar envelope: Temp 15-32°C, Wind 3-15 km/h, Humidity 40-80%, Precipitation 0 mm
+    // Conservative foliar spray suitability evaluation based on agronomic standards:
+    // Safe foliar envelope: Temp 15-32°C, Wind 3-15 km/h, Wind Gusts <= 20 km/h, Humidity 40-80%, Precipitation 0 mm
     let isSpraySafe = true;
-    let advisoryReason = 'OPTIMAL: Atmospheric parameters are within ICAR foliar spray safety margins';
+    let advisoryReason = 'OPTIMAL: Atmospheric parameters are within foliar spray safety margins';
     let sprayWindow = 'Condition-dependent: apply while parameters remain within safe ranges';
 
-    if (temp === undefined || temp === null || humidity === undefined || humidity === null || windSpeed === undefined || windSpeed === null) {
+    if (temp === null || humidity === null || windSpeed === null) {
       isSpraySafe = false;
       advisoryReason = 'Advisory unavailable: Incomplete meteorological telemetry';
       sprayWindow = 'Unavailable';
-    } else if (code >= 51 || precipitation > 0) {
+    } else if ((code !== null && code >= 51) || (precipitation !== null && precipitation > 0)) {
       isSpraySafe = false;
       advisoryReason = 'UNSAFE: Active precipitation or rain wash-off risk';
       sprayWindow = 'Postponed until crop canopy dries completely';
     } else if (windSpeed > 15) {
       isSpraySafe = false;
-      advisoryReason = `UNSAFE: High wind velocity (${windSpeed} km/h > 15 km/h) causes excessive droplet drift`;
+      advisoryReason = `UNSAFE: High sustained wind velocity (${windSpeed} km/h > 15 km/h) causes excessive droplet drift`;
       sprayWindow = 'Postponed until sustained wind falls below 15 km/h';
+    } else if (windGusts !== null && windGusts > 20) {
+      isSpraySafe = false;
+      advisoryReason = `UNSAFE: High wind gust velocity (${windGusts} km/h > 20 km/h) causes spray drift hazard`;
+      sprayWindow = 'Postponed until wind gusts subside below 20 km/h';
     } else if (windSpeed < 3) {
       isSpraySafe = false;
       advisoryReason = `UNSAFE: Near-calm wind (${windSpeed} km/h < 3 km/h) creates surface temperature inversion risk`;
@@ -119,10 +143,10 @@ export async function getCurrentWeather(request: FastifyRequest, reply: FastifyR
 
     return reply.status(200).send({
       status: 'AVAILABLE',
-      source: 'Open-Meteo Weather API (NWP Forecast Model)',
+      source: 'Open-Meteo Weather API (NWP Numerical Forecast Model)',
       provider: 'Open-Meteo',
       location: {
-        district: districtRaw || 'Agricultural Field Coordinates',
+        district: districtRaw || 'Agricultural Coordinates',
         state: stateRaw || 'Telangana',
         latitude: lat,
         longitude: lon
@@ -161,33 +185,46 @@ export async function getCurrentWeather(request: FastifyRequest, reply: FastifyR
 }
 
 /**
- * Helper to extract authenticated user id from request or headers
- */
-function getAuthenticatedUserId(request: FastifyRequest): string {
-  const reqUser = (request as any).user;
-  if (reqUser && reqUser.id) return reqUser.id;
-  const headerUserId = request.headers['x-user-id'] as string;
-  if (headerUserId) return headerUserId;
-  return '00000000-0000-0000-0000-000000000001';
-}
-
-/**
- * P0.4: Genuine Persistent Price Alerts API
+ * P0.5: Truly idempotent and transactional price alert creation.
+ * Scoped strictly to authenticated JWT user with required idempotency key.
  */
 export async function createPriceAlert(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   const body = request.body as any;
   const crop = body?.crop ? String(body.crop).trim() : '';
   const commodity = body?.commodity ? String(body.commodity).trim() : crop;
   const targetPrice = parseFloat(body?.targetPrice ?? body?.target_price);
-  const mandi = body?.mandi ? String(body.mandi).trim() : 'APMC Yard';
+  const mandi = body?.mandi ? String(body.mandi).trim() : '';
   const condition = (body?.condition || 'ABOVE').toUpperCase();
-  const idempotencyKey = (request.headers['x-idempotency-key'] as string) || body?.idempotency_key || null;
+  const idempotencyKey = ((request.headers['x-idempotency-key'] as string) || body?.idempotency_key || '').trim();
 
+  // Validate required idempotency key
+  if (!idempotencyKey) {
+    return reply.status(400).send({
+      error: 'MISSING_IDEMPOTENCY_KEY',
+      message: 'A valid X-Idempotency-Key header or idempotency_key parameter is required to prevent duplicate alerts'
+    });
+  }
+
+  // Validate crop & target price
   if (!crop || isNaN(targetPrice) || targetPrice <= 0) {
     return reply.status(400).send({
       error: 'VALIDATION_ERROR',
       message: 'Crop and a positive target price are required to create a price alert'
+    });
+  }
+
+  // Do not silently substitute generic mandi
+  if (!mandi) {
+    return reply.status(400).send({
+      error: 'MISSING_MANDI',
+      message: 'Target Mandi (e.g. Warangal, Enumamula, Khammam) is required'
     });
   }
 
@@ -223,7 +260,7 @@ export async function createPriceAlert(request: FastifyRequest, reply: FastifyRe
     if (err.code === '23505' || err.message?.includes('duplicate key') || err.message?.includes('unique constraint')) {
       return reply.status(409).send({
         error: 'DUPLICATE_ALERT',
-        message: 'A price alert with this idempotency key already exists'
+        message: 'A price alert with this idempotency key already exists for your account'
       });
     }
     request.log.error(err);
@@ -235,7 +272,13 @@ export async function createPriceAlert(request: FastifyRequest, reply: FastifyRe
 }
 
 export async function getPriceAlerts(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   try {
     const result = await pool.query(
       `SELECT * FROM public.price_alerts WHERE user_id = $1 ORDER BY created_at DESC`,
@@ -252,7 +295,13 @@ export async function getPriceAlerts(request: FastifyRequest, reply: FastifyRepl
 }
 
 export async function cancelPriceAlert(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   const { id } = request.params as any;
   if (!id) {
     return reply.status(400).send({ error: 'INVALID_ID', message: 'Price alert ID is required' });
@@ -278,9 +327,32 @@ export async function cancelPriceAlert(request: FastifyRequest, reply: FastifyRe
 }
 
 /**
- * P0.4: Evaluate active price alerts and trigger genuine notifications
+ * P0.5: Atomically evaluate active price alerts against validated market observations.
+ * Prevents duplicate notification events under concurrent evaluations.
  */
-export async function evaluatePriceAlerts(commodity: string, mandi: string, currentPrice: number) {
+export async function evaluatePriceAlerts(
+  commodity: string,
+  mandi: string,
+  currentPrice: number,
+  observation?: { source?: string; timestamp?: string }
+) {
+  // Validate market observation telemetry before evaluating
+  if (!commodity || !mandi || isNaN(currentPrice) || currentPrice <= 0) {
+    console.warn('Rejected invalid market observation during alert evaluation');
+    return { triggeredCount: 0 };
+  }
+
+  if (observation?.timestamp) {
+    const obsTime = new Date(observation.timestamp).getTime();
+    const now = Date.now();
+    // Reject observations claiming future timestamps or older than 48 hours
+    if (obsTime > now + 60000 || obsTime < now - (48 * 3600 * 1000)) {
+      console.warn(`Rejected stale or unverified market observation timestamp: ${observation.timestamp}`);
+      return { triggeredCount: 0 };
+    }
+  }
+
+  let triggeredCount = 0;
   try {
     const result = await pool.query(
       `SELECT * FROM public.price_alerts WHERE status = 'ACTIVE'`,
@@ -289,8 +361,7 @@ export async function evaluatePriceAlerts(commodity: string, mandi: string, curr
     const activeAlerts = result.rows.filter(a => {
       const matchCrop = (a.crop || '').toLowerCase() === commodity.toLowerCase() ||
                         (a.commodity || '').toLowerCase() === commodity.toLowerCase();
-      const matchMandi = !a.mandi || a.mandi === 'APMC Yard' || mandi === 'APMC Yard' ||
-                         a.mandi.toLowerCase() === mandi.toLowerCase();
+      const matchMandi = (a.mandi || '').toLowerCase() === mandi.toLowerCase();
       return matchCrop && matchMandi;
     });
 
@@ -300,37 +371,49 @@ export async function evaluatePriceAlerts(commodity: string, mandi: string, curr
       const isBelowMet = alert.condition === 'BELOW' && currentPrice <= target;
 
       if (isAboveMet || isBelowMet) {
-        // Mark alert TRIGGERED
-        await pool.query(
-          `UPDATE public.price_alerts SET status = $1 WHERE id = $2 AND user_id = $3`,
+        // Atomic status transition: Only updates if still ACTIVE, preventing concurrent double-trigger
+        const updateRes = await pool.query(
+          `UPDATE public.price_alerts SET status = $1 WHERE id = $2 AND user_id = $3 AND status = 'ACTIVE' RETURNING id`,
           ['TRIGGERED', alert.id, alert.user_id]
         );
 
-        // Insert genuine notification
-        await pool.query(
-          `INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            alert.user_id,
-            'PRICE_ALERT_ENGINE',
-            alert.id,
-            'PRICE_ALERT',
-            `${alert.crop} Price Alert Triggered`,
-            `${alert.crop} at ${mandi} has reached ₹${currentPrice.toLocaleString('en-IN')}/Qtl (Target: ${alert.condition} ₹${target.toLocaleString('en-IN')}/Qtl).`
-          ]
-        );
+        if (updateRes.rows.length > 0) {
+          triggeredCount++;
+          // Alert transition succeeded: insert persistent notification
+          await pool.query(
+            `INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (user_id, event_source, event_id) DO NOTHING`,
+            [
+              alert.user_id,
+              'PRICE_ALERT_ENGINE',
+              alert.id,
+              'PRICE_ALERT',
+              `${alert.crop} Price Alert Triggered`,
+              `${alert.crop} at ${mandi} has reached ₹${currentPrice.toLocaleString('en-IN')}/Qtl (Target: ${alert.condition} ₹${target.toLocaleString('en-IN')}/Qtl).`
+            ]
+          );
+        }
       }
     }
+    return { triggeredCount };
   } catch (err) {
     console.error('Error evaluating price alerts:', err);
+    return { triggeredCount: 0 };
   }
 }
 
 /**
- * P0.5: Genuine Notifications API
+ * P0.6: Genuine Notifications API with owner-only isolation and strict database error reporting.
  */
 export async function getNotifications(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   try {
     const result = await pool.query(
       `SELECT * FROM public.notifications WHERE user_id = $1 ORDER BY created_at DESC`,
@@ -342,12 +425,18 @@ export async function getNotifications(request: FastifyRequest, reply: FastifyRe
     });
   } catch (err) {
     request.log.error(err);
-    return reply.status(500).send({ error: 'DATABASE_ERROR', message: 'Failed to retrieve notifications' });
+    return reply.status(503).send({ error: 'SERVICE_UNAVAILABLE', message: 'Failed to retrieve notifications from database' });
   }
 }
 
 export async function getUnreadNotificationsCount(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   try {
     const result = await pool.query(
       `SELECT COUNT(*)::int as unread_count FROM public.notifications WHERE user_id = $1 AND is_read = false`,
@@ -360,15 +449,22 @@ export async function getUnreadNotificationsCount(request: FastifyRequest, reply
     });
   } catch (err) {
     request.log.error(err);
-    return reply.status(200).send({
-      unreadCount: 0,
-      timestamp: new Date().toISOString()
+    // P0.6: Never return zero on database failure. Return authentic 503 error.
+    return reply.status(503).send({
+      error: 'SERVICE_UNAVAILABLE',
+      message: 'Failed to retrieve unread notification count: database unavailable'
     });
   }
 }
 
 export async function markNotificationRead(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   const { id } = request.params as any;
   if (!id) {
     return reply.status(400).send({ error: 'INVALID_ID', message: 'Notification ID is required' });
@@ -393,7 +489,13 @@ export async function markNotificationRead(request: FastifyRequest, reply: Fasti
 }
 
 export async function markAllNotificationsRead(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getAuthenticatedUserId(request);
+  let userId: string;
+  try {
+    userId = getAuthenticatedUserId(request);
+  } catch (authErr: any) {
+    return reply.status(authErr.statusCode || 401).send({ error: authErr.message });
+  }
+
   try {
     const result = await pool.query(
       `UPDATE public.notifications SET is_read = true WHERE user_id = $1 AND is_read = false RETURNING id`,

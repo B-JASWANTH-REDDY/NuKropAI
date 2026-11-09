@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS public._migration_legacy_user_sync_audit (
   user_id UUID PRIMARY KEY,
   email TEXT,
   role TEXT,
-  status TEXT NOT NULL, -- 'MIGRATED', 'ALREADY_EXISTS', 'PASSWORD_RECOVERY_REQUIRED'
+  status TEXT NOT NULL, -- 'MIGRATED', 'ALREADY_EXISTS', 'PASSWORD_RECOVERY_REQUIRED', 'ADMIN_VERIFICATION_REQUIRED'
   details TEXT,
   migrated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -191,6 +191,11 @@ DECLARE
   v_migrated INT := 0;
   v_existing INT := 0;
   v_recovery INT := 0;
+  v_admin_count INT := 0;
+  v_sanitized_role TEXT;
+  v_admin_flagged BOOLEAN := FALSE;
+  v_status TEXT;
+  v_details TEXT;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
     FOR rec IN SELECT id, email, password_hash, role, created_at FROM public.users LOOP
@@ -200,6 +205,20 @@ BEGIN
         VALUES (rec.id, rec.email, rec.role, 'ALREADY_EXISTS', 'Account already present in auth.users')
         ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details;
       ELSE
+        -- P0.3: ROLE WHITELISTING & ADMIN ESCALATION BLOCK
+        -- Never write 'admin' to app_metadata automatically during migration
+        IF LOWER(COALESCE(rec.role, '')) = 'admin' THEN
+          v_sanitized_role := 'farmer';
+          v_admin_flagged := TRUE;
+          v_admin_count := v_admin_count + 1;
+        ELSIF LOWER(COALESCE(rec.role, '')) IN ('driver', 'buyer', 'farmer') THEN
+          v_sanitized_role := LOWER(rec.role);
+          v_admin_flagged := FALSE;
+        ELSE
+          v_sanitized_role := 'farmer';
+          v_admin_flagged := FALSE;
+        END IF;
+
         -- Validate password hash compatibility (bcrypt prefix $2a$ or $2b$)
         IF rec.password_hash IS NOT NULL AND rec.password_hash ~ '^\$2[ab]\$[0-9]{2}\$' THEN
           INSERT INTO auth.users (id, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
@@ -207,51 +226,70 @@ BEGIN
             rec.id,
             rec.email,
             rec.password_hash,
-            jsonb_build_object('role', rec.role, 'legacy_migrated', true),
-            jsonb_build_object('role', rec.role),
+            jsonb_build_object('role', v_sanitized_role, 'legacy_migrated', true, 'admin_verification_required', v_admin_flagged),
+            jsonb_build_object('role', v_sanitized_role),
             rec.created_at,
             NOW()
           );
           v_migrated := v_migrated + 1;
+
+          IF v_admin_flagged THEN
+            v_status := 'ADMIN_VERIFICATION_REQUIRED';
+            v_details := 'Legacy admin role stripped during automated migration; downgraded to farmer pending independent security authorization';
+          ELSE
+            v_status := 'MIGRATED';
+            v_details := 'Migrated successfully with compatible bcrypt hash';
+          END IF;
+
           INSERT INTO public._migration_legacy_user_sync_audit (user_id, email, role, status, details)
-          VALUES (rec.id, rec.email, rec.role, 'MIGRATED', 'Migrated successfully with compatible bcrypt hash')
-          ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details;
+          VALUES (rec.id, rec.email, rec.role, v_status, v_details)
+          ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details, status = EXCLUDED.status;
         ELSE
           -- Incompatible or legacy cleartext/SHA hash -> insert with disabled password and require recovery
           INSERT INTO auth.users (id, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
           VALUES (
             rec.id,
             rec.email,
-            jsonb_build_object('role', rec.role, 'legacy_migrated', true, 'password_recovery_required', true),
-            jsonb_build_object('role', rec.role),
+            jsonb_build_object('role', v_sanitized_role, 'legacy_migrated', true, 'password_recovery_required', true, 'admin_verification_required', v_admin_flagged),
+            jsonb_build_object('role', v_sanitized_role),
             rec.created_at,
             NOW()
           );
           v_recovery := v_recovery + 1;
+
+          IF v_admin_flagged THEN
+            v_status := 'ADMIN_VERIFICATION_REQUIRED';
+            v_details := 'Legacy admin role stripped and password hash incompatible; recovery and admin authorization required';
+          ELSE
+            v_status := 'PASSWORD_RECOVERY_REQUIRED';
+            v_details := 'Hash incompatible with bcrypt; password recovery required';
+          END IF;
+
           INSERT INTO public._migration_legacy_user_sync_audit (user_id, email, role, status, details)
-          VALUES (rec.id, rec.email, rec.role, 'PASSWORD_RECOVERY_REQUIRED', 'Hash incompatible with bcrypt; password recovery required')
-          ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details;
+          VALUES (rec.id, rec.email, rec.role, v_status, v_details)
+          ON CONFLICT (user_id) DO UPDATE SET details = EXCLUDED.details, status = EXCLUDED.status;
         END IF;
 
-        -- Ensure public.profiles has corresponding record
+        -- Ensure public.profiles has corresponding record without clobbering existing profile data
         INSERT INTO public.profiles (id, user_id, email, role, full_name, created_at, updated_at)
         VALUES (
           rec.id,
           rec.id,
           rec.email,
-          rec.role,
+          v_sanitized_role,
           split_part(rec.email, '@', 1),
           rec.created_at,
           NOW()
         )
         ON CONFLICT (id) DO UPDATE SET
           user_id = EXCLUDED.user_id,
-          email = EXCLUDED.email,
-          role = EXCLUDED.role,
+          email = COALESCE(public.profiles.email, EXCLUDED.email),
+          role = v_sanitized_role,
+          full_name = COALESCE(public.profiles.full_name, EXCLUDED.full_name),
           updated_at = NOW();
       END IF;
     END LOOP;
-    RAISE NOTICE 'Legacy user migration observable audit: migrated=%, already_exists=%, recovery_required=%', v_migrated, v_existing, v_recovery;
+    RAISE NOTICE 'Legacy user migration observable audit: migrated=%, already_exists=%, recovery_required=%, admin_downgraded=%', v_migrated, v_existing, v_recovery, v_admin_count;
   END IF;
 END $$;
 
@@ -301,22 +339,21 @@ CREATE POLICY "profiles_delete_own"
   );
 
 -- 2. RESTRICTED PUBLIC PROFILES VIEW (Approved Non-Sensitive Public Discovery Only)
--- Excludes: email, phone, land_acres, kcc_credit_limit, kcc_balance, soil_type, agristack_id, dpdp_consent
+-- Excludes: email, phone, user_id, village, land_acres, kcc_credit_limit, kcc_balance, soil_type, agristack_id, dpdp_consent
 CREATE OR REPLACE VIEW public.public_profiles AS
 SELECT 
   id,
-  user_id,
   full_name,
   role,
   avatar_url,
-  village,
   district,
   state,
   agristack_verified,
   created_at
 FROM public.profiles;
 
-GRANT SELECT ON public.public_profiles TO authenticated, anon, service_role;
+REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
+GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 -- 3. DISEASE SCANS RLS
 DO $$
@@ -423,10 +460,11 @@ CREATE TABLE IF NOT EXISTS public.price_alerts (
   target_price NUMERIC(10,2) NOT NULL CHECK (target_price > 0),
   condition VARCHAR(20) NOT NULL DEFAULT 'ABOVE' CHECK (condition IN ('ABOVE', 'BELOW')),
   status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'TRIGGERED', 'PAUSED', 'CANCELLED')),
-  idempotency_key VARCHAR(100) UNIQUE,
+  idempotency_key VARCHAR(100),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  triggered_at TIMESTAMPTZ
+  triggered_at TIMESTAMPTZ,
+  CONSTRAINT uq_price_alerts_user_idempotency UNIQUE (user_id, idempotency_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON public.price_alerts(user_id);
@@ -482,7 +520,8 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   title VARCHAR(255) NOT NULL,
   body TEXT NOT NULL,
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_notifications_event_source_id UNIQUE (user_id, event_source, event_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications(user_id, is_read);

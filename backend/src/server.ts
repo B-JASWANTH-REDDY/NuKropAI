@@ -13,6 +13,7 @@ import client from 'prom-client';
 import pino from 'pino';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
+import * as fs from 'fs';
 
 
 dotenv.config();
@@ -25,9 +26,15 @@ const logger = pino({
 
 const fastify = Fastify({ logger });
 
-// Serve APKs directly from the user's Downloads folder
+// Platform-agnostic static APK and artifact serving (Linux container & Windows compatible)
+const downloadsDir = process.env.DOWNLOADS_PATH || (process.platform === 'win32' && fs.existsSync('C:\\Users\\bjasw\\Downloads') ? 'C:\\Users\\bjasw\\Downloads' : path.join(process.cwd(), 'downloads'));
+if (!fs.existsSync(downloadsDir)) {
+  try {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+  } catch (_) {}
+}
 fastify.register(fastifyStatic, {
-  root: 'C:\\Users\\bjasw\\Downloads',
+  root: downloadsDir,
   prefix: '/downloads/', 
 });
 

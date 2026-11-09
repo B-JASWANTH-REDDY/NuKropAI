@@ -45,3 +45,4 @@ This document establishes the enterprise observability framework (Metrics, Logs,
    ```bash
    kubectl rollout status deployment/nukropai-backend -n nukropai
    ```
+

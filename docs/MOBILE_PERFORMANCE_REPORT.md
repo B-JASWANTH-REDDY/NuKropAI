@@ -24,3 +24,4 @@ This report benchmarks the mobile performance, frame rendering rate, memory foot
 2. **Lazy List Virtualization**: Used `ListView.builder` and `SliverList` across Community, Mandi, and Khata views to recycle offscreen elements.
 3. **Repaint Boundaries**: Encapsulated dynamic widgets (e.g., continuous market ticker and scanner laser sweep) inside `RepaintBoundary` to prevent cascading canvas invalidation.
 4. **Hardware Acceleration**: Verified Skia / Impeller GPU rendering pipeline enabled by default in Flutter.
+

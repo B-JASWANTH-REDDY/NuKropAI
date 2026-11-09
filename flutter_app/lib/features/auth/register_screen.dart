@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/user_session.dart';
+import '../../core/networking/api_client.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../shared/widgets/luxury_toast.dart';
 
@@ -20,23 +21,34 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String _selectedRole = 'farmer';
-  bool _agreedToTerms = true;
+  bool _agreedToTerms = false;
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  String _normalizeEmail(String input) {
+    final trimmed = input.trim().toLowerCase();
+    if (trimmed.contains('@')) {
+      return trimmed;
+    }
+    final cleanDigits = trimmed.replaceAll(RegExp(r'\D'), '');
+    final phone = cleanDigits.length > 10 ? cleanDigits.substring(cleanDigits.length - 10) : cleanDigits;
+    return '$phone@nukrop.ai';
+  }
+
   Future<void> _handleRegister() async {
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
+    final identifier = _identifierController.text.trim();
     final password = _passwordController.text.trim();
 
     if (name.isEmpty) {
@@ -48,19 +60,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (phone.length < 10) {
+    if (identifier.isEmpty) {
       LuxuryToast.show(
         context,
-        message: 'Please enter a valid 10-digit mobile number.',
+        message: 'Please enter a valid 10-digit mobile number or email.',
         color: AppConstants.dangerRed,
       );
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       LuxuryToast.show(
         context,
-        message: 'Password must be at least 6 characters.',
+        message: 'Password must be at least 8 characters long.',
         color: AppConstants.dangerRed,
       );
       return;
@@ -69,7 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_agreedToTerms) {
       LuxuryToast.show(
         context,
-        message: 'Please accept Terms of Service & Privacy Notice.',
+        message: 'Please accept Terms of Service & DPDP 2023 Consent.',
         color: AppConstants.dangerRed,
       );
       return;
@@ -79,143 +91,314 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    final normalizedEmail = _normalizeEmail(identifier);
 
-    final role = _selectedRole == 'farmer' ? UserRole.farmer : UserRole.driver;
-    final session = UserSession(
-      userId: 'usr_${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      phone: '+91 $phone',
-      email: '$phone@nukrop.ai',
-      role: role,
-      state: 'Telangana',
-      district: 'Warangal Rural',
-      activeCrops: ['Cotton', 'Chilli'],
-      accessToken: 'jwt_mock_token_registered',
-      refreshToken: 'jwt_mock_refresh_token_registered',
-    );
-
-    await SecureStorage.saveSession(session);
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-      LuxuryToast.show(
-        context,
-        message: 'Account created successfully for $name!',
-        icon: Icons.check_circle_rounded,
-        color: AppConstants.primaryGreen,
+    try {
+      final response = await ApiClient.post<Map<String, dynamic>>(
+        '/auth/register',
+        body: {
+          'email': normalizedEmail,
+          'password': password,
+          'role': _selectedRole,
+        },
       );
-      widget.onRegisterSuccess();
+
+      final accessToken = response['accessToken'] as String?;
+      final refreshToken = response['refreshToken'] as String?;
+      final user = response['user'] as Map<String, dynamic>?;
+
+      if (accessToken == null || refreshToken == null || user == null) {
+        throw const ServerException('Server returned an invalid registration response.');
+      }
+
+      // Canonical UUID for RLS
+      final canonicalUserId = user['id']?.toString() ?? '';
+      final session = UserSession(
+        userId: canonicalUserId,
+        name: name,
+        email: normalizedEmail,
+        phone: identifier.contains('@') ? '' : identifier,
+        role: _selectedRole == 'driver' ? UserRole.driver : UserRole.farmer,
+        state: 'Telangana',
+        district: 'Warangal Rural',
+        activeCrops: ['Cotton', 'Chilli'],
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      );
+
+      // Persist in platform-backed Android Keystore / iOS Keychain
+      await SecureStorage.saveSession(session);
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        LuxuryToast.show(
+          context,
+          message: 'Account registered successfully! Welcome to NuKropAI.',
+          icon: Icons.check_circle_rounded,
+          color: AppConstants.primaryGreen,
+        );
+        widget.onRegisterSuccess();
+      }
+    } on ConflictException {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        LuxuryToast.show(
+          context,
+          message: 'This mobile/email is already registered. Please sign in.',
+          color: AppConstants.dangerRed,
+        );
+      }
+    } on ForbiddenException catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        LuxuryToast.show(
+          context,
+          message: e.message,
+          color: AppConstants.dangerRed,
+        );
+      }
+    } on NetworkException catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        LuxuryToast.show(
+          context,
+          message: e.message,
+          color: AppConstants.dangerRed,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        LuxuryToast.show(
+          context,
+          message: 'Registration failed: ${e.toString()}',
+          color: AppConstants.dangerRed,
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: widget.onNavigateToLogin,
-        ),
-        title: const Text('Create NuKropAI Account'),
-      ),
+      backgroundColor: AppConstants.surfaceBg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Full Name',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(hintText: 'e.g. Ramesh Patel'),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Mobile Number',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  prefixText: '+91 ',
-                  hintText: '98765 43210',
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Account Role',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Center(child: Text('Farmer')),
-                      selected: _selectedRole == 'farmer',
-                      selectedColor: AppConstants.primaryLight,
-                      onSelected: (_) => setState(() => _selectedRole = 'farmer'),
+        child: Center(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      onPressed: widget.onNavigateToLogin,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Center(child: Text('Driver')),
-                      selected: _selectedRole == 'driver',
-                      selectedColor: AppConstants.primaryLight,
-                      onSelected: (_) => setState(() => _selectedRole = 'driver'),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Create Account',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: AppConstants.textDark,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Password',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(hintText: 'Min 6 characters'),
-              ),
-              const SizedBox(height: 16),
-              CheckboxListTile(
-                value: _agreedToTerms,
-                onChanged: (val) => setState(() => _agreedToTerms = val ?? false),
-                activeColor: AppConstants.primaryGreen,
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'I agree to the Terms of Service & DPDP 2023 Agrarian Data Notice.',
-                  style: TextStyle(fontSize: 12, color: AppConstants.textMuted),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleRegister,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
+                const SizedBox(height: 16),
+
+                // Form Card
+                Card(
+                  elevation: 0.5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Role Selection
+                        const Text(
+                          'Select Agrarian Role',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppConstants.textDark,
+                          ),
                         ),
-                      )
-                    : const Text('Complete Registration'),
-              ),
-            ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Text('🌾 Kisan / Farmer'),
+                                selected: _selectedRole == 'farmer',
+                                onSelected: (val) {
+                                  if (val) setState(() => _selectedRole = 'farmer');
+                                },
+                                selectedColor: AppConstants.primaryLight,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Text('🚚 Driver'),
+                                selected: _selectedRole == 'driver',
+                                onSelected: (val) {
+                                  if (val) setState(() => _selectedRole = 'driver');
+                                },
+                                selectedColor: AppConstants.primaryLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Full Name
+                        TextField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Full Name',
+                            hintText: 'e.g. Jaswanth Reddy',
+                            prefixIcon: Icon(Icons.person_outline_rounded),
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Mobile or Email
+                        TextField(
+                          controller: _identifierController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'Mobile Number or Email',
+                            hintText: 'e.g. 9876543210 or farmer@nukrop.ai',
+                            prefixIcon: Icon(Icons.phone_android_rounded),
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Password
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            hintText: 'Minimum 8 characters',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off_rounded
+                                    : Icons.visibility_rounded,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Terms & DPDP checkbox
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _agreedToTerms,
+                              activeColor: AppConstants.primaryGreen,
+                              onChanged: (val) {
+                                setState(() {
+                                  _agreedToTerms = val ?? false;
+                                });
+                              },
+                            ),
+                            const Expanded(
+                              child: Text(
+                                'I agree to the Terms of Service & DPDP 2023 Consent for Agricultural Intelligence.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppConstants.textMuted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Submit Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _handleRegister,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppConstants.primaryGreen,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Create Account',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Back to Login
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Already registered?',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppConstants.textMuted,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: widget.onNavigateToLogin,
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppConstants.primaryGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

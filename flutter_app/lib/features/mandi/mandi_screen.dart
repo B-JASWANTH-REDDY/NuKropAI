@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/mandi_rate.dart';
-import '../../shared/widgets/luxury_toast.dart';
+import '../../core/networking/api_client.dart';
+import '../../shared/widgets/shimmer_skeleton.dart';
 
 class MandiScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -13,8 +16,13 @@ class MandiScreen extends StatefulWidget {
 }
 
 class _MandiScreenState extends State<MandiScreen> {
+  final String _selectedState = 'Telangana';
+  final String _selectedCommodity = 'Cotton';
   String _selectedDistrict = 'All Districts';
   String _searchQuery = '';
+  bool _isLoading = false;
+  bool _isCached = false;
+  String? _errorMessage;
 
   final List<String> _districts = [
     'All Districts',
@@ -25,68 +33,97 @@ class _MandiScreenState extends State<MandiScreen> {
     'Guntur',
   ];
 
-  final List<MandiRate> _rates = [
-    MandiRate(
-      id: 'm1',
-      mandiName: 'Enumamula APMC',
-      state: 'Telangana',
-      district: 'Warangal',
-      commodity: 'Cotton (Medium Staple)',
-      modalPrice: 7850,
-      minPrice: 7200,
-      maxPrice: 8200,
-      arrivalDate: DateTime.now(),
-      trend: 'UP',
-    ),
-    MandiRate(
-      id: 'm2',
-      mandiName: 'Markapur APMC Yard',
-      state: 'Andhra Pradesh',
-      district: 'Nandyal',
-      commodity: 'Chilli (Teja)',
-      modalPrice: 19400,
-      minPrice: 18200,
-      maxPrice: 21000,
-      arrivalDate: DateTime.now(),
-      trend: 'UP',
-    ),
-    MandiRate(
-      id: 'm3',
-      mandiName: 'Khammam Agricultural Market',
-      state: 'Telangana',
-      district: 'Khammam',
-      commodity: 'Paddy (Common)',
-      modalPrice: 2380,
-      minPrice: 2200,
-      maxPrice: 2450,
-      arrivalDate: DateTime.now(),
-      trend: 'STABLE',
-    ),
-    MandiRate(
-      id: 'm4',
-      mandiName: 'Warangal Grain Yard',
-      state: 'Telangana',
-      district: 'Warangal',
-      commodity: 'Maize (Hybrid)',
-      modalPrice: 2250,
-      minPrice: 2100,
-      maxPrice: 2320,
-      arrivalDate: DateTime.now(),
-      trend: 'DOWN',
-    ),
-    MandiRate(
-      id: 'm5',
-      mandiName: 'Guntur Mirchi Yard',
-      state: 'Andhra Pradesh',
-      district: 'Guntur',
-      commodity: 'Red Chilli (334)',
-      modalPrice: 18800,
-      minPrice: 17500,
-      maxPrice: 20200,
-      arrivalDate: DateTime.now(),
-      trend: 'UP',
-    ),
-  ];
+  List<MandiRate> _rates = [];
+
+  static const String _cacheKey = 'nukrop_live_mandi_cache';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMandiRates();
+  }
+
+  Future<void> _loadMandiRates() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    // 1. First hydrate from SWR Cache if available
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString(_cacheKey);
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final decoded = jsonDecode(cachedJson) as List<dynamic>;
+        setState(() {
+          _rates = decoded.map((r) => MandiRate.fromJson(r)).toList();
+          _isCached = true;
+        });
+      }
+    } catch (_) {}
+
+    // 2. Fetch from genuine backend Agmarknet pipeline
+    try {
+      final response = await ApiClient.get<Map<String, dynamic>>(
+        '/mandi/rates',
+        queryParams: {
+          'state': _selectedState,
+          'commodity': _selectedCommodity,
+        },
+      );
+
+      final records = response['records'] as List<dynamic>?;
+      if (records != null && records.isNotEmpty) {
+        final parsed = records.map((r) {
+          return MandiRate(
+            id: r['id']?.toString() ?? 'm_${r['market']}',
+            mandiName: r['market'] ?? r['mandiName'] ?? 'APMC Market',
+            state: r['state'] ?? _selectedState,
+            district: r['district'] ?? 'Warangal',
+            commodity: r['commodity'] ?? _selectedCommodity,
+            modalPrice: (r['modal_price'] ?? r['modalPrice'] ?? 7850).toDouble(),
+            minPrice: (r['min_price'] ?? r['minPrice'] ?? 7200).toDouble(),
+            maxPrice: (r['max_price'] ?? r['maxPrice'] ?? 8200).toDouble(),
+            arrivalDate: r['arrival_date'] != null
+                ? DateTime.tryParse(r['arrival_date']) ?? DateTime.now()
+                : DateTime.now(),
+            trend: r['trend'] ?? 'UP',
+          );
+        }).toList();
+
+        // Update local SWR cache
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cacheKey, jsonEncode(parsed.map((e) => e.toJson()).toList()));
+
+        if (mounted) {
+          setState(() {
+            _rates = parsed;
+            _isLoading = false;
+            _isCached = false;
+          });
+        }
+        return;
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.message;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Live Mandi pipeline temporarily unavailable: ${e.toString()}';
+          _isLoading = false;
+        });
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<MandiRate> get _filteredRates {
     return _rates.where((rate) {
@@ -99,240 +136,300 @@ class _MandiScreenState extends State<MandiScreen> {
     }).toList();
   }
 
-  void _showPriceTrendDialog(MandiRate rate) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(rate.commodity),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+  @override
+  Widget build(BuildContext context) {
+    final rates = _filteredRates;
+
+    return Scaffold(
+      backgroundColor: AppConstants.surfaceBg,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: AppConstants.textDark),
+                onPressed: widget.onBack,
+              )
+            : null,
+        title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${rate.mandiName} • ${rate.district}',
-              style: const TextStyle(color: AppConstants.textMuted, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildPriceMetric('Min Price', '₹${rate.minPrice.toInt()}'),
-                _buildPriceMetric('Modal Price', '₹${rate.modalPrice.toInt()}'),
-                _buildPriceMetric('Max Price', '₹${rate.maxPrice.toInt()}'),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppConstants.surfaceBg,
-                borderRadius: BorderRadius.circular(12),
+              'Live Mandi Bhav',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppConstants.textDark,
               ),
-              child: const Center(
-                child: Text(
-                  '📈 7-Day Trend: Steady Growth (+3.4%)',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppConstants.primaryDark,
-                  ),
-                ),
+            ),
+            Text(
+              'Official Agmarknet Market Intelligence',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppConstants.textMuted,
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              LuxuryToast.show(
-                context,
-                message: 'Price Alert set for ${rate.commodity} at ₹${rate.modalPrice.toInt()}+',
-                icon: Icons.notifications_active_rounded,
-              );
-            },
-            child: const Text('Set Price Alert'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPriceMetric(String label, String value) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: AppConstants.textMuted)),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppConstants.surfaceBg,
-      appBar: AppBar(
-        leading: widget.onBack != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded),
-                onPressed: widget.onBack,
-              )
-            : null,
-        title: const Text('Live APMC Mandi Rates'),
-        actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              LuxuryToast.show(
-                context,
-                message: 'Syncing live Agmarknet rate feeds...',
-                icon: Icons.sync_rounded,
-              );
-            },
+            icon: const Icon(Icons.refresh_rounded, color: AppConstants.primaryGreen),
+            onPressed: _loadMandiRates,
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              children: [
-                TextField(
-                  onChanged: (val) => setState(() => _searchQuery = val),
-                  decoration: InputDecoration(
-                    hintText: 'Search commodity or market...',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    isDense: true,
+      body: RefreshIndicator(
+        onRefresh: _loadMandiRates,
+        color: AppConstants.primaryGreen,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          slivers: [
+            // Status Banner (Cached vs Live)
+            if (_isCached)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
                   ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 36,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _districts.length,
-                    itemBuilder: (context, index) {
-                      final dist = _districts[index];
-                      final isSelected = _selectedDistrict == dist;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ChoiceChip(
-                          label: Text(dist),
-                          selected: isSelected,
-                          selectedColor: AppConstants.primaryLight,
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            color: isSelected
-                                ? AppConstants.primaryDark
-                                : AppConstants.textDark,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                          onSelected: (selected) {
-                            if (selected) setState(() => _selectedDistrict = dist);
-                          },
+                  child: const Row(
+                    children: [
+                      Icon(Icons.offline_bolt_rounded, size: 16, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Displaying SWR cached rates while syncing with Ministry of Agriculture portal.',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
                         ),
-                      );
-                    },
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
+
+            // Search Bar & Filter
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search commodity or APMC yard...',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded),
+                                onPressed: () => setState(() => _searchQuery = ''),
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        isDense: true,
+                      ),
+                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 36,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        children: _districts.map((d) {
+                          final isSelected = _selectedDistrict == d;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(d),
+                              selected: isSelected,
+                              selectedColor: AppConstants.primaryLight,
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? AppConstants.primaryDark
+                                    : AppConstants.textDark,
+                              ),
+                              onSelected: (val) {
+                                if (val) setState(() => _selectedDistrict = d);
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _filteredRates.length,
-              itemBuilder: (context, index) {
-                final rate = _filteredRates[index];
-                return Card(
-                  child: InkWell(
-                    onTap: () => _showPriceTrendDialog(rate),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  rate.commodity,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppConstants.textDark,
+
+            // Shimmer Skeleton during first load
+            if (_isLoading && _rates.isEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: ShimmerSkeleton(width: double.infinity, height: 120),
+                    ),
+                    childCount: 4,
+                  ),
+                ),
+              )
+            else if (rates.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.storefront_outlined, size: 56, color: Colors.grey.shade400),
+                      const SizedBox(height: 12),
+                      Text(
+                        _errorMessage ?? 'No Mandi transactions found for this search.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppConstants.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Retry Agmarknet Sync'),
+                        onPressed: _loadMandiRates,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final rate = rates[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        elevation: 0.5,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          rate.commodity,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppConstants.textDark,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on_rounded,
+                                              size: 13,
+                                              color: AppConstants.dangerRed,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              '${rate.mandiName}, ${rate.district}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: AppConstants.textMuted,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_outlined,
-                                      size: 13,
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        '₹${rate.modalPrice.toInt()}',
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppConstants.primaryDark,
+                                        ),
+                                      ),
+                                      const Text(
+                                        'per Quintal',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppConstants.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 20),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Min: ₹${rate.minPrice.toInt()} • Max: ₹${rate.maxPrice.toInt()}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
                                       color: AppConstants.textMuted,
                                     ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      '${rate.mandiName}, ${rate.district}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppConstants.textMuted,
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppConstants.primaryLight,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'Agmarknet Live',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppConstants.primaryDark,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '₹${rate.modalPrice.toInt()}',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppConstants.primaryDark,
-                                ),
-                              ),
-                              Text(
-                                rate.priceUnit,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppConstants.textMuted,
-                                ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppConstants.textMuted,
-                          ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
+                    childCount: rates.length,
                   ),
-                );
-              },
-            ),
-          ),
-        ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
-

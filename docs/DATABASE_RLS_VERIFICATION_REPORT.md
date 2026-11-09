@@ -26,3 +26,4 @@ This document provides verification evidence for the Row Level Security (RLS) po
 1. **Cross-Tenant Access Test**: Verified that Farmer A cannot query, update, or delete ledger entries belonging to Farmer B. Queries return 0 rows under RLS.
 2. **Role Elevation Test**: Verified that an authenticated farmer cannot insert records into `driver_locations` or update `trips.status` to `IN_TRANSIT` without a valid OTP handshake.
 3. **Fail-Closed Verification**: Audited in `tests/test_db_fallback_reliability.js`: all 9/9 database persistence tests pass, verifying that write operations throw hard errors in production when the database connection drops.
+

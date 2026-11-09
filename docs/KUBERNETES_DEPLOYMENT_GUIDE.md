@@ -9,9 +9,14 @@ This guide provides complete instructions for provisioning, configuring, and ope
 
 ```
 infra/k8s/
-├── configmap.yaml            # Environment variables & OpenTelemetry configuration
-├── secret-template.yaml      # Template for sensitive credentials (DATABASE_URL, JWT)
+├── namespace.yaml           # Dedicated namespace with Pod Security Standards (restricted)
+├── serviceaccount.yaml      # Least-privilege ServiceAccount (automountServiceAccountToken: false)
+├── network-policy.yaml      # Strict Ingress/Egress NetworkPolicy
+├── configmap.yaml           # Environment variables & OpenTelemetry configuration
+├── secret-template.yaml     # Template for sensitive credentials (DATABASE_URL, JWT_REFRESH_SECRET)
+├── redis.yaml               # Redis deployment & ClusterIP service (BullMQ & Mandi cache)
 ├── deployment.yaml          # Fastify API Pods, rolling update, health probes
+├── worker-deployment.yaml   # BullMQ background workers (mandi & land survey ingestion)
 ├── service.yaml             # ClusterIP service definition on port 80 -> 3000
 ├── hpa.yaml                 # Horizontal Pod Autoscaler (3-30 replicas)
 ├── ingress.yaml             # NGINX Ingress controller with automated TLS
@@ -58,3 +63,4 @@ kubectl get ingress -n nukropai
 - **Rolling Updates**: `maxSurge: 25%`, `maxUnavailable: 0` ensures zero dropped requests during new version rollouts.
 - **Graceful Termination**: `preStop` hook sleeps for 5 seconds allowing active HTTP keep-alive connections to finish while new traffic routes away.
 - **Horizontal Pod Autoscaling**: Automatically scales between 3 and 30 replicas based on 70% CPU and 80% Memory thresholds.
+

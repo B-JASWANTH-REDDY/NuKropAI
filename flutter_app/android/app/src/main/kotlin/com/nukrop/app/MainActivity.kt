@@ -1,4 +1,4 @@
-package com.example.nukrop_app
+package com.nukrop.app
 
 import io.flutter.embedding.android.FlutterActivity
 

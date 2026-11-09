@@ -60,3 +60,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Launch application via dumb-init to ensure graceful termination without zombie processes
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["node", "dist/server.js"]
+

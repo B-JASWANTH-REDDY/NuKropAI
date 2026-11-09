@@ -52,3 +52,4 @@ sequenceDiagram
 | **Freight** | `POST /api/v1/trips/book` | `ApiClient.bookTrip` | `trip.controller.ts` | `trips`, `driver_locations` |
 | **Ledger** | `POST /api/v1/khata/entries`| `ApiClient.saveKhata` | `khata.controller.ts` | `farm_khata_ledger` |
 | **Health** | `GET /health` | App initialization | `server.ts` | PostgreSQL ping |
+

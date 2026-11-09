@@ -16,3 +16,4 @@ data:
   RATE_LIMIT_TIME_WINDOW: "1 minute"
   OTEL_SERVICE_NAME: "nukropai-backend"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318"
+

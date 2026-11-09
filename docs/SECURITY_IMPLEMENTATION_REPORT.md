@@ -29,3 +29,4 @@ This report audits the 20 Security Standards mandated by `docs/ENGINEERING_QUALI
 | **SEC.18** | TLS / HTTPS Enforcement | Strict TLS 1.3 in NGINX ingress with automated Let's Encrypt | Verified |
 | **SEC.19** | Anti-Tampering Logging | Structured JSON logging with Pino; OpenTelemetry trace correlation | Verified |
 | **SEC.20** | Safe File & Image Ingestion | Magic-byte MIME verification and size caps on image uploads | Verified |
+

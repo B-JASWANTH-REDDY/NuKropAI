@@ -39,3 +39,4 @@ This report audits the pixel-for-pixel and layout-level parity between the origi
 | **Card Shape** | `borderRadius` | `16px`, `box-shadow` | `RoundedRectangleBorder(16)` | Exact |
 | **Bottom Bar** | Plantix Floating | Convex Center FAB | `PlantixNavBar` Custom Painter | Exact |
 | **Toast** | Luxury Snack | Shimmer Green Border | `LuxuryToast` with Undo Action | Exact |
+

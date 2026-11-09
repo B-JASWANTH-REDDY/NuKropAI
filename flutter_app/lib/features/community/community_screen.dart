@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/community_post.dart';
+import '../../core/storage/secure_storage.dart';
 import '../../shared/widgets/luxury_toast.dart';
 
 class CommunityScreen extends StatefulWidget {
@@ -198,13 +199,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   if (titleController.text.trim().isEmpty) return;
+                  final session = await SecureStorage.getSession();
+                  final authorName = session?.name.isNotEmpty == true ? session!.name : 'Kisan Farmer';
+                  final authorRole = session?.isDriver == true ? 'Verified Driver' : 'Verified Farmer';
+                  final location = '${session?.district.isNotEmpty == true ? session!.district : "Warangal"}, ${session?.state.isNotEmpty == true ? session!.state : "Telangana"}';
                   final newPost = CommunityPost(
                     id: 'p_${DateTime.now().millisecondsSinceEpoch}',
-                    authorName: 'Jaswanth Reddy',
-                    authorRole: 'Verified Farmer',
-                    location: 'Warangal Rural, Telangana',
+                    authorName: authorName,
+                    authorRole: authorRole,
+                    location: location,
                     cropTag: crop,
                     title: titleController.text.trim(),
                     content: contentController.text.trim(),
@@ -213,12 +218,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   setState(() {
                     _rawPosts.insert(0, newPost);
                   });
-                  Navigator.pop(ctx);
-                  LuxuryToast.show(
-                    context,
-                    message: 'Your query has been posted to Kisan Community!',
-                    icon: Icons.check_circle_rounded,
-                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    LuxuryToast.show(
+                      context,
+                      message: 'Your query has been posted to Kisan Community!',
+                      icon: Icons.check_circle_rounded,
+                    );
+                  }
                 },
                 child: const Text('Post Query'),
               ),

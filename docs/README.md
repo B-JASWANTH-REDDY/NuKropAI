@@ -113,3 +113,4 @@ agriculture-ai-os/
 ├── tests/                   # Master test suites (E2E, journeys, security, permanent standards)
 └── web/                     # Vite + React 18 marketing platform & secure APK gateway
 ```
+

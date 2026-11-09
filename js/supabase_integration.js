@@ -144,16 +144,27 @@ async function nk_fetchCommunityHistory(cropId = 'all', limit = 50) {
   return data || [];
 }
 
+let _commPostChannel = null;
 function nk_subscribeToCommunityPosts(onNewPostCallback) {
-  if (!sbClient) return;
-  sbClient.channel('realtime:community_posts')
-    .on('postgres_changes', {
-      event: 'INSERT', schema: 'public', table: 'community_posts'
-    }, payload => {
-      console.log('🌱 New Community Post:', payload.new.title);
-      onNewPostCallback(payload.new);
-    })
-    .subscribe();
+  if (!sbClient) return null;
+  try {
+    if (_commPostChannel) {
+      try { sbClient.removeChannel(_commPostChannel); } catch(e) {}
+      _commPostChannel = null;
+    }
+    _commPostChannel = sbClient.channel('realtime:community_posts_' + Date.now())
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'community_posts'
+      }, payload => {
+        console.log('🌱 New Community Post:', payload.new.title);
+        if (typeof onNewPostCallback === 'function') onNewPostCallback(payload.new);
+      })
+      .subscribe();
+    return _commPostChannel;
+  } catch(e) {
+    console.warn('Realtime community sub error:', e);
+    return null;
+  }
 }
 
 /**

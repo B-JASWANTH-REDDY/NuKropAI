@@ -109,6 +109,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
       email: newUser.email,
       role: newUser.role,
       full_name: newUser.email.split('@')[0],
+      public_profile_enabled: false,
       created_at: newUser.created_at
     });
     return { rows: [newUser] };
@@ -117,6 +118,43 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   if (queryStr.includes('select * from public.profiles where') && (queryStr.includes('user_id =') || queryStr.includes('id ='))) {
     const profile = memoryStore.profiles.find(p => p.id === params[0] || p.user_id === params[0]);
     return { rows: profile ? [profile] : [] };
+  }
+
+  if (queryStr.includes('update public.profiles set public_profile_enabled =')) {
+    const enabled = params[0];
+    const targetUserId = params[1];
+    const profile = memoryStore.profiles.find(p => p.id === targetUserId || p.user_id === targetUserId);
+    if (profile) {
+      profile.public_profile_enabled = enabled;
+      return { rows: [{ id: profile.id, public_profile_enabled: enabled }] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('select public_profile_enabled from public.profiles where')) {
+    const targetUserId = params[0];
+    const profile = memoryStore.profiles.find(p => p.id === targetUserId || p.user_id === targetUserId);
+    if (profile) {
+      return { rows: [{ public_profile_enabled: profile.public_profile_enabled ?? false }] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('from public.public_profiles')) {
+    const optedIn = memoryStore.profiles
+      .filter(p => p.public_profile_enabled === true)
+      .map(p => ({
+        public_id: p.farmer_id || p.driver_id || `NK-${String(p.id).substring(0, 8)}`,
+        farmer_id: p.farmer_id || null,
+        driver_id: p.driver_id || null,
+        full_name: p.full_name,
+        role: p.role,
+        avatar_url: p.avatar_url || null,
+        district: p.district || null,
+        state: p.state || null,
+        created_at: p.created_at
+      }));
+    return { rows: optedIn };
   }
 
   if (queryStr.includes('select * from public.users where email =')) {

@@ -172,6 +172,68 @@ async function main() {
     assert(body.error.includes('RLS_VIOLATION'));
   });
 
+  // 6. Public Profile Discovery Opt-In Security & Lifecycle
+  await testAsync('ID-6: Default privacy shield: New profile has discovery disabled by default (false)', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` }
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    assert.strictEqual(body.public_profile_enabled, false);
+  });
+
+  await testAsync('ID-7: Authenticated user explicitly opts into public discovery (200 OK)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: { enabled: true }
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.public_profile_enabled, true);
+  });
+
+  await testAsync('ID-8: Authenticated user immediately revokes public discovery opt-in (200 OK)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: { enabled: false }
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    const body = JSON.parse(res.body);
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.public_profile_enabled, false);
+  });
+
+  await testAsync('ID-9: Unauthenticated request to discovery API is rejected (401 Unauthorized)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      payload: { enabled: true }
+    });
+
+    assert.strictEqual(res.statusCode, 401);
+  });
+
+  await testAsync('ID-10: Invalid discovery payload (non-boolean) is rejected (400 Bad Request)', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/auth/profile/discovery',
+      headers: { authorization: `Bearer ${farmerToken}` },
+      payload: { enabled: 'invalid-string' }
+    });
+
+    assert.strictEqual(res.statusCode, 400);
+  });
+
   console.log('\n================================================================================');
   console.log(`📊 CANONICAL IDENTITY AUDIT: ${passed}/${total} PASSED`);
   console.log('================================================================================\n');

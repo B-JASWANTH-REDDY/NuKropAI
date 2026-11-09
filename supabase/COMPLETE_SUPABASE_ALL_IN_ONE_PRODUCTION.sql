@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   preferred_language text DEFAULT 'en'::text,
   dpdp_consent_given boolean DEFAULT false,
   dpdp_consent_timestamp timestamp with time zone DEFAULT NULL,
+  public_profile_enabled boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT profiles_pkey PRIMARY KEY (id)
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS user_id text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS farmer_id text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS public_profile_enabled boolean NOT NULL DEFAULT false;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name text DEFAULT 'Farmer';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone_number text;
@@ -909,10 +911,12 @@ END $$;
 -- STEP 4B: PUBLIC PROFILES SECURE VIEW (DPDP Act 2023 Identity Shield)
 -- ─────────────────────────────────────────────────────────────────
 -- Defined as a SECURITY DEFINER view (WITH security_barrier = true, security_invoker = false)
--- owned by postgres so that authenticated users can discover other users' public identities
+-- owned by postgres so that authenticated users can discover opted-in users' public identities
 -- while keeping the underlying public.profiles table strictly owner-only.
+-- Filters strictly to users who have explicitly opted in (WHERE public_profile_enabled = TRUE).
 -- Excludes internal auth identifiers (id, user_id) and confidential attributes
 -- (phone, village, mandal, email, land_acres, kcc_balance, government identity tags).
+-- Excludes unverified claims (agristack_verified) and private preferences (preferred_language).
 -- Projects only approved public attributes for community identity.
 CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true, security_invoker = false) AS
 SELECT 
@@ -920,14 +924,13 @@ SELECT
   farmer_id,
   driver_id,
   full_name,
+  role,
   avatar_url,
   district,
   state,
-  role,
-  agristack_verified,
-  preferred_language,
   created_at
-FROM public.profiles;
+FROM public.profiles
+WHERE public_profile_enabled = TRUE;
 
 ALTER VIEW public.public_profiles OWNER TO postgres;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;

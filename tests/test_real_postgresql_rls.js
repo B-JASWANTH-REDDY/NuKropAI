@@ -280,16 +280,16 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0.1-3', `Farmer 2 breached Farmer 1 private profile: ${JSON.stringify(f2ReadF1.rows)}`);
     }
 
-    // P0-DEF-1: Verify NO fabricated geographic or consent defaults were assigned
+    // P0-DEF-1: Verify NO fabricated geographic or consent defaults were assigned, and public_profile_enabled defaults to false
     await pglite.exec(`RESET ROLE;`);
     const defaultsCheck = await pglite.query(
-      `SELECT village, district, state, land_extent_acres, dpdp_consent_given FROM public.profiles WHERE id = $1`,
+      `SELECT village, district, state, land_extent_acres, dpdp_consent_given, public_profile_enabled FROM public.profiles WHERE id = $1`,
       [farmer1Id]
     );
     const defRow = defaultsCheck.rows[0];
     if (defRow.village === null && defRow.district === null && defRow.state === null &&
-        defRow.land_extent_acres === null && defRow.dpdp_consent_given === false) {
-      pass('P0-DEF-1', 'Missing profile attributes stored as NULL/false without fabricated defaults (no Hanamkonda/Warangal/Telangana/4.50/TRUE)');
+        defRow.land_extent_acres === null && defRow.dpdp_consent_given === false && defRow.public_profile_enabled === false) {
+      pass('P0-DEF-1', 'Missing profile attributes stored as NULL/false without fabricated defaults (no Hanamkonda/Warangal/Telangana/4.50/TRUE, public_profile_enabled=false)');
     } else {
       fail('P0-DEF-1', `Profile received fabricated defaults: ${JSON.stringify(defRow)}`);
     }
@@ -302,17 +302,39 @@ $$ LANGUAGE plpgsql STABLE;`
       ON CONFLICT (id) DO NOTHING;
     `);
     const f3Check = await pglite.query(
-      `SELECT village, district, state, dpdp_consent_given FROM public.profiles WHERE id = $1`,
+      `SELECT village, district, state, dpdp_consent_given, public_profile_enabled FROM public.profiles WHERE id = $1`,
       [farmer3Id]
     );
     if (f3Check.rows[0]?.village === 'Alwal' && f3Check.rows[0]?.district === 'Medchal' &&
-        f3Check.rows[0]?.state === 'Telangana' && f3Check.rows[0]?.dpdp_consent_given === true) {
+        f3Check.rows[0]?.state === 'Telangana' && f3Check.rows[0]?.dpdp_consent_given === true &&
+        f3Check.rows[0]?.public_profile_enabled === false) {
       pass('P0-DEF-2', 'Explicit user attributes and DPDP consent are preserved accurately without being clobbered');
     } else {
       fail('P0-DEF-2', `Explicit attributes not preserved: ${JSON.stringify(f3Check.rows[0])}`);
     }
 
-    // AS FARMER 2: Query public.public_profiles discovery view to discover Farmer 1
+    // P0-OPTIN-1: AS FARMER 2: Query public.public_profiles before Farmer 1 opts in -> returns 0 rows (default privacy shield)
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2BeforeOptIn = await pglite.query(
+      `SELECT * FROM public.public_profiles WHERE full_name = 'Farmer One'`
+    );
+    if (f2BeforeOptIn.rows.length === 0) {
+      pass('P0-OPTIN-1', 'New account is NOT publicly discoverable before explicit opt-in (public_profiles returned 0 rows)');
+    } else {
+      fail('P0-OPTIN-1', `Farmer 1 was prematurely discoverable: ${JSON.stringify(f2BeforeOptIn.rows)}`);
+    }
+
+    // P0-OPTIN-2: AS FARMER 1: Explicitly opt-in to public discovery
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
+    `);
+    await pglite.query(`UPDATE public.profiles SET public_profile_enabled = TRUE WHERE id = $1`, [farmer1Id]);
+
+    // P0-OPTIN-3: AS FARMER 2: Query public.public_profiles now that Farmer 1 has opted in
     await pglite.exec(`
       SET ROLE authenticated;
       SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
@@ -323,10 +345,13 @@ $$ LANGUAGE plpgsql STABLE;`
     if (f2DiscoverF1.rows.length === 1) {
       const discRow = f2DiscoverF1.rows[0];
       const hasNoUuid = discRow.id === undefined && discRow.user_id === undefined;
-      const hasNoPii = discRow.phone === undefined && discRow.email === undefined && discRow.land_acres === undefined && discRow.village === undefined;
+      const hasNoPii = discRow.phone === undefined && discRow.email === undefined && discRow.land_acres === undefined && discRow.village === undefined && discRow.kcc_balance === undefined;
       const hasPublicFields = discRow.public_id !== undefined && discRow.farmer_id !== undefined && discRow.full_name === 'Farmer One';
-      if (hasNoUuid && hasNoPii && hasPublicFields) {
-        pass('P1.1-DISC-1', 'Farmer 2 successfully discovers Farmer 1 via public.public_profiles view (approved metadata visible, PII/UUIDs stripped)');
+      const approvedKeys = ['public_id', 'farmer_id', 'driver_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'created_at'];
+      const returnedKeys = Object.keys(discRow);
+      const unapprovedKeys = returnedKeys.filter(k => !approvedKeys.includes(k));
+      if (hasNoUuid && hasNoPii && hasPublicFields && unapprovedKeys.length === 0) {
+        pass('P1.1-DISC-1', 'Farmer 2 discovers Farmer 1 after opt-in (approved projection only: no UUIDs, no PII, no unverified claims)');
       } else {
         fail('P1.1-DISC-1', `Discovery returned unexpected fields: ${JSON.stringify(discRow)}`);
       }
@@ -334,16 +359,55 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P1.1-DISC-1', `Farmer 2 could not discover Farmer 1 via public.public_profiles (rows returned: ${f2DiscoverF1.rows.length})`);
     }
 
-    // AS FARMER 1: Query public.public_profiles discovery view for own public projection
+    // P0-OPTIN-4: AS FARMER 1: Revoke opt-in -> Immediate revocation
     await pglite.exec(`
       SET ROLE authenticated;
       SET request.jwt.claims = '{"sub": "${farmer1Id}", "role": "authenticated"}';
     `);
-    const f1ReadView = await pglite.query(`SELECT * FROM public.public_profiles`);
-    if (f1ReadView.rows.length >= 1) {
-      const row = f1ReadView.rows[0];
+    await pglite.query(`UPDATE public.profiles SET public_profile_enabled = FALSE WHERE id = $1`, [farmer1Id]);
+
+    // AS FARMER 2: Query again -> immediately 0 rows returned
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2AfterRevocation = await pglite.query(
+      `SELECT * FROM public.public_profiles WHERE full_name = 'Farmer One'`
+    );
+    if (f2AfterRevocation.rows.length === 0) {
+      pass('P0-OPTIN-REVOKE', 'Revocation is immediate: Farmer 1 is instantly hidden from public discovery upon opt-out (0 rows)');
+    } else {
+      fail('P0-OPTIN-REVOKE', `Farmer 1 remained discoverable after revocation: ${JSON.stringify(f2AfterRevocation.rows)}`);
+    }
+
+    // P0-CROSS-MUTATE-BLOCKED: Adversarial mutation: Farmer 2 attempts to change Farmer 1's public_profile_enabled
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2TamperF1 = await pglite.query(
+      `UPDATE public.profiles SET public_profile_enabled = TRUE WHERE id = $1 RETURNING id`,
+      [farmer1Id]
+    );
+    if (f2TamperF1.rows.length === 0) {
+      pass('P0-CROSS-MUTATE-BLOCKED', 'Cross-user visibility tampering blocked: Farmer 2 cannot alter Farmer 1 visibility setting (0 rows affected)');
+    } else {
+      fail('P0-CROSS-MUTATE-BLOCKED', `Farmer 2 illegally mutated Farmer 1 visibility setting!`);
+    }
+
+    // Re-enable Farmer 3's opt-in for projection verification
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer3Id}", "role": "authenticated"}';
+    `);
+    await pglite.query(`UPDATE public.profiles SET public_profile_enabled = TRUE WHERE id = $1`, [farmer3Id]);
+
+    // AS FARMER 3: Query public.public_profiles discovery view for own public projection
+    const f3ReadView = await pglite.query(`SELECT * FROM public.public_profiles WHERE full_name = 'Farmer Three'`);
+    if (f3ReadView.rows.length === 1) {
+      const row = f3ReadView.rows[0];
       const returnedKeys = Object.keys(row);
-      const approvedKeys = ['public_id', 'farmer_id', 'driver_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'agristack_verified', 'preferred_language', 'created_at'];
+      const approvedKeys = ['public_id', 'farmer_id', 'driver_id', 'full_name', 'role', 'avatar_url', 'district', 'state', 'created_at'];
       const unapprovedKeys = returnedKeys.filter(k => !approvedKeys.includes(k));
       
       // Verify primary key id and internal user_id are strictly stripped from public discovery
@@ -356,12 +420,12 @@ $$ LANGUAGE plpgsql STABLE;`
                              row.village !== undefined || row.kcc_balance !== undefined;
       
       if (!hasAuthUuid && hasPublicId && !exposesPrivate && unapprovedKeys.length === 0) {
-        pass('P0.1-4', 'Public discovery view uses surrogate public identifier (farmer_id/public_id) and strips internal auth UUID (id/user_id) without leaking PII/financial/land data');
+        pass('P0.1-4', 'Public discovery view uses surrogate public identifier (farmer_id/public_id) and strips internal auth UUID without leaking PII/financial/land data');
       } else {
         fail('P0.1-4', `public_profiles view exposes private or unapproved columns: ${unapprovedKeys.join(', ')} (hasAuthUuid: ${hasAuthUuid})`);
       }
     } else {
-      fail('P0.1-4', `public_profiles view failed to return rows (rows: ${f1ReadView.rows.length})`);
+      fail('P0.1-4', `public_profiles view failed to return rows for opted-in user (rows: ${f3ReadView.rows.length})`);
     }
 
     // P1.1-ADV-1: Adversarial Test - Attempting to query public_profiles by auth UUID 'id' fails because 'id' column does not exist

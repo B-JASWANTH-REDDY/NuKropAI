@@ -255,6 +255,31 @@ class ApiClient {
     );
   }
 
+  /// Sends a typed PATCH request
+  static Future<T> patch<T>(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    String? idempotencyKey,
+    T Function(dynamic json)? fromJson,
+  }) async {
+    final stableKey = idempotencyKey ?? _generateIdempotencyKey();
+    return _executeWithRetry<T>(
+      () async {
+        final uri = Uri.parse('$baseUrl$endpoint');
+        final headers = await _buildHeaders(
+          idempotencyKey: stableKey,
+          isMutation: true,
+        );
+        return _client.patch(
+          uri,
+          headers: headers,
+          body: body != null ? jsonEncode(body) : null,
+        );
+      },
+      fromJson: fromJson,
+    );
+  }
+
   /// Sends a typed DELETE request
   static Future<T> delete<T>(
     String endpoint, {

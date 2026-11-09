@@ -328,3 +328,78 @@ export const logout = async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({ success: true, message: 'Token already expired or invalid, session purged' });
   }
 };
+
+/**
+ * Updates the authenticated user's public profile discovery setting (opt-in / opt-out).
+ * SECURITY & PRIVACY:
+ * 1. Strictly owner-only: Binds to request.user.id extracted from verified JWT claims.
+ * 2. Never permits arbitrary client mutation of another user's visibility.
+ * 3. Immediate revocation: Setting public_profile_enabled = FALSE immediately filters out
+ *    the user from public.public_profiles view.
+ */
+export const updateProfileDiscovery = async (request: FastifyRequest, reply: FastifyReply) => {
+  const userId = request.user?.id;
+  if (!userId) {
+    return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
+  }
+
+  const body = (request.body as any) || {};
+  const enabled = body.enabled !== undefined ? body.enabled : body.public_profile_enabled;
+
+  if (typeof enabled !== 'boolean') {
+    return reply.status(400).send({ 
+      error: 'Missing or invalid "enabled" parameter. A boolean value (true/false) is required.' 
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      'UPDATE public.profiles SET public_profile_enabled = $1 WHERE (id = $2 OR user_id = $2) RETURNING id, public_profile_enabled',
+      [enabled, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.status(404).send({ error: 'Profile not found for authenticated user' });
+    }
+
+    return reply.send({
+      success: true,
+      public_profile_enabled: Boolean(result.rows[0].public_profile_enabled),
+      message: enabled 
+        ? 'Public profile discovery enabled: Your approved public profile is now discoverable.' 
+        : 'Public profile discovery revoked: Your profile is immediately hidden from public discovery.'
+    });
+  } catch (err: any) {
+    request.log.error(err, 'Failed to update profile discovery setting');
+    return reply.status(500).send({ error: 'Internal server error while updating profile discovery setting' });
+  }
+};
+
+/**
+ * Retrieves the authenticated user's current public profile discovery setting.
+ */
+export const getProfileDiscovery = async (request: FastifyRequest, reply: FastifyReply) => {
+  const userId = request.user?.id;
+  if (!userId) {
+    return reply.status(401).send({ error: 'Unauthorized: Authentication required' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT public_profile_enabled FROM public.profiles WHERE (id = $1 OR user_id = $1)',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return reply.status(404).send({ error: 'Profile not found for authenticated user' });
+    }
+
+    return reply.send({
+      success: true,
+      public_profile_enabled: Boolean(result.rows[0].public_profile_enabled)
+    });
+  } catch (err: any) {
+    request.log.error(err, 'Failed to fetch profile discovery setting');
+    return reply.status(500).send({ error: 'Internal server error while fetching profile discovery setting' });
+  }
+};

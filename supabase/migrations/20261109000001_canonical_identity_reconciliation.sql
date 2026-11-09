@@ -57,6 +57,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS agristack_verified BOOLEAN 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS biometric_lock BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_given BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_timestamp TIMESTAMPTZ;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS public_profile_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Drop legacy fabricated defaults from columns to guarantee unverified attributes are never assumed
 ALTER TABLE public.profiles ALTER COLUMN village DROP DEFAULT;
@@ -102,6 +103,7 @@ DECLARE
   v_district text;
   v_state text;
   v_dpdp_consent boolean;
+  v_public_profile_enabled boolean;
   v_farmer_id text;
   v_driver_id text;
 BEGIN
@@ -146,6 +148,13 @@ BEGIN
     v_dpdp_consent := FALSE;
   END IF;
 
+  -- Public profile discovery opt-in: defaults strictly to FALSE (never exposed without explicit opt-in)
+  IF (NEW.raw_user_meta_data->>'public_profile_enabled') IS NOT NULL THEN
+    v_public_profile_enabled := (NEW.raw_user_meta_data->>'public_profile_enabled')::boolean;
+  ELSE
+    v_public_profile_enabled := FALSE;
+  END IF;
+
   INSERT INTO public.profiles (
     id,
     user_id,
@@ -162,6 +171,7 @@ BEGIN
     state,
     dpdp_consent_given,
     dpdp_consent_timestamp,
+    public_profile_enabled,
     created_at,
     updated_at
   )
@@ -181,6 +191,7 @@ BEGIN
     v_state,
     v_dpdp_consent,
     CASE WHEN v_dpdp_consent THEN NOW() ELSE NULL END,
+    v_public_profile_enabled,
     NOW(),
     NOW()
   )
@@ -199,6 +210,7 @@ BEGIN
       WHEN EXCLUDED.dpdp_consent_given = TRUE AND public.profiles.dpdp_consent_given IS NOT TRUE THEN NOW()
       ELSE public.profiles.dpdp_consent_timestamp 
     END,
+    public_profile_enabled = COALESCE(public.profiles.public_profile_enabled, EXCLUDED.public_profile_enabled, FALSE),
     updated_at = NOW();
 
   RETURN NEW;
@@ -374,12 +386,14 @@ CREATE POLICY "profiles_delete_own"
     auth.uid() = id OR auth.uid() = user_id OR auth.role() = 'service_role'
   );
 
--- 2. RESTRICTED PUBLIC PROFILES VIEW (Approved Non-Sensitive Public Discovery Only)
+-- 2. RESTRICTED PUBLIC PROFILES VIEW (Approved Opt-In Non-Sensitive Public Discovery Only)
 -- Defined as a SECURITY DEFINER view (WITH security_barrier = true, security_invoker = false)
--- owned by postgres so that authenticated users can discover other users' public identities
+-- owned by postgres so that authenticated users can discover opted-in users' public identities
 -- while keeping the underlying public.profiles table strictly owner-only.
+-- Filters strictly to users who have explicitly opted in (WHERE public_profile_enabled = TRUE).
 -- Excludes internal auth identifiers (id, user_id) and confidential attributes
 -- (phone, email, village, mandal, land_acres, land_extent_acres, kcc_balance, kcc_credit_limit, agristack_id, dpdp_consent).
+-- Excludes unverified claims (agristack_verified) and private preferences (preferred_language).
 -- Exposes distinct public identifier (farmer_id / driver_id / surrogate public_id) without auth UUIDs.
 CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true, security_invoker = false) AS
 SELECT 
@@ -391,10 +405,9 @@ SELECT
   avatar_url,
   district,
   state,
-  agristack_verified,
-  preferred_language,
   created_at
-FROM public.profiles;
+FROM public.profiles
+WHERE public_profile_enabled = TRUE;
 
 ALTER VIEW public.public_profiles OWNER TO postgres;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;

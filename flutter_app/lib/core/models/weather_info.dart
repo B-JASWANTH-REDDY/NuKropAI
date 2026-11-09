@@ -63,7 +63,9 @@ class WeatherInfo {
         advisory['status']?.toString() ??
         (isSafe ? 'OPTIMAL TO SPRAY' : 'Advisory unavailable');
     final window = advisory['window']?.toString() ??
-        (isSafe ? 'Condition-dependent: apply while parameters remain within safe ranges' : 'Unavailable');
+        (isSafe
+            ? 'Condition-dependent: apply while parameters remain within safe ranges'
+            : 'Unavailable');
 
     DateTime? obsTime;
     if (json['observationTime'] != null) {

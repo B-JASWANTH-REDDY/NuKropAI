@@ -828,7 +828,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    isOptimal ? 'OPTIMAL TO SPRAY' : 'UNSAFE TO SPRAY',
+                    isOptimal
+                        ? 'OPTIMAL TO SPRAY'
+                        : (weather.sprayAdvisory.contains('UNAVAILABLE')
+                            ? 'ADVISORY UNAVAILABLE'
+                            : 'UNSAFE TO SPRAY'),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -868,6 +872,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     const TextStyle(fontSize: 9, color: AppConstants.textMuted),
               ),
             ),
+            if (weather.disclaimer != null) ...[
+              const SizedBox(height: 3),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  weather.disclaimer!,
+                  style: const TextStyle(
+                      fontSize: 8.5,
+                      fontStyle: FontStyle.italic,
+                      color: AppConstants.textMuted),
+                ),
+              ),
+            ],
           ],
         ),
       ),

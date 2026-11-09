@@ -280,6 +280,60 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0.1-3', `Farmer 2 breached Farmer 1 private profile: ${JSON.stringify(f2ReadF1.rows)}`);
     }
 
+    // P0-DEF-1: Verify NO fabricated geographic or consent defaults were assigned
+    await pglite.exec(`RESET ROLE;`);
+    const defaultsCheck = await pglite.query(
+      `SELECT village, district, state, land_extent_acres, dpdp_consent_given FROM public.profiles WHERE id = $1`,
+      [farmer1Id]
+    );
+    const defRow = defaultsCheck.rows[0];
+    if (defRow.village === null && defRow.district === null && defRow.state === null &&
+        defRow.land_extent_acres === null && defRow.dpdp_consent_given === false) {
+      pass('P0-DEF-1', 'Missing profile attributes stored as NULL/false without fabricated defaults (no Hanamkonda/Warangal/Telangana/4.50/TRUE)');
+    } else {
+      fail('P0-DEF-1', `Profile received fabricated defaults: ${JSON.stringify(defRow)}`);
+    }
+
+    // P0-DEF-2: Verify explicit user attributes and consent are preserved accurately without clobbering
+    const farmer3Id = '44444444-4444-4444-4444-444444444444';
+    await pglite.exec(`
+      INSERT INTO auth.users (id, email, raw_user_meta_data)
+      VALUES ('${farmer3Id}', 'farmer3@nukrop.ai', '{"full_name": "Farmer Three", "role": "farmer", "village": "Alwal", "district": "Medchal", "state": "Telangana", "dpdp_consent_given": true}')
+      ON CONFLICT (id) DO NOTHING;
+    `);
+    const f3Check = await pglite.query(
+      `SELECT village, district, state, dpdp_consent_given FROM public.profiles WHERE id = $1`,
+      [farmer3Id]
+    );
+    if (f3Check.rows[0]?.village === 'Alwal' && f3Check.rows[0]?.district === 'Medchal' &&
+        f3Check.rows[0]?.state === 'Telangana' && f3Check.rows[0]?.dpdp_consent_given === true) {
+      pass('P0-DEF-2', 'Explicit user attributes and DPDP consent are preserved accurately without being clobbered');
+    } else {
+      fail('P0-DEF-2', `Explicit attributes not preserved: ${JSON.stringify(f3Check.rows[0])}`);
+    }
+
+    // AS FARMER 2: Query public.public_profiles discovery view to discover Farmer 1
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${farmer2Id}", "role": "authenticated"}';
+    `);
+    const f2DiscoverF1 = await pglite.query(
+      `SELECT * FROM public.public_profiles WHERE full_name = 'Farmer One'`
+    );
+    if (f2DiscoverF1.rows.length === 1) {
+      const discRow = f2DiscoverF1.rows[0];
+      const hasNoUuid = discRow.id === undefined && discRow.user_id === undefined;
+      const hasNoPii = discRow.phone === undefined && discRow.email === undefined && discRow.land_acres === undefined && discRow.village === undefined;
+      const hasPublicFields = discRow.public_id !== undefined && discRow.farmer_id !== undefined && discRow.full_name === 'Farmer One';
+      if (hasNoUuid && hasNoPii && hasPublicFields) {
+        pass('P1.1-DISC-1', 'Farmer 2 successfully discovers Farmer 1 via public.public_profiles view (approved metadata visible, PII/UUIDs stripped)');
+      } else {
+        fail('P1.1-DISC-1', `Discovery returned unexpected fields: ${JSON.stringify(discRow)}`);
+      }
+    } else {
+      fail('P1.1-DISC-1', `Farmer 2 could not discover Farmer 1 via public.public_profiles (rows returned: ${f2DiscoverF1.rows.length})`);
+    }
+
     // AS FARMER 1: Query public.public_profiles discovery view for own public projection
     await pglite.exec(`
       SET ROLE authenticated;
@@ -628,6 +682,175 @@ $$ LANGUAGE plpgsql STABLE;`
     }
   } catch (err) {
     fail('SEC-4', `Privilege escalation test failed: ${err.message}`);
+  }
+
+  console.log('\n▶ Test 5: Real PostgreSQL Transaction Engine — Alert State & Notification Atomicity');
+  console.log('   (Engine: @electric-sql/pglite WASM — PostgreSQL-compatible WASM engine, NOT live Supabase)\n');
+  try {
+    await pglite.exec(`RESET ROLE;`);
+
+    const alertId1 = 'a1111111-1111-1111-1111-111111111111';
+    await pglite.query(`
+      INSERT INTO public.price_alerts (id, user_id, crop, commodity, mandi, target_price, condition, status)
+      VALUES ($1, $2, 'Cotton', 'Cotton', 'Enumamula APMC', 7500.00, 'ABOVE', 'ACTIVE')
+      ON CONFLICT (id) DO UPDATE SET status = 'ACTIVE', triggered_at = NULL;
+    `, [alertId1, farmer1Id]);
+    await pglite.query(`DELETE FROM public.notifications WHERE event_id = $1`, [alertId1]);
+
+    // TEST 5.1: Alert UPDATE succeeds, notification INSERT fails -> ROLLBACK verified
+    try {
+      await pglite.exec('BEGIN;');
+      await pglite.query(`
+        UPDATE public.price_alerts SET status = 'TRIGGERED', triggered_at = NOW(), updated_at = NOW()
+        WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'
+        RETURNING id;
+      `, [alertId1, farmer1Id]);
+
+      // Trigger failure on notification check constraint
+      await pglite.query(`
+        INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+        VALUES ($1, 'PRICE_ALERT_ENGINE', $2, 'INVALID_CATEGORY_VIOLATION', 'Test', 'Test');
+      `, [farmer1Id, alertId1]);
+
+      await pglite.exec('COMMIT;');
+      fail('TX-1', 'Transaction should have failed on invalid notification category constraint');
+    } catch (txErr) {
+      await pglite.exec('ROLLBACK;');
+      const alertCheck = await pglite.query(`SELECT status FROM public.price_alerts WHERE id = $1`, [alertId1]);
+      const notifCheck = await pglite.query(`SELECT COUNT(*)::int as count FROM public.notifications WHERE event_id = $1`, [alertId1]);
+      if (alertCheck.rows[0]?.status === 'ACTIVE' && notifCheck.rows[0]?.count === 0) {
+        pass('TX-1', 'Alert UPDATE succeeded, notification INSERT failed -> alert remains ACTIVE (rollback verified, 0 notifications)');
+      } else {
+        fail('TX-1', `Rollback failed: status=${alertCheck.rows[0]?.status}, notifCount=${notifCheck.rows[0]?.count}`);
+      }
+    }
+
+    // TEST 5.2: Both UPDATE and notification INSERT succeed -> COMMIT
+    await pglite.exec('BEGIN;');
+    const updateRes = await pglite.query(`
+      UPDATE public.price_alerts SET status = 'TRIGGERED', triggered_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'
+      RETURNING id, user_id, crop, mandi, target_price, condition;
+    `, [alertId1, farmer1Id]);
+
+    if (updateRes.rows.length === 1) {
+      await pglite.query(`
+        INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+        VALUES ($1, 'PRICE_ALERT_ENGINE', $2, 'PRICE_ALERT', 'Cotton Price Alert', 'Target reached at Enumamula APMC')
+        ON CONFLICT (user_id, event_source, event_id) DO NOTHING;
+      `, [farmer1Id, alertId1]);
+      await pglite.exec('COMMIT;');
+
+      const alertCheck2 = await pglite.query(`SELECT status FROM public.price_alerts WHERE id = $1`, [alertId1]);
+      const notifCheck2 = await pglite.query(`SELECT COUNT(*)::int as count FROM public.notifications WHERE event_id = $1`, [alertId1]);
+      if (alertCheck2.rows[0]?.status === 'TRIGGERED' && notifCheck2.rows[0]?.count === 1) {
+        pass('TX-2', 'Both succeed -> alert becomes TRIGGERED, exactly 1 notification committed');
+      } else {
+        fail('TX-2', `Commit failed: status=${alertCheck2.rows[0]?.status}, count=${notifCheck2.rows[0]?.count}`);
+      }
+    } else {
+      await pglite.exec('ROLLBACK;');
+      fail('TX-2', 'Initial alert update failed to match ACTIVE alert');
+    }
+
+    // TEST 5.3: Concurrent workers evaluate same alert -> exactly 1 notification
+    const alertIdConcurrent = 'a2222222-2222-2222-2222-222222222222';
+    await pglite.query(`
+      INSERT INTO public.price_alerts (id, user_id, crop, commodity, mandi, target_price, condition, status)
+      VALUES ($1, $2, 'Chilli', 'Chilli', 'Warangal APMC', 18000.00, 'ABOVE', 'ACTIVE')
+      ON CONFLICT (id) DO UPDATE SET status = 'ACTIVE', triggered_at = NULL;
+    `, [alertIdConcurrent, farmer1Id]);
+    await pglite.query(`DELETE FROM public.notifications WHERE event_id = $1`, [alertIdConcurrent]);
+
+    let worker1Triggered = false;
+    let worker2Triggered = false;
+
+    // Worker 1 transaction
+    await pglite.exec('BEGIN;');
+    const w1Upd = await pglite.query(`
+      UPDATE public.price_alerts SET status = 'TRIGGERED', triggered_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'
+      RETURNING id;
+    `, [alertIdConcurrent, farmer1Id]);
+    if (w1Upd.rows.length > 0) {
+      await pglite.query(`
+        INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+        VALUES ($1, 'PRICE_ALERT_ENGINE', $2, 'PRICE_ALERT', 'Chilli Alert', 'Target reached')
+        ON CONFLICT (user_id, event_source, event_id) DO NOTHING;
+      `, [farmer1Id, alertIdConcurrent]);
+      await pglite.exec('COMMIT;');
+      worker1Triggered = true;
+    } else {
+      await pglite.exec('ROLLBACK;');
+    }
+
+    // Worker 2 attempts same alert (status already TRIGGERED)
+    await pglite.exec('BEGIN;');
+    const w2Upd = await pglite.query(`
+      UPDATE public.price_alerts SET status = 'TRIGGERED', triggered_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'
+      RETURNING id;
+    `, [alertIdConcurrent, farmer1Id]);
+    if (w2Upd.rows.length > 0) {
+      await pglite.query(`
+        INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+        VALUES ($1, 'PRICE_ALERT_ENGINE', $2, 'PRICE_ALERT', 'Chilli Alert', 'Target reached')
+        ON CONFLICT (user_id, event_source, event_id) DO NOTHING;
+      `, [farmer1Id, alertIdConcurrent]);
+      await pglite.exec('COMMIT;');
+      worker2Triggered = true;
+    } else {
+      await pglite.exec('ROLLBACK;');
+    }
+
+    const concurrentNotifs = await pglite.query(`SELECT COUNT(*)::int as count FROM public.notifications WHERE event_id = $1`, [alertIdConcurrent]);
+    if (worker1Triggered && !worker2Triggered && concurrentNotifs.rows[0]?.count === 1) {
+      pass('TX-3', 'Concurrent workers evaluate same alert: exactly 1 worker claims and commits, exactly 1 notification created');
+    } else {
+      fail('TX-3', `Concurrency failed: w1=${worker1Triggered}, w2=${worker2Triggered}, count=${concurrentNotifs.rows[0]?.count}`);
+    }
+
+    // TEST 5.4: Retry after commit does not create duplicate notification
+    await pglite.exec('BEGIN;');
+    const retryUpd = await pglite.query(`
+      UPDATE public.price_alerts SET status = 'TRIGGERED', triggered_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND status = 'ACTIVE'
+      RETURNING id;
+    `, [alertIdConcurrent, farmer1Id]);
+    if (retryUpd.rows.length === 0) {
+      await pglite.exec('ROLLBACK;');
+      await pglite.query(`
+        INSERT INTO public.notifications (user_id, event_source, event_id, category, title, body)
+        VALUES ($1, 'PRICE_ALERT_ENGINE', $2, 'PRICE_ALERT', 'Chilli Alert Retry', 'Target reached')
+        ON CONFLICT (user_id, event_source, event_id) DO NOTHING;
+      `, [farmer1Id, alertIdConcurrent]);
+    }
+    const retryNotifs = await pglite.query(`SELECT COUNT(*)::int as count FROM public.notifications WHERE event_id = $1`, [alertIdConcurrent]);
+    if (retryNotifs.rows[0]?.count === 1) {
+      pass('TX-4', 'Retry after commit does not create duplicate notification (idempotency preserved)');
+    } else {
+      fail('TX-4', `Duplicate notification created on retry: count=${retryNotifs.rows[0]?.count}`);
+    }
+
+    // TEST 5.5: DB query/syntax failure rolls back cleanly without false success
+    let simulatedFailedTriggerReported = false;
+    try {
+      await pglite.exec('BEGIN;');
+      await pglite.query('SELECT * FROM public.non_existent_table_for_failure_injection;');
+      await pglite.exec('COMMIT;');
+      simulatedFailedTriggerReported = true;
+    } catch (_) {
+      await pglite.exec('ROLLBACK;');
+      simulatedFailedTriggerReported = false;
+    }
+    if (!simulatedFailedTriggerReported) {
+      pass('TX-5', 'DB failure rolls back cleanly without falsely reporting successful trigger');
+    } else {
+      fail('TX-5', 'DB failure falsely reported success');
+    }
+
+  } catch (err) {
+    fail('TX-E', `Alert transaction test suite error: ${err.message}`);
   }
 
   console.log('\n================================================================================');

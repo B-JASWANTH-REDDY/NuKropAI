@@ -40,13 +40,13 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role VARCHAR(30) DEFAULT 'f
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS farmer_id VARCHAR(50);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS driver_id VARCHAR(50);
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS village VARCHAR(100) DEFAULT 'Hanamkonda';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS village VARCHAR(100);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS mandal VARCHAR(100);
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS district VARCHAR(50) DEFAULT 'Warangal';
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS state VARCHAR(50) DEFAULT 'Telangana';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS district VARCHAR(50);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS state VARCHAR(50);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS land_acres NUMERIC(6,2);
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS land_extent_acres NUMERIC(6,2) DEFAULT 4.50;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT 'te';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS land_extent_acres NUMERIC(6,2);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(10) DEFAULT 'en';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS soil_type VARCHAR(100);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS primary_crops TEXT[];
@@ -55,8 +55,16 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS kcc_balance NUMERIC(10,2);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS agristack_id VARCHAR(100);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS agristack_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS biometric_lock BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_given BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_timestamp TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_given BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS dpdp_consent_timestamp TIMESTAMPTZ;
+
+-- Drop legacy fabricated defaults from columns to guarantee unverified attributes are never assumed
+ALTER TABLE public.profiles ALTER COLUMN village DROP DEFAULT;
+ALTER TABLE public.profiles ALTER COLUMN district DROP DEFAULT;
+ALTER TABLE public.profiles ALTER COLUMN state DROP DEFAULT;
+ALTER TABLE public.profiles ALTER COLUMN land_extent_acres DROP DEFAULT;
+ALTER TABLE public.profiles ALTER COLUMN dpdp_consent_given SET DEFAULT FALSE;
+ALTER TABLE public.profiles ALTER COLUMN dpdp_consent_timestamp DROP DEFAULT;
 
 -- Safely make phone nullable to support email-based authentication without synthetic phone numbers
 DO $$
@@ -90,7 +98,10 @@ DECLARE
   v_role text;
   v_requested_role text;
   v_village text;
+  v_mandal text;
   v_district text;
+  v_state text;
+  v_dpdp_consent boolean;
   v_farmer_id text;
   v_driver_id text;
 BEGIN
@@ -122,8 +133,18 @@ BEGIN
     v_farmer_id := 'NKF-' || floor(10000 + random() * 89999)::text;
   END IF;
 
-  v_village := COALESCE(NEW.raw_user_meta_data->>'village', 'Hanamkonda');
-  v_district := COALESCE(NEW.raw_user_meta_data->>'district', 'Warangal');
+  -- Extract location strictly from user metadata (never fabricate unverified geographic attributes)
+  v_village := NEW.raw_user_meta_data->>'village';
+  v_mandal := NEW.raw_user_meta_data->>'mandal';
+  v_district := NEW.raw_user_meta_data->>'district';
+  v_state := NEW.raw_user_meta_data->>'state';
+
+  -- DPDP Consent: unknown or missing consent defaults strictly to FALSE (never fabricated as TRUE)
+  IF (NEW.raw_user_meta_data->>'dpdp_consent_given') IS NOT NULL THEN
+    v_dpdp_consent := (NEW.raw_user_meta_data->>'dpdp_consent_given')::boolean;
+  ELSE
+    v_dpdp_consent := FALSE;
+  END IF;
 
   INSERT INTO public.profiles (
     id,
@@ -136,8 +157,11 @@ BEGIN
     farmer_id,
     driver_id,
     village,
+    mandal,
     district,
     state,
+    dpdp_consent_given,
+    dpdp_consent_timestamp,
     created_at,
     updated_at
   )
@@ -152,8 +176,11 @@ BEGIN
     v_farmer_id,
     v_driver_id,
     v_village,
+    v_mandal,
     v_district,
-    'Telangana',
+    v_state,
+    v_dpdp_consent,
+    CASE WHEN v_dpdp_consent THEN NOW() ELSE NULL END,
     NOW(),
     NOW()
   )
@@ -163,6 +190,15 @@ BEGIN
     full_name = CASE WHEN public.profiles.full_name IS NULL OR public.profiles.full_name = 'Farmer' THEN EXCLUDED.full_name ELSE public.profiles.full_name END,
     phone = COALESCE(public.profiles.phone, EXCLUDED.phone),
     phone_number = COALESCE(public.profiles.phone_number, EXCLUDED.phone_number),
+    village = COALESCE(public.profiles.village, EXCLUDED.village),
+    mandal = COALESCE(public.profiles.mandal, EXCLUDED.mandal),
+    district = COALESCE(public.profiles.district, EXCLUDED.district),
+    state = COALESCE(public.profiles.state, EXCLUDED.state),
+    dpdp_consent_given = COALESCE(public.profiles.dpdp_consent_given, EXCLUDED.dpdp_consent_given, FALSE),
+    dpdp_consent_timestamp = CASE 
+      WHEN EXCLUDED.dpdp_consent_given = TRUE AND public.profiles.dpdp_consent_given IS NOT TRUE THEN NOW()
+      ELSE public.profiles.dpdp_consent_timestamp 
+    END,
     updated_at = NOW();
 
   RETURN NEW;
@@ -339,11 +375,13 @@ CREATE POLICY "profiles_delete_own"
   );
 
 -- 2. RESTRICTED PUBLIC PROFILES VIEW (Approved Non-Sensitive Public Discovery Only)
--- Defined WITH (security_invoker = true) to strictly honor row-level security.
+-- Defined as a SECURITY DEFINER view (WITH security_barrier = true, security_invoker = false)
+-- owned by postgres so that authenticated users can discover other users' public identities
+-- while keeping the underlying public.profiles table strictly owner-only.
 -- Excludes internal auth identifiers (id, user_id) and confidential attributes
--- (phone, email, village, mandal, land_acres, kcc_balance, kcc_credit_limit, agristack_id, dpdp_consent).
+-- (phone, email, village, mandal, land_acres, land_extent_acres, kcc_balance, kcc_credit_limit, agristack_id, dpdp_consent).
 -- Exposes distinct public identifier (farmer_id / driver_id / surrogate public_id) without auth UUIDs.
-CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true, security_invoker = false) AS
 SELECT 
   COALESCE(farmer_id, driver_id, 'NK-' || substring(encode(sha256(id::text::bytea), 'hex') from 1 for 10)) AS public_id,
   farmer_id,
@@ -358,8 +396,9 @@ SELECT
   created_at
 FROM public.profiles;
 
+ALTER VIEW public.public_profiles OWNER TO postgres;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
-REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated, anon;
 GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 -- 3. DISEASE SCANS RLS

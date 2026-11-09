@@ -610,8 +610,8 @@ CREATE TABLE IF NOT EXISTS public.machinery_bookings (
   machine_id text,
   machine_name text NOT NULL,
   farmer_name text NOT NULL DEFAULT 'Farmer'::text,
-  farmer_phone text NOT NULL DEFAULT '+91 98492 11048'::text,
-  farmer_village text NOT NULL DEFAULT 'Warangal Rural'::text,
+  farmer_phone text,
+  farmer_village text,
   farmer_id text,
   booking_unit text DEFAULT 'acre'::text,
   quantity numeric DEFAULT 1.0,
@@ -695,7 +695,7 @@ CREATE TABLE IF NOT EXISTS public.community_stories (
   user_id text REFERENCES public.profiles(id) ON DELETE CASCADE,
   author_id text REFERENCES public.profiles(id) ON DELETE CASCADE,
   author_name text NOT NULL DEFAULT 'Farmer'::text,
-  author_village text DEFAULT 'Warangal, Telangana'::text,
+  author_village text,
   author_avatar text DEFAULT 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'::text,
   media_url text NOT NULL,
   caption text,
@@ -709,7 +709,7 @@ CREATE TABLE IF NOT EXISTS public.community_stories (
 ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS user_id text;
 ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_id text;
 ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_name text DEFAULT 'Farmer';
-ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_village text DEFAULT 'Warangal, Telangana';
+ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_village text;
 ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS author_avatar text;
 ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS media_url text;
 ALTER TABLE public.community_stories ADD COLUMN IF NOT EXISTS caption text;
@@ -925,7 +925,7 @@ END $$;
 -- Excludes internal auth identifiers (id, user_id) and confidential attributes
 -- (phone, village, mandal, email, land_acres, kcc_balance, government identity tags).
 -- Projects only approved public attributes for community identity.
-CREATE OR REPLACE VIEW public.public_profiles WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW public.public_profiles WITH (security_barrier = true, security_invoker = false) AS
 SELECT 
   COALESCE(farmer_id, driver_id, 'NK-' || substring(encode(sha256(id::text::bytea), 'hex') from 1 for 10)) AS public_id,
   farmer_id,
@@ -940,8 +940,9 @@ SELECT
   created_at
 FROM public.profiles;
 
+ALTER VIEW public.public_profiles OWNER TO postgres;
 REVOKE ALL ON public.public_profiles FROM PUBLIC, anon;
-REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.public_profiles FROM authenticated, anon;
 GRANT SELECT ON public.public_profiles TO authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────
@@ -1553,7 +1554,9 @@ DECLARE
   v_role text;
   v_requested_role text;
   v_village text;
+  v_mandal text;
   v_district text;
+  v_state text;
   v_farmer_id text;
   v_driver_id text;
 BEGIN
@@ -1577,8 +1580,11 @@ BEGIN
     v_role := v_requested_role;
   END IF;
 
-  v_village := COALESCE(NEW.raw_user_meta_data->>'village', 'Warangal Rural');
-  v_district := COALESCE(NEW.raw_user_meta_data->>'district', 'Warangal');
+  -- Extract location strictly from user metadata (never fabricate unverified geographic attributes)
+  v_village := NEW.raw_user_meta_data->>'village';
+  v_district := NEW.raw_user_meta_data->>'district';
+  v_mandal := NEW.raw_user_meta_data->>'mandal';
+  v_state := NEW.raw_user_meta_data->>'state';
 
   IF v_role = 'driver' THEN
     v_farmer_id := NULL;
@@ -1594,7 +1600,7 @@ BEGIN
   )
   VALUES (
     NEW.id::text, NEW.id::text, v_farmer_id, v_driver_id, NEW.email, v_full_name,
-    v_phone, v_phone, v_role, v_village, v_district, 'Warangal', 'Telangana', 'en', NOW(), NOW()
+    v_phone, v_phone, v_role, v_village, v_district, v_mandal, v_state, 'en', NOW(), NOW()
   )
   ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.id,
@@ -1602,6 +1608,10 @@ BEGIN
     full_name = CASE WHEN public.profiles.full_name IS NULL OR public.profiles.full_name = 'Farmer' THEN EXCLUDED.full_name ELSE public.profiles.full_name END,
     phone = COALESCE(public.profiles.phone, EXCLUDED.phone),
     phone_number = COALESCE(public.profiles.phone_number, EXCLUDED.phone_number),
+    village = COALESCE(public.profiles.village, EXCLUDED.village),
+    mandal = COALESCE(public.profiles.mandal, EXCLUDED.mandal),
+    district = COALESCE(public.profiles.district, EXCLUDED.district),
+    state = COALESCE(public.profiles.state, EXCLUDED.state),
     updated_at = NOW();
 
   RETURN NEW;

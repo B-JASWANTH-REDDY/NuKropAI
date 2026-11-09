@@ -469,6 +469,33 @@ async function runContractsSuite() {
       fail('PROV-2', `Provenance misattributed: source=${dataFC20.source}, obsTime=${dataFC20.observationTime}, modelTime=${dataFC20.modelTime}`);
     }
 
+    // AGRON-1: Spray advice framed as meteorological suitability screening (not chemical application approval)
+    if (dataFC20.sprayAdvisory.screeningType === 'METEOROLOGICAL_SUITABILITY_SCREENING' &&
+        dataFC20.sprayAdvisory.isWeatherSuitable === true &&
+        dataFC20.sprayAdvisory.classification === 'FAVORABLE_METEOROLOGICAL_CONDITIONS') {
+      pass('AGRON-1', 'Spray advice framed as meteorological suitability screening with favorable conditions classification');
+    } else {
+      fail('AGRON-1', `Expected METEOROLOGICAL_SUITABILITY_SCREENING, got: ${JSON.stringify(dataFC20.sprayAdvisory)}`);
+    }
+
+    // AGRON-2: Mandatory disclaimer distinguishing weather screening from pesticide/crop-specific approval
+    if (typeof dataFC20.sprayAdvisory.disclaimer === 'string' &&
+        dataFC20.sprayAdvisory.disclaimer.includes('Weather-based spray suitability screening only') &&
+        dataFC20.sprayAdvisory.disclaimer.includes('product label')) {
+      pass('AGRON-2', 'Agronomically honest disclaimer present (screening only, consult product label and local agronomist)');
+    } else {
+      fail('AGRON-2', `Disclaimer missing or inadequate: ${dataFC20.sprayAdvisory.disclaimer}`);
+    }
+
+    // AGRON-3: Physical threshold rationale & generic foliar envelope limitations disclosed
+    const rationale = dataFC20.sprayAdvisory.thresholdRationale;
+    if (rationale && rationale.temperature && rationale.humidity && rationale.sustainedWind && rationale.windGusts && rationale.precipitation &&
+        typeof dataFC20.sprayAdvisory.cropProductContext === 'string') {
+      pass('AGRON-3', 'Physical threshold rationale (evaporation, inversion, drift, wash-off) and crop/product limitations disclosed');
+    } else {
+      fail('AGRON-3', `Threshold rationale or cropProductContext incomplete: ${JSON.stringify(dataFC20.sprayAdvisory)}`);
+    }
+
   } finally {
     axios.get = originalAxiosGet;
   }

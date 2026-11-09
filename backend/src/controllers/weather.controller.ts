@@ -248,9 +248,23 @@ export async function getCurrentWeather(request: FastifyRequest, reply: FastifyR
       },
       sprayAdvisory: {
         isSafe: isSpraySafe,
+        isWeatherSuitable: isSpraySafe,
         status: advisoryStatus,
         reason: advisoryReason,
         window: sprayWindow,
+        screeningType: 'METEOROLOGICAL_SUITABILITY_SCREENING',
+        classification: isSpraySafe
+          ? 'FAVORABLE_METEOROLOGICAL_CONDITIONS'
+          : (advisoryStatus === 'ADVISORY_UNAVAILABLE' ? 'ADVISORY_UNAVAILABLE' : 'UNFAVORABLE_METEOROLOGICAL_CONDITIONS'),
+        disclaimer: 'Weather-based spray suitability screening only. Not a crop-specific or pesticide application approval. Always consult product label instructions, target pest life-stage, and qualified local agronomist before foliar application.',
+        cropProductContext: 'GENERAL_FOLIAR_ENVELOPE (Crop and chemical product specific threshold validation unavailable; always check product label)',
+        thresholdRationale: {
+          temperature: '15°C to 32°C (minimizes droplet evaporation, avoids phytotoxicity, and supports stomatal uptake)',
+          humidity: '40% to 80% (prevents premature droplet drying while avoiding fungal spore germination microclimates)',
+          sustainedWind: '3 km/h to 15 km/h (ensures active atmospheric mixing while minimizing droplet drift; <3 km/h risks surface temperature inversion)',
+          windGusts: '<= 20 km/h (prevents off-target spray drift containment breach)',
+          precipitation: '0 mm (prevents chemical wash-off and environmental leaching)'
+        },
         missingTelemetry: missingOrInvalidFields.length > 0 ? missingOrInvalidFields : undefined
       }
     });

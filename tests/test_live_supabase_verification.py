@@ -3,16 +3,44 @@ import urllib.error
 import json
 import uuid
 import sys
+import os
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-key = ''
-with open('.env') as f:
-    for line in f:
-        if line.startswith('SUPABASE_ANON_KEY='):
-            key = line.split('=', 1)[1].strip()
+# Import canonical target safety guard
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from simulations.mirofish_adapter.target_validator import (
+    validate_simulation_target,
+    ProductionTargetSafetyError,
+    TargetConfigurationError,
+    PRODUCTION_PROJECT_REF
+)
 
-url = 'https://yxjqseiegwjdfnccdchk.supabase.co'
+test_url = os.environ.get("TEST_SUPABASE_URL")
+test_ref = os.environ.get("TEST_SUPABASE_PROJECT_REF")
+test_key = os.environ.get("TEST_SUPABASE_ANON_KEY")
+
+if not test_url or not test_ref or not test_key:
+    print("======================================================================")
+    print("LIVE SUPABASE ISOLATION SAFETY GUARD")
+    print("======================================================================")
+    print(f"[SAFETY ENFORCED] Production database '{PRODUCTION_PROJECT_REF}' is strictly isolated.")
+    print("Synthetic test execution against production Supabase is prohibited.")
+    print("To test against an isolated test/staging instance, configure:")
+    print("  TEST_SUPABASE_URL, TEST_SUPABASE_PROJECT_REF, and TEST_SUPABASE_ANON_KEY")
+    print("======================================================================")
+    sys.exit(0)
+
+try:
+    url, project_ref, env_label = validate_simulation_target(
+        url=test_url,
+        project_ref=test_ref,
+        anon_key=test_key
+    )
+    key = test_key
+except (ProductionTargetSafetyError, TargetConfigurationError) as e:
+    print(f"❌ [CRITICAL SAFETY BLOCK] {e}")
+    sys.exit(1)
 
 print("======================================================================")
 print("LIVE SUPABASE FULL-STACK DOMAIN INTEGRATION VERIFICATION")

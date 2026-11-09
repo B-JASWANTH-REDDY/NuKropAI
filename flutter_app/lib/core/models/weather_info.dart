@@ -12,6 +12,10 @@ class WeatherInfo {
   final String
       sprayAdvisory; // 'OPTIMAL TO SPRAY', 'UNSAFE TO SPRAY', 'ADVISORY_UNAVAILABLE'
   final String sprayWindow;
+  final bool isWeatherSuitable;
+  final String? screeningType;
+  final String? disclaimer;
+  final String? cropProductContext;
   final String source;
   final DateTime? observationTime;
   final DateTime? modelTime;
@@ -31,6 +35,10 @@ class WeatherInfo {
     this.windGusts,
     required this.sprayAdvisory,
     required this.sprayWindow,
+    this.isWeatherSuitable = false,
+    this.screeningType = 'METEOROLOGICAL_SUITABILITY_SCREENING',
+    this.disclaimer,
+    this.cropProductContext,
     this.source = 'Open-Meteo Weather API (NWP Numerical Forecast Model)',
     this.observationTime,
     this.modelTime,
@@ -58,7 +66,8 @@ class WeatherInfo {
         ? '$district, $state'
         : (district ?? state ?? 'Agricultural Location');
 
-    final isSafe = advisory['isSafe'] == true;
+    final isSafe =
+        advisory['isSafe'] == true || advisory['isWeatherSuitable'] == true;
     final advisoryStatus = advisory['reason']?.toString() ??
         advisory['status']?.toString() ??
         (isSafe ? 'OPTIMAL TO SPRAY' : 'Advisory unavailable');
@@ -66,6 +75,10 @@ class WeatherInfo {
         (isSafe
             ? 'Condition-dependent: apply while parameters remain within safe ranges'
             : 'Unavailable');
+    final screeningType = advisory['screeningType']?.toString() ??
+        'METEOROLOGICAL_SUITABILITY_SCREENING';
+    final disclaimer = advisory['disclaimer']?.toString();
+    final cropProductContext = advisory['cropProductContext']?.toString();
 
     DateTime? obsTime;
     if (json['observationTime'] != null) {
@@ -107,6 +120,10 @@ class WeatherInfo {
       windGusts: windGusts,
       sprayAdvisory: advisoryStatus,
       sprayWindow: window,
+      isWeatherSuitable: isSafe,
+      screeningType: screeningType,
+      disclaimer: disclaimer,
+      cropProductContext: cropProductContext,
       source: json['source']?.toString() ??
           'Open-Meteo Weather API (NWP Numerical Forecast Model)',
       observationTime: obsTime,
@@ -130,6 +147,11 @@ class WeatherInfo {
     windGusts: null,
     sprayAdvisory: 'Advisory unavailable',
     sprayWindow: 'Telemetry offline',
+    isWeatherSuitable: false,
+    screeningType: 'METEOROLOGICAL_SUITABILITY_SCREENING',
+    disclaimer:
+        'Meteorological telemetry offline; spray suitability screening unavailable.',
+    cropProductContext: null,
     source: 'Weather Provider Offline',
     observationTime: null,
     modelTime: null,

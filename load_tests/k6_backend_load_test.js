@@ -17,6 +17,7 @@ const authLatency = new Trend('nukrop_auth_latency_ms');
 
 // Test Configuration: Realistic Ramping Stages
 export const options = {
+  maxRedirects: 0, // Strictly reject following HTTP redirects to prevent redirection to production
   stages: [
     { duration: '30s', target: 50 },    // Warm-up to 50 VUs
     { duration: '1m', target: 200 },    // Ramp to 200 concurrent farmers
@@ -32,12 +33,48 @@ export const options = {
 
 const BASE_URL = __ENV.TARGET_URL || 'http://localhost:3000';
 
-export function setup() {
-  // Pre-flight target validation: ensure we never point at production Supabase
-  if (BASE_URL.includes('yxjqseiegwjdfnccdchk') || BASE_URL.includes('prod.nukrop.ai')) {
-    throw new Error('FATAL SAFETY VIOLATION: Load test cannot target production infrastructure!');
+const ALLOWED_TARGET_HOSTNAMES = [
+  'localhost',
+  '127.0.0.1',
+  '::1',
+  'api.staging.nukropai.com',
+  'staging.nukropai.com',
+];
+
+const DISALLOWED_PATTERNS = [
+  'api.nukropai.com',
+  'prod.nukrop.ai',
+  'nukrop.ai',
+  'yxjqseiegwjdfnccdchk',
+  'supabase.co',
+];
+
+function validateTargetUrl(rawUrl) {
+  // Reject production patterns
+  for (const pattern of DISALLOWED_PATTERNS) {
+    if (rawUrl.toLowerCase().includes(pattern.toLowerCase())) {
+      throw new Error(`FATAL SAFETY VIOLATION: Load test target "${rawUrl}" contains prohibited production pattern "${pattern}"!`);
+    }
   }
-  console.log(`[k6 Setup] Commencing load test against staging target: ${BASE_URL}`);
+
+  // Extract hostname
+  const match = rawUrl.match(/^https?:\/\/([^/:]+)/i);
+  if (!match) {
+    throw new Error(`FATAL SAFETY VIOLATION: Malformed load test target URL "${rawUrl}"!`);
+  }
+  const hostname = match[1].toLowerCase();
+
+  if (!ALLOWED_TARGET_HOSTNAMES.includes(hostname)) {
+    throw new Error(
+      `FATAL SAFETY VIOLATION: Target host "${hostname}" is not in the explicit staging allowlist: [${ALLOWED_TARGET_HOSTNAMES.join(', ')}].`,
+    );
+  }
+}
+
+export function setup() {
+  // Pre-flight target validation: ensure we never point at production or unauthorized hosts
+  validateTargetUrl(BASE_URL);
+  console.log(`[k6 Setup] Commencing load test against verified staging target: ${BASE_URL}`);
 
   // Provision load test user account once before VU execution to guarantee authentic 200 authentications
   const userPayload = JSON.stringify({

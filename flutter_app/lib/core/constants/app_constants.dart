@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AppConstants {
@@ -12,6 +13,7 @@ class AppConstants {
   static const Color textMuted = Color(0xFF6B7280);
   static const Color borderSubtle = Color(0xFFE5E7EB);
   static const Color dangerRed = Color(0xFFEF4444);
+  static const Color dangerLight = Color(0xFFFEE2E2);
 
   // Supabase & Backend Endpoints
   static const String supabaseUrl = String.fromEnvironment(
@@ -29,10 +31,26 @@ class AppConstants {
   static const String stagingApiUrl = 'https://api.staging.nukropai.com/api/v1';
   static const String productionApiUrl = 'https://api.nukropai.com/api/v1';
 
-  static const String apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: defaultEmulatorUrl,
-  );
+  /// Resolves the API Base URL with strict release security enforcement:
+  /// - In release mode, only HTTPS URLs are allowed.
+  /// - Localhost, 127.0.0.1, 10.0.2.2, and insecure HTTP endpoints are strictly rejected.
+  static String get apiBaseUrl {
+    const rawUrl = String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: kReleaseMode ? productionApiUrl : defaultEmulatorUrl,
+    );
+    if (kReleaseMode) {
+      if (!rawUrl.startsWith('https://') ||
+          rawUrl.contains('localhost') ||
+          rawUrl.contains('127.0.0.1') ||
+          rawUrl.contains('10.0.2.2')) {
+        throw StateError(
+          'INSECURE_RELEASE_CONFIG: Insecure cleartext or local development endpoint "$rawUrl" is strictly prohibited in release mode. Must configure a valid HTTPS URL.',
+        );
+      }
+    }
+    return rawUrl;
+  }
 
   // App Views
   static const String viewHome = 'home';

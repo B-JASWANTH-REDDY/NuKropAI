@@ -62,7 +62,7 @@ async function runTests() {
       await query('INSERT INTO public.users (email, password_hash) VALUES ($1, $2)', ['test@example.com', 'hash']);
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected INSERT to throw in production');
   });
@@ -74,7 +74,7 @@ async function runTests() {
       await query('UPDATE public.refresh_tokens SET revoked = true WHERE id = $1', ['token-id']);
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected UPDATE to throw in production');
   });
@@ -86,7 +86,7 @@ async function runTests() {
       await query('DELETE FROM public.users WHERE id = $1', ['user-id']);
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected DELETE to throw in production');
   });
@@ -98,7 +98,7 @@ async function runTests() {
       await query('WITH inserted AS (INSERT INTO public.users (email) VALUES ($1) RETURNING *) SELECT * FROM inserted', ['cte@test.com']);
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected CTE write to throw in production');
   });
@@ -110,7 +110,7 @@ async function runTests() {
       await query('SELECT * FROM public.escrow_contracts WHERE id = $1', ['contract-id']);
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected financial query to throw in production');
   });
@@ -122,7 +122,7 @@ async function runTests() {
       await query('CALL public.settle_mandi_batch($1)', ['batch-1']);
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected CALL to throw in production');
   });
@@ -134,19 +134,31 @@ async function runTests() {
       await query('BEGIN');
     } catch (e) {
       threw = true;
-      assert(e.message.includes('In-memory fallback cannot satisfy persistent or financial operations in production mode'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
     }
     assert.strictEqual(threw, true, 'Expected BEGIN to throw in production');
   });
 
-  // 8. pool.connect() in production
-  await testAsync('PROD-FAIL-8: pool.connect() throws error in production when DB offline', async () => {
+  // 8. READ query in production must fail closed
+  await testAsync('PROD-FAIL-8: Read query SELECT * FROM public.profiles throws SERVICE_UNAVAILABLE in production', async () => {
+    let threw = false;
+    try {
+      await query('SELECT * FROM public.profiles WHERE id = $1', ['some-profile-id']);
+    } catch (e) {
+      threw = true;
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Database is offline in production mode'));
+    }
+    assert.strictEqual(threw, true, 'Expected SELECT to throw in production');
+  });
+
+  // 9. pool.connect() in production
+  await testAsync('PROD-FAIL-9: pool.connect() throws error in production when DB offline', async () => {
     let threw = false;
     try {
       await pool.connect();
     } catch (e) {
       threw = true;
-      assert(e.message.includes('Cannot establish client connection or transaction in production'));
+      assert(e.message.includes('SERVICE_UNAVAILABLE') && e.message.includes('Cannot establish client connection or transaction in production'));
     }
     assert.strictEqual(threw, true, 'Expected pool.connect to throw in production');
   });

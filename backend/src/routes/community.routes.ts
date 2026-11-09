@@ -11,3 +11,4 @@ export default async function communityRoutes(fastify: FastifyInstance) {
   fastify.post('/posts', { preHandler: [authenticate] }, createCommunityPost);
   fastify.post('/posts/:id/like', { preHandler: [authenticate] }, togglePostLike);
 }
+

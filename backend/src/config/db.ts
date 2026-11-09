@@ -77,38 +77,19 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
       return await rawPool.query(text, params);
     } catch (err) {
       if (process.env.NODE_ENV === 'production') {
-        throw new Error(`Database persistent query failed in production: ${(err as Error).message}`);
+        throw new Error(`SERVICE_UNAVAILABLE: Database persistent query failed in production: ${(err as Error).message}`);
       }
       console.warn("Database query error, falling back to memory execution.");
     }
   }
 
-  // Strict Data Reliability: Audit all write, transaction, and financial paths.
-  // Never allow in-memory fallbacks to fake persistence in production mode.
-  const queryStr = text.toLowerCase().trim();
-  const isWriteOp = 
-    queryStr.startsWith('insert') ||
-    queryStr.startsWith('update') ||
-    queryStr.startsWith('delete') ||
-    queryStr.startsWith('truncate') ||
-    queryStr.startsWith('call') ||
-    queryStr.startsWith('begin') ||
-    queryStr.startsWith('commit') ||
-    queryStr.startsWith('rollback') ||
-    (queryStr.startsWith('with') && (
-      queryStr.includes('insert ') || 
-      queryStr.includes('update ') || 
-      queryStr.includes('delete ')
-    ));
-
-  const isFinancial = 
-    queryStr.includes('escrow_contracts') || 
-    queryStr.includes('khata_transactions') || 
-    queryStr.includes('kcc_applications');
-
-  if (process.env.NODE_ENV === 'production' && (isWriteOp || isFinancial)) {
-    throw new Error('Database offline: In-memory fallback cannot satisfy persistent or financial operations in production mode.');
+  // Strict Data Reliability: In production mode, both reads and writes MUST fail closed
+  // immediately if the database is offline. Never allow in-memory fallbacks in production.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SERVICE_UNAVAILABLE: Database is offline in production mode.');
   }
+
+  const queryStr = text.toLowerCase().trim();
 
   // 1. Users & Profiles Operations
   if (queryStr.includes('insert into public.users')) {
@@ -418,7 +399,7 @@ export const pool = {
         return client;
       } catch (err) {
         if (process.env.NODE_ENV === 'production') {
-          throw new Error(`Database offline: Cannot establish client connection or transaction in production: ${(err as Error).message}`);
+          throw new Error(`SERVICE_UNAVAILABLE: Database offline: Cannot establish client connection or transaction in production: ${(err as Error).message}`);
         }
         return {
           query: query,
@@ -427,7 +408,7 @@ export const pool = {
       }
     }
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('Database offline: Cannot establish client connection or transaction in production: DATABASE_URL not configured.');
+      throw new Error('SERVICE_UNAVAILABLE: Database offline: Cannot establish client connection or transaction in production: DATABASE_URL not configured.');
     }
     return {
       query: query,

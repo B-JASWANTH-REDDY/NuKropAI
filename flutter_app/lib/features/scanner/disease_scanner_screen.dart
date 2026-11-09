@@ -138,16 +138,22 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
         },
       );
 
-      final isPlantOrSoil = response['isPlantOrSoil'] == true;
+      final Map<String, dynamic> prediction = (response['ai_prediction'] is Map)
+          ? Map<String, dynamic>.from(response['ai_prediction'] as Map)
+          : response;
+
+      final isPlantOrSoil = prediction['isPlantOrSoil'] == true;
 
       if (!isPlantOrSoil) {
         // Authenticity Check: Reject non-crop / ambiguous image uploads
         setState(() {
           _isAnalyzing = false;
           _isNonCropRejection = true;
-          _rejectionMessage = response['symptoms'] ??
-              'The submitted specimen could not be verified as an agricultural leaf or farm soil. '
-              'Please position camera directly on the diseased leaf or foliar tissue.';
+          _rejectionMessage = prediction['symptoms']?.toString() ??
+              (prediction['detectedSubject'] != null
+                  ? 'Identified non-crop subject: "${prediction['detectedSubject']}". Please capture an authentic crop leaf or farm soil.'
+                  : 'The submitted specimen could not be verified as an agricultural crop leaf or farm soil. '
+                      'Please position camera directly on the diseased leaf or foliar tissue.');
         });
         if (mounted) {
           LuxuryToast.show(
@@ -160,28 +166,52 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
         return;
       }
 
-      // Valid crop foliar pathology parsed from genuine backend response
-      final rawConfidence = response['confidence'];
-      final double? parsedConfidence = (rawConfidence is num)
-          ? (rawConfidence > 1
-              ? rawConfidence.toDouble() / 100.0
-              : rawConfidence.toDouble())
-          : null;
+      final diseaseName = prediction['diseaseName']?.toString();
+      if (diseaseName == null ||
+          diseaseName.trim().isEmpty ||
+          diseaseName.toLowerCase().contains('unknown') ||
+          diseaseName.toLowerCase().contains('non-crop')) {
+        setState(() {
+          _isAnalyzing = false;
+          _errorMessage = 'Inconclusive foliar diagnosis: The image features could not be conclusively matched to a known crop pathogen. Please re-capture in clear lighting.';
+        });
+        return;
+      }
+
+      final rawConfidence = prediction['confidence'];
+      final double parsedConfidence = (rawConfidence is num)
+          ? (rawConfidence > 1 ? rawConfidence.toDouble() / 100.0 : rawConfidence.toDouble())
+          : 0.0;
+
+      final chemicalSol = prediction['chemicalSolution']?.toString();
+      final organicSol = prediction['organicSolution']?.toString();
+      final sprayAdv = prediction['sprayAdvisory']?.toString();
+
+      final List<String> treatments = [];
+      if (chemicalSol != null && chemicalSol.trim().isNotEmpty && !chemicalSol.toLowerCase().contains('none')) {
+        treatments.add('Chemical: $chemicalSol');
+      }
+      if (organicSol != null && organicSol.trim().isNotEmpty && !organicSol.toLowerCase().contains('none')) {
+        treatments.add('Organic: $organicSol');
+      }
+      if (sprayAdv != null && sprayAdv.trim().isNotEmpty && !sprayAdv.toLowerCase().contains('n/a')) {
+        treatments.add('Advisory: $sprayAdv');
+      }
 
       final disease = CropDisease(
-        diseaseName: response['diseaseName'] ?? 'Foliar Condition Diagnosed',
-        scientificName: response['pathogen'] ?? 'Biological Pathogen',
+        diseaseName: diseaseName,
+        scientificName: prediction['pathogen']?.toString() ?? 'Pathogen classification pending',
         crop: _selectedCrop,
-        confidence: parsedConfidence ?? 0.0,
-        severity: response['severity'] ?? 'Medium',
-        symptoms: response['symptoms']?.toString() ?? 'Visible foliar lesions and symptoms',
-        chemicalControls: response['chemicalSolution']?.toString() ?? 'Approved CIB&RC formulation',
-        organicControls: response['organicSolution']?.toString() ?? 'Approved organic bio-treatment',
-        icarTreatments: [
-          if (response['chemicalSolution'] != null) response['chemicalSolution'].toString(),
-          if (response['organicSolution'] != null) response['organicSolution'].toString(),
-          if (response['sprayAdvisory'] != null) response['sprayAdvisory'].toString(),
-        ],
+        confidence: parsedConfidence,
+        severity: prediction['severity']?.toString() ?? 'Moderate',
+        symptoms: prediction['symptoms']?.toString() ?? 'Foliar pathology observed',
+        chemicalControls: chemicalSol ?? 'No chemical control registered',
+        organicControls: organicSol ?? 'No organic control registered',
+        icarTreatments: treatments.isNotEmpty ? treatments : ['No registered treatments for indeterminate diagnosis'],
+        provenance: response['provenance']?.toString(),
+        timestamp: response['timestamp'] != null ? DateTime.tryParse(response['timestamp'].toString()) : DateTime.now(),
+        disclaimer: response['disclaimer']?.toString(),
+        sprayAdvisory: sprayAdv,
       );
 
       if (mounted) {
@@ -479,9 +509,37 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                             color: AppConstants.textMuted,
                           ),
                         ),
+                        if (_diagnosticResult!.provenance != null) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppConstants.borderSubtle),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.psychology_outlined, size: 14, color: AppConstants.primaryDark),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Inference Engine: ${_diagnosticResult!.provenance}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppConstants.textDark,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         const Text(
-                          'ICAR Prescribed Treatments & CIB&RC Formulations:',
+                          'Recommended Agronomic Actions & Treatments:',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -510,6 +568,17 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                             ),
                           ),
                         ),
+                        if (_diagnosticResult!.disclaimer != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            _diagnosticResult!.disclaimer!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                              color: AppConstants.textMuted,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         Row(
                           children: [

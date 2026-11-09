@@ -171,3 +171,4 @@ export const togglePostLike = async (request: FastifyRequest, reply: FastifyRepl
     return reply.status(500).send({ error: 'Failed to toggle post like' });
   }
 };
+

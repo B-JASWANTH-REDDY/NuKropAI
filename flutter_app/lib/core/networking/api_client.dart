@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/app_constants.dart';
 import '../storage/secure_storage.dart';
@@ -68,9 +69,21 @@ class ApiClient {
   /// Active Base URL for API communications
   static String get baseUrl => _customBaseUrl;
 
-  /// Dynamic runtime override for testing, LAN, staging, or production
+  /// Dynamic runtime override for testing, LAN, staging, or production.
+  /// In release builds, only secure HTTPS endpoints are accepted.
   static void setBaseUrl(String url) {
-    _customBaseUrl = url.replaceAll(RegExp(r'/+$'), '');
+    final sanitized = url.replaceAll(RegExp(r'/+$'), '');
+    if (kReleaseMode) {
+      if (!sanitized.startsWith('https://') ||
+          sanitized.contains('localhost') ||
+          sanitized.contains('127.0.0.1') ||
+          sanitized.contains('10.0.2.2')) {
+        throw ArgumentError(
+          'INSECURE_RELEASE_CONFIG: Insecure cleartext or local development endpoint "$sanitized" is strictly prohibited in release mode. Must configure a valid HTTPS URL.',
+        );
+      }
+    }
+    _customBaseUrl = sanitized;
   }
 
   /// Reset to compilation default

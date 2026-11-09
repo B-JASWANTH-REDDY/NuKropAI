@@ -14,9 +14,25 @@ class AppConstants {
   static const Color dangerRed = Color(0xFFEF4444);
 
   // Supabase & Backend Endpoints
-  static const String supabaseUrl = 'https://yxjqseiegwjdfnccdchk.supabase.co';
-  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
-  static const String apiBaseUrl = 'http://10.0.2.2:3000/api/v1';
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://yxjqseiegwjdfnccdchk.supabase.co',
+  );
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  );
+
+  // Environment-Aware API Base URLs
+  static const String defaultEmulatorUrl = 'http://10.0.2.2:3000/api/v1';
+  static const String defaultLanUrl = 'http://192.168.1.100:3000/api/v1';
+  static const String stagingApiUrl = 'https://api.staging.nukropai.com/api/v1';
+  static const String productionApiUrl = 'https://api.nukropai.com/api/v1';
+
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: defaultEmulatorUrl,
+  );
 
   // App Views
   static const String viewHome = 'home';

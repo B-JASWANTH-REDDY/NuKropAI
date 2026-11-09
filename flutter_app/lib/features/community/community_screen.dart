@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/community_post.dart';
 import '../../core/storage/secure_storage.dart';
+import '../../core/networking/api_client.dart';
 import '../../shared/widgets/luxury_toast.dart';
 
 class CommunityScreen extends StatefulWidget {
@@ -17,57 +18,76 @@ class _CommunityScreenState extends State<CommunityScreen> {
   String _selectedTopic = 'All Topics';
   final List<String> _topics = ['All Topics', 'Cotton', 'Chilli', 'Paddy', 'Tomato'];
 
-  // Base authentic posts with deduplication IDs
-  final List<CommunityPost> _rawPosts = [
-    CommunityPost(
-      id: 'p1_warangal_cotton',
-      authorName: 'Jaswanth Reddy',
-      authorRole: 'Verified Farmer',
-      location: 'Himayath Nagar Farm, Telangana',
-      cropTag: 'Cotton',
-      title: 'Bumper Cotton Yield in Warangal',
-      content:
-          'Using Jeevamrutha and IPM sticky traps reduced pest incidence by 80%. Highly recommended for all cotton farmers before flowering stage!',
-      likesCount: 24,
-      commentsCount: 6,
-      isLiked: false,
-      isFollowed: true,
-      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-    ),
-    CommunityPost(
-      id: 'p2_nandyal_chilli',
-      authorName: 'Narayana Swamy',
-      authorRole: 'Progressive Farmer',
-      location: 'Nandyal District, Andhra Pradesh',
-      cropTag: 'Chilli',
-      title: 'Black Thrips Management Technique',
-      content:
-          'Intercropping with maize and border planting of castor has shielded our chilli beds from severe thrips migration. Soil moisture must be maintained.',
-      likesCount: 38,
-      commentsCount: 12,
-      isLiked: true,
-      isFollowed: false,
-      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-    ),
-    CommunityPost(
-      id: 'p3_delta_paddy',
-      authorName: 'Dr. K. Venkatesh',
-      authorRole: 'Agronomist Specialist',
-      location: 'PJTSAU Agricultural University',
-      cropTag: 'Paddy',
-      title: 'Stem Borer Warning in Godavari Delta',
-      content:
-          'Pheromone trap catches exceeded 8 moths/night. Install Trichogramma egg parasitoids @ 20,000/acre immediately.',
-      likesCount: 65,
-      commentsCount: 19,
-      isLiked: false,
-      isFollowed: false,
-      createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-    ),
-  ];
+  // Authentic posts fetched from backend / persistent database (Zero built-in dummy posts)
+  final List<CommunityPost> _rawPosts = [];
+  bool _isLoading = false;
+  String? _nextCursor;
+  bool _hasMore = false;
 
   // User uploaded stories only (zero stock photos/fake profiles)
   final List<Map<String, String>> _authenticStories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts(refresh: true);
+  }
+
+  Future<void> _loadPosts({bool refresh = false}) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final queryParams = <String, String>{};
+      if (_selectedTopic != 'All Topics') {
+        queryParams['topic'] = _selectedTopic;
+      }
+      if (!refresh && _nextCursor != null) {
+        queryParams['cursor'] = _nextCursor!;
+      }
+
+      final res = await ApiClient.get<Map<String, dynamic>>(
+        '/community/posts',
+        queryParams: queryParams,
+      );
+
+      final List<dynamic> raw = res['posts'] ?? [];
+      final fetched = raw.map((item) {
+        return CommunityPost(
+          id: item['id']?.toString() ?? '',
+          authorName: item['authorName']?.toString() ?? 'Kisan Farmer',
+          authorRole: item['authorRole']?.toString() ?? 'Verified Farmer',
+          location: item['location']?.toString() ?? 'Telangana',
+          cropTag: item['cropTag']?.toString() ?? 'Cotton',
+          title: item['title']?.toString() ?? '',
+          content: item['content']?.toString() ?? '',
+          likesCount: item['likesCount'] is int ? item['likesCount'] : 0,
+          commentsCount: item['commentsCount'] is int ? item['commentsCount'] : 0,
+          isLiked: item['isLiked'] == true,
+          isFollowed: item['isFollowed'] == true,
+          createdAt: item['createdAt'] != null
+              ? DateTime.tryParse(item['createdAt'].toString()) ?? DateTime.now()
+              : DateTime.now(),
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          if (refresh) {
+            _rawPosts.clear();
+          }
+          _rawPosts.addAll(fetched);
+          _nextCursor = res['nextCursor']?.toString();
+          _hasMore = res['hasMore'] == true;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   List<CommunityPost> get _deduplicatedPosts {
     final seen = <String>{};
@@ -85,7 +105,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     return unique;
   }
 
-  void _toggleLike(String postId) {
+  Future<void> _toggleLike(String postId) async {
     final index = _rawPosts.indexWhere((p) => p.id == postId);
     if (index == -1) return;
     final post = _rawPosts[index];
@@ -97,6 +117,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
         likesCount: newCount,
       );
     });
+
+    try {
+      await ApiClient.post<Map<String, dynamic>>('/community/posts/$postId/like');
+    } catch (_) {
+      // Revert if network error
+      if (mounted) {
+        setState(() {
+          _rawPosts[index] = post;
+        });
+      }
+    }
   }
 
   void _toggleFollow(String postId) {
@@ -200,31 +231,60 @@ class _CommunityScreenState extends State<CommunityScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () async {
-                  if (titleController.text.trim().isEmpty) return;
-                  final session = await SecureStorage.getSession();
-                  final authorName = session?.name.isNotEmpty == true ? session!.name : 'Kisan Farmer';
-                  final authorRole = session?.isDriver == true ? 'Verified Driver' : 'Verified Farmer';
-                  final location = '${session?.district.isNotEmpty == true ? session!.district : "Warangal"}, ${session?.state.isNotEmpty == true ? session!.state : "Telangana"}';
-                  final newPost = CommunityPost(
-                    id: 'p_${DateTime.now().millisecondsSinceEpoch}',
-                    authorName: authorName,
-                    authorRole: authorRole,
-                    location: location,
-                    cropTag: crop,
-                    title: titleController.text.trim(),
-                    content: contentController.text.trim(),
-                    createdAt: DateTime.now(),
-                  );
-                  setState(() {
-                    _rawPosts.insert(0, newPost);
-                  });
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (mounted) {
-                    LuxuryToast.show(
-                      context,
-                      message: 'Your query has been posted to Kisan Community!',
-                      icon: Icons.check_circle_rounded,
+                  final title = titleController.text.trim();
+                  final content = contentController.text.trim();
+                  if (title.isEmpty) {
+                    LuxuryToast.show(ctx, message: 'Please enter a title for your query', color: Colors.orange);
+                    return;
+                  }
+
+                  try {
+                    final session = await SecureStorage.getSession();
+                    final location = '${session?.district.isNotEmpty == true ? session!.district : "Warangal"}, ${session?.state.isNotEmpty == true ? session!.state : "Telangana"}';
+                    
+                    final res = await ApiClient.post<Map<String, dynamic>>(
+                      '/community/posts',
+                      body: {
+                        'title': title,
+                        'content': content.isNotEmpty ? content : title,
+                        'cropTag': crop,
+                        'location': location,
+                      },
                     );
+
+                    final postData = res['post'];
+                    if (postData != null) {
+                      final newPost = CommunityPost(
+                        id: postData['id']?.toString() ?? 'p_${DateTime.now().millisecondsSinceEpoch}',
+                        authorName: postData['authorName']?.toString() ?? (session?.name ?? 'Kisan Farmer'),
+                        authorRole: postData['authorRole']?.toString() ?? 'Verified Farmer',
+                        location: postData['location']?.toString() ?? location,
+                        cropTag: postData['cropTag']?.toString() ?? crop,
+                        title: postData['title']?.toString() ?? title,
+                        content: postData['content']?.toString() ?? content,
+                        createdAt: DateTime.now(),
+                      );
+                      setState(() {
+                        _rawPosts.insert(0, newPost);
+                      });
+                    }
+
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      LuxuryToast.show(
+                        context,
+                        message: 'Your query has been posted to Kisan Community!',
+                        icon: Icons.check_circle_rounded,
+                      );
+                    }
+                  } catch (err) {
+                    if (ctx.mounted) {
+                      LuxuryToast.show(
+                        ctx,
+                        message: 'Failed to post query: ${err.toString()}',
+                        color: AppConstants.dangerRed,
+                      );
+                    }
                   }
                 },
                 child: const Text('Post Query'),
@@ -445,6 +505,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       setState(() {
                         _selectedTopic = topic;
                       });
+                      _loadPosts(refresh: true);
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
@@ -479,9 +540,61 @@ class _CommunityScreenState extends State<CommunityScreen> {
             child: SizedBox(height: 12),
           ),
 
-          // Community Feed List (Deduplicated)
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          if (_isLoading && posts.isEmpty)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: CircularProgressIndicator(color: AppConstants.primaryGreen),
+              ),
+            )
+          else if (posts.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.forum_outlined, size: 64, color: Colors.grey.shade400),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No Community posts published yet.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppConstants.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Be the first farmer to share an insight or ask a question!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppConstants.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Ask Kisan Community'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppConstants.primaryGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      ),
+                      onPressed: _showCreatePostDialog,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            // Community Feed List (Deduplicated)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
@@ -695,6 +808,22 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
             ),
           ),
+          if (_hasMore)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: OutlinedButton(
+                  onPressed: _isLoading ? null : () => _loadPosts(refresh: false),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Load More Posts'),
+                ),
+              ),
+            ),
           const SliverToBoxAdapter(
             child: SizedBox(height: 24),
           ),

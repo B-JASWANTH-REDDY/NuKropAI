@@ -63,6 +63,20 @@ class ApiClient {
   static http.Client _client = http.Client();
   static bool _isRefreshing = false;
   static Completer<bool>? _refreshCompleter;
+  static String _customBaseUrl = AppConstants.apiBaseUrl;
+
+  /// Active Base URL for API communications
+  static String get baseUrl => _customBaseUrl;
+
+  /// Dynamic runtime override for testing, LAN, staging, or production
+  static void setBaseUrl(String url) {
+    _customBaseUrl = url.replaceAll(RegExp(r'/+$'), '');
+  }
+
+  /// Reset to compilation default
+  static void resetBaseUrl() {
+    _customBaseUrl = AppConstants.apiBaseUrl;
+  }
 
   // Visible for testing to inject custom client
   static void setMockClient(http.Client mockClient) {
@@ -96,8 +110,8 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    if (isMutation) {
-      headers['X-Idempotency-Key'] = idempotencyKey ?? _generateIdempotencyKey();
+    if (isMutation && idempotencyKey != null && idempotencyKey.isNotEmpty) {
+      headers['X-Idempotency-Key'] = idempotencyKey;
     }
 
     return headers;
@@ -120,7 +134,7 @@ class ApiClient {
         return false;
       }
 
-      final url = Uri.parse('${AppConstants.apiBaseUrl}/auth/refresh');
+      final url = Uri.parse('$baseUrl/auth/refresh');
       final res = await _client.post(
         url,
         headers: {
@@ -165,7 +179,7 @@ class ApiClient {
   }) async {
     return _executeWithRetry<T>(
       () async {
-        var uri = Uri.parse('${AppConstants.apiBaseUrl}$endpoint');
+        var uri = Uri.parse('$baseUrl$endpoint');
         if (queryParams != null && queryParams.isNotEmpty) {
           uri = uri.replace(queryParameters: queryParams);
         }
@@ -183,11 +197,13 @@ class ApiClient {
     String? idempotencyKey,
     T Function(dynamic json)? fromJson,
   }) async {
+    // Generate stable idempotency key ONCE so retries reuse the exact same key
+    final stableKey = idempotencyKey ?? _generateIdempotencyKey();
     return _executeWithRetry<T>(
       () async {
-        final uri = Uri.parse('${AppConstants.apiBaseUrl}$endpoint');
+        final uri = Uri.parse('$baseUrl$endpoint');
         final headers = await _buildHeaders(
-          idempotencyKey: idempotencyKey,
+          idempotencyKey: stableKey,
           isMutation: true,
         );
         return _client.post(
@@ -204,12 +220,17 @@ class ApiClient {
   static Future<T> put<T>(
     String endpoint, {
     Map<String, dynamic>? body,
+    String? idempotencyKey,
     T Function(dynamic json)? fromJson,
   }) async {
+    final stableKey = idempotencyKey ?? _generateIdempotencyKey();
     return _executeWithRetry<T>(
       () async {
-        final uri = Uri.parse('${AppConstants.apiBaseUrl}$endpoint');
-        final headers = await _buildHeaders(isMutation: true);
+        final uri = Uri.parse('$baseUrl$endpoint');
+        final headers = await _buildHeaders(
+          idempotencyKey: stableKey,
+          isMutation: true,
+        );
         return _client.put(
           uri,
           headers: headers,
@@ -223,12 +244,17 @@ class ApiClient {
   /// Sends a typed DELETE request
   static Future<T> delete<T>(
     String endpoint, {
+    String? idempotencyKey,
     T Function(dynamic json)? fromJson,
   }) async {
+    final stableKey = idempotencyKey ?? _generateIdempotencyKey();
     return _executeWithRetry<T>(
       () async {
-        final uri = Uri.parse('${AppConstants.apiBaseUrl}$endpoint');
-        final headers = await _buildHeaders(isMutation: true);
+        final uri = Uri.parse('$baseUrl$endpoint');
+        final headers = await _buildHeaders(
+          idempotencyKey: stableKey,
+          isMutation: true,
+        );
         return _client.delete(uri, headers: headers);
       },
       fromJson: fromJson,
@@ -262,6 +288,12 @@ class ApiClient {
             // Re-attempt original request with refreshed token
             continue;
           }
+        }
+
+        // Retry transient upstream/gateway errors (502, 503, 504)
+        if ((response.statusCode == 502 || response.statusCode == 503 || response.statusCode == 504) && attempts <= maxRetries) {
+          await Future.delayed(Duration(milliseconds: 200 * attempts));
+          continue;
         }
 
         // Handle Status Codes

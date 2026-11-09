@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/user_session.dart';
 import '../../core/models/weather_info.dart';
+import '../../core/models/mandi_rate.dart';
+import '../../core/networking/api_client.dart';
 import '../../shared/widgets/luxury_toast.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final UserSession session;
   final Function(String) onNavigateToScreen;
   final VoidCallback onOpenNotifications;
@@ -17,6 +19,71 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenNotifications,
     required this.onOpenLanguageSheet,
   });
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final int _notificationCount = 0;
+  bool _loadingMandi = true;
+  MandiRate? _liveRate;
+  WeatherInfo? _liveWeather;
+  String _marketTickerText = 'Fetching live APMC Mandi commodity rates...';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHomeLiveIntelligence();
+  }
+
+  Future<void> _fetchHomeLiveIntelligence() async {
+    final activeCrop = widget.session.activeCrops.firstOrNull ?? 'Cotton';
+    final state = widget.session.state.isNotEmpty ? widget.session.state : 'Telangana';
+
+    try {
+      final res = await ApiClient.get<Map<String, dynamic>>(
+        '/mandi/rates',
+        queryParams: {'state': state, 'commodity': activeCrop},
+      );
+      final records = res['records'] as List<dynamic>?;
+      if (records != null && records.isNotEmpty) {
+        final parsed = records.map((r) {
+          final modal = (r['modal_price'] ?? r['modalPrice'] ?? r['modal'] ?? 0.0);
+          final min = (r['min_price'] ?? r['minPrice'] ?? r['min'] ?? 0.0);
+          final max = (r['max_price'] ?? r['maxPrice'] ?? r['max'] ?? 0.0);
+          return MandiRate(
+            id: r['id']?.toString() ?? 'm_${r['market']}',
+            mandiName: r['market'] ?? r['mandiName'] ?? 'APMC Yard',
+            state: r['state'] ?? state,
+            district: r['district'] ?? widget.session.district,
+            commodity: r['commodity'] ?? activeCrop,
+            modalPrice: (modal is num) ? modal.toDouble() : 0.0,
+            minPrice: (min is num) ? min.toDouble() : 0.0,
+            maxPrice: (max is num) ? max.toDouble() : 0.0,
+            arrivalDate: DateTime.now(),
+            trend: r['trend'] ?? 'UP',
+          );
+        }).toList();
+
+        if (mounted) {
+          final top = parsed.first;
+          final ticker = parsed.take(3).map((m) => '${m.mandiName} • ${m.commodity} ₹${m.modalPrice.toInt()}').join('   |   ');
+          setState(() {
+            _liveRate = top;
+            _marketTickerText = ticker;
+          });
+        }
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingMandi = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +152,7 @@ class HomeScreen extends StatelessWidget {
         ),
         const Spacer(),
         GestureDetector(
-          onTap: onOpenLanguageSheet,
+          onTap: widget.onOpenLanguageSheet,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -93,19 +160,19 @@ class HomeScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.grey.shade300),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'English',
-                  style: TextStyle(
+                  widget.session.languageCode.toUpperCase(),
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppConstants.textDark,
                   ),
                 ),
-                SizedBox(width: 4),
-                Icon(
+                const SizedBox(width: 4),
+                const Icon(
                   Icons.keyboard_arrow_down_rounded,
                   size: 16,
                   color: AppConstants.textDark,
@@ -132,36 +199,37 @@ class HomeScreen extends StatelessWidget {
                   color: AppConstants.textDark,
                   size: 20,
                 ),
-                onPressed: onOpenNotifications,
+                onPressed: widget.onOpenNotifications,
               ),
             ),
-            Positioned(
-              right: -1,
-              top: -1,
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: AppConstants.dangerRed,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-                child: const Center(
-                  child: Text(
-                    '4',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      height: 1.0,
+            if (_notificationCount > 0)
+              Positioned(
+                right: -1,
+                top: -1,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppConstants.dangerRed,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '$_notificationCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        height: 1.0,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ],
@@ -175,7 +243,7 @@ class HomeScreen extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         children: [
-          ...session.activeCrops.map(
+          ...widget.session.activeCrops.map(
             (crop) => Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -310,12 +378,18 @@ class HomeScreen extends StatelessWidget {
                                   color: AppConstants.dangerRed,
                                 ),
                                 const SizedBox(width: 2),
-                                Text(
-                                  '${session.district.isNotEmpty ? session.district : "Markapur"} APMC',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppConstants.textMuted,
+                                Expanded(
+                                  child: Text(
+                                    _liveRate != null
+                                        ? '${_liveRate!.mandiName} (${_liveRate!.commodity})'
+                                        : '${widget.session.district.isNotEmpty ? widget.session.district : "Markapur"} APMC',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppConstants.textMuted,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -329,20 +403,22 @@ class HomeScreen extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Row(
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
                         Text(
-                          '₹8,000',
-                          style: TextStyle(
+                          _liveRate != null
+                              ? '₹${_liveRate!.modalPrice.toInt()}'
+                              : (_loadingMandi ? '...' : '₹7,850'),
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                             color: AppConstants.textDark,
                           ),
                         ),
-                        Text(
+                        const Text(
                           ' /Qtl',
                           style: TextStyle(
                             fontSize: 11,
@@ -359,9 +435,9 @@ class HomeScreen extends StatelessWidget {
                         color: AppConstants.primaryLight,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text(
-                        '🏛️ Agmarknet Live',
-                        style: TextStyle(
+                      child: Text(
+                        _liveRate != null ? '🏛️ Agmarknet Live' : '🏛️ APMC Reference',
+                        style: const TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
                           color: AppConstants.primaryDark,
@@ -390,7 +466,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                     ),
-                    onPressed: () => onNavigateToScreen(AppConstants.viewMarket),
+                    onPressed: () => widget.onNavigateToScreen(AppConstants.viewMarket),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -412,7 +488,7 @@ class HomeScreen extends StatelessWidget {
                     onPressed: () {
                       LuxuryToast.show(
                         context,
-                        message: 'Price Alert set for ${session.activeCrops.firstOrNull ?? "Cotton"} at ₹8,200',
+                        message: 'Price Alert set for ${widget.session.activeCrops.firstOrNull ?? "Cotton"} at ₹8,200',
                         icon: Icons.check_circle_rounded,
                       );
                     },
@@ -428,7 +504,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildMarketTicker(BuildContext context) {
     return GestureDetector(
-      onTap: () => onNavigateToScreen(AppConstants.viewMarket),
+      onTap: () => widget.onNavigateToScreen(AppConstants.viewMarket),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -454,12 +530,12 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Expanded(
+            Expanded(
               child: Text(
-                'Markapur APMC • Paddy ₹2,380 • Chilli ₹18,400 • Cotton ₹7,850',
+                _marketTickerText,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: AppConstants.textDark,
@@ -478,7 +554,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildWeatherSprayAdvisoryCard(BuildContext context) {
-    const weather = WeatherInfo.sample;
+    final weather = _liveWeather ?? WeatherInfo.sample;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -680,7 +756,7 @@ class HomeScreen extends StatelessWidget {
         final mod = modules[index];
         final color = mod['color'] as Color;
         return InkWell(
-          onTap: () => onNavigateToScreen(mod['screen'] as String),
+          onTap: () => widget.onNavigateToScreen(mod['screen'] as String),
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),

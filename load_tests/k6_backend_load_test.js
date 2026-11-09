@@ -38,6 +38,22 @@ export function setup() {
     throw new Error('FATAL SAFETY VIOLATION: Load test cannot target production infrastructure!');
   }
   console.log(`[k6 Setup] Commencing load test against staging target: ${BASE_URL}`);
+
+  // Provision load test user account once before VU execution to guarantee authentic 200 authentications
+  const userPayload = JSON.stringify({
+    name: 'Load Test Farmer',
+    email: 'k6_farmer_test@nukrop.ai',
+    password: 'TestPassword@2026',
+    phone: '9876543210',
+    role: 'farmer',
+    state: 'Telangana',
+    district: 'Warangal'
+  });
+  http.post(`${BASE_URL}/api/v1/auth/register`, userPayload, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: '5s'
+  });
+
   return { baseUrl: BASE_URL };
 }
 
@@ -69,15 +85,14 @@ export default function (data) {
     mandiLatency.add(Date.now() - start);
 
     const success = check(res, {
-      'mandi rates returns 200 or 502 upstream': (r) => r.status === 200 || r.status === 502,
+      'mandi rates returns 200': (r) => r.status === 200,
     });
-    // 502 represents upstream data.gov.in downtime, not gateway failure
-    errorRate.add(res.status >= 500 && res.status !== 502);
+    errorRate.add(!success);
   });
 
   group('3. Authentic Login & Token Issuance', () => {
     const loginPayload = JSON.stringify({
-      email: '9876543210@nukrop.ai',
+      email: 'k6_farmer_test@nukrop.ai',
       password: 'TestPassword@2026',
     });
 
@@ -86,9 +101,9 @@ export default function (data) {
     authLatency.add(Date.now() - start);
 
     const success = check(res, {
-      'auth returns expected response (200 or 401)': (r) => r.status === 200 || r.status === 401,
+      'auth returns 200 with tokens': (r) => r.status === 200 && r.json('accessToken') !== undefined,
     });
-    errorRate.add(res.status >= 500);
+    errorRate.add(!success);
   });
 
   sleep(1);
@@ -97,3 +112,4 @@ export default function (data) {
 export function teardown(data) {
   console.log('[k6 Teardown] Load test cycle completed successfully.');
 }
+

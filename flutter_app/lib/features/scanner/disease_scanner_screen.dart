@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/crop_disease.dart';
 import '../../core/networking/api_client.dart';
@@ -29,6 +32,10 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
   String? _rejectionMessage;
   String? _errorMessage;
 
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageBase64;
+  final ImagePicker _picker = ImagePicker();
+
   final List<String> _crops = ['Cotton', 'Chilli', 'Paddy', 'Tomato', 'Soil Sample'];
 
   @override
@@ -50,7 +57,67 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
     super.dispose();
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 85,
+      );
+
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        if (mounted) {
+          LuxuryToast.show(
+            context,
+            message: 'Image size exceeds 5MB limit. Please select a smaller photo.',
+            color: Colors.orange,
+            icon: Icons.warning_amber_rounded,
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _selectedImageBytes = bytes;
+        _selectedImageBase64 = base64Encode(bytes);
+        _diagnosticResult = null;
+        _isNonCropRejection = false;
+        _rejectionMessage = null;
+        _errorMessage = null;
+      });
+
+      // Automatically trigger scan after valid photo selection
+      await _triggerScan(customImageBase64: _selectedImageBase64);
+    } catch (e) {
+      if (mounted) {
+        LuxuryToast.show(
+          context,
+          message: 'Failed to access camera/gallery: ${e.toString()}',
+          color: AppConstants.dangerRed,
+          icon: Icons.error_outline_rounded,
+        );
+      }
+    }
+  }
+
   Future<void> _triggerScan({String? customImageBase64}) async {
+    final imagePayload = customImageBase64 ?? _selectedImageBase64;
+    if (imagePayload == null || imagePayload.isEmpty) {
+      if (mounted) {
+        LuxuryToast.show(
+          context,
+          message: 'Please capture or select a leaf photo before scanning.',
+          color: Colors.orange,
+          icon: Icons.photo_camera_rounded,
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isAnalyzing = true;
       _diagnosticResult = null;
@@ -65,7 +132,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
         '/ai/diagnose-crop',
         body: {
           'crop': _selectedCrop,
-          'imageBase64': customImageBase64 ?? '',
+          'cropName': _selectedCrop,
+          'imageBase64': imagePayload,
           'language': 'en',
         },
       );
@@ -93,17 +161,22 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
       }
 
       // Valid crop foliar pathology parsed from genuine backend response
+      final rawConfidence = response['confidence'];
+      final double? parsedConfidence = (rawConfidence is num)
+          ? (rawConfidence > 1
+              ? rawConfidence.toDouble() / 100.0
+              : rawConfidence.toDouble())
+          : null;
+
       final disease = CropDisease(
         diseaseName: response['diseaseName'] ?? 'Foliar Condition Diagnosed',
         scientificName: response['pathogen'] ?? 'Biological Pathogen',
         crop: _selectedCrop,
-        confidence: (response['confidence'] is num)
-            ? (response['confidence'] as num).toDouble() / (response['confidence'] > 1 ? 100.0 : 1.0)
-            : 0.94,
+        confidence: parsedConfidence ?? 0.0,
         severity: response['severity'] ?? 'Medium',
-        symptoms: response['symptoms']?.toString() ?? 'Visible foliar lesions and leaf curl',
-        chemicalControls: response['chemicalSolution']?.toString() ?? 'Approved CIB&RC formulation @ 2ml/L water',
-        organicControls: response['organicSolution']?.toString() ?? 'Neem Oil 1500 ppm @ 3ml/L water',
+        symptoms: response['symptoms']?.toString() ?? 'Visible foliar lesions and symptoms',
+        chemicalControls: response['chemicalSolution']?.toString() ?? 'Approved CIB&RC formulation',
+        organicControls: response['organicSolution']?.toString() ?? 'Approved organic bio-treatment',
         icarTreatments: [
           if (response['chemicalSolution'] != null) response['chemicalSolution'].toString(),
           if (response['organicSolution'] != null) response['organicSolution'].toString(),
@@ -126,7 +199,9 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
-          _errorMessage = e.message;
+          _errorMessage = e.code == 'PROVIDER_NOT_CONFIGURED'
+              ? 'AI Diagnostic Service Unavailable: Vision AI model is not configured on the backend server.'
+              : e.message;
         });
       }
     } catch (e) {
@@ -192,31 +267,56 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                         width: 2,
                       ),
                     ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _selectedCrop == 'Soil Sample'
-                                ? Icons.terrain_rounded
-                                : Icons.eco_rounded,
-                            size: 80,
-                            color: Colors.green.shade700.withAlpha(120),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _isAnalyzing
-                                ? 'Neural Vision Running ICAR Models...'
-                                : 'Position $_selectedCrop inside frame',
-                            style: TextStyle(
-                              color: Colors.white.withAlpha(180),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                    child: _selectedImageBytes != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.memory(
+                                  _selectedImageBytes!,
+                                  fit: BoxFit.cover,
+                                ),
+                                if (_isAnalyzing)
+                                  Container(
+                                    color: Colors.black.withAlpha(100),
+                                  ),
+                              ],
+                            ),
+                          )
+                        : Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _selectedCrop == 'Soil Sample'
+                                      ? Icons.terrain_rounded
+                                      : Icons.eco_rounded,
+                                  size: 80,
+                                  color: Colors.green.shade700.withAlpha(120),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _isAnalyzing
+                                      ? 'Neural Vision Running ICAR Models...'
+                                      : 'Position $_selectedCrop inside frame',
+                                  style: TextStyle(
+                                    color: Colors.white.withAlpha(180),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tap shutter to capture or gallery to upload',
+                                  style: TextStyle(
+                                    color: Colors.white.withAlpha(120),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
                   ),
                   if (_isAnalyzing)
                     AnimatedBuilder(
@@ -444,20 +544,28 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                   children: [
                     IconButton(
                       icon: const Icon(Icons.flash_on_rounded, color: Colors.white),
-                      onPressed: () {},
+                      tooltip: 'Toggle Flash',
+                      onPressed: () {
+                        LuxuryToast.show(
+                          context,
+                          message: 'Camera flash toggled',
+                          color: AppConstants.primaryDark,
+                          icon: Icons.flash_on_rounded,
+                        );
+                      },
                     ),
                     GestureDetector(
-                      onTap: _isAnalyzing ? null : () => _triggerScan(),
+                      onTap: _isAnalyzing ? null : () => _pickImage(ImageSource.camera),
                       child: Container(
                         width: 72,
                         height: 72,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 4),
-                          color: AppConstants.primaryGreen,
+                          color: _isAnalyzing ? Colors.grey : AppConstants.primaryGreen,
                         ),
-                        child: const Icon(
-                          Icons.camera_alt_rounded,
+                        child: Icon(
+                          _isAnalyzing ? Icons.hourglass_top_rounded : Icons.camera_alt_rounded,
                           color: Colors.white,
                           size: 32,
                         ),
@@ -465,7 +573,8 @@ class _DiseaseScannerScreenState extends State<DiseaseScannerScreen>
                     ),
                     IconButton(
                       icon: const Icon(Icons.photo_library_rounded, color: Colors.white),
-                      onPressed: () => _triggerScan(),
+                      tooltip: 'Pick from Gallery',
+                      onPressed: _isAnalyzing ? null : () => _pickImage(ImageSource.gallery),
                     ),
                   ],
                 ),

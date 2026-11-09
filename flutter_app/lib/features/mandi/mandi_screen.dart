@@ -16,13 +16,37 @@ class MandiScreen extends StatefulWidget {
 }
 
 class _MandiScreenState extends State<MandiScreen> {
-  final String _selectedState = 'Telangana';
-  final String _selectedCommodity = 'Cotton';
+  String _selectedState = 'Telangana';
+  String _selectedCommodity = 'Cotton';
   String _selectedDistrict = 'All Districts';
   String _searchQuery = '';
   bool _isLoading = false;
   bool _isCached = false;
+  bool _isLive = false;
   String? _errorMessage;
+
+  final List<String> _states = [
+    'Telangana',
+    'Andhra Pradesh',
+    'Maharashtra',
+    'Karnataka',
+    'Gujarat',
+    'Madhya Pradesh',
+    'Punjab',
+    'Haryana',
+  ];
+
+  final List<String> _commodities = [
+    'Cotton',
+    'Chilli',
+    'Paddy',
+    'Maize',
+    'Soyabean',
+    'Turmeric',
+    'Tomato',
+    'Onion',
+    'Wheat',
+  ];
 
   final List<String> _districts = [
     'All Districts',
@@ -64,26 +88,35 @@ class _MandiScreenState extends State<MandiScreen> {
 
     // 2. Fetch from genuine backend Agmarknet pipeline
     try {
+      final queryParams = <String, String>{
+        'state': _selectedState,
+        'commodity': _selectedCommodity,
+      };
+      if (_selectedDistrict != 'All Districts') {
+        queryParams['district'] = _selectedDistrict;
+      }
+
       final response = await ApiClient.get<Map<String, dynamic>>(
         '/mandi/rates',
-        queryParams: {
-          'state': _selectedState,
-          'commodity': _selectedCommodity,
-        },
+        queryParams: queryParams,
       );
 
       final records = response['records'] as List<dynamic>?;
       if (records != null && records.isNotEmpty) {
         final parsed = records.map((r) {
+          final modal = (r['modal_price'] ?? r['modalPrice'] ?? r['modal'] ?? 0.0);
+          final min = (r['min_price'] ?? r['minPrice'] ?? r['min'] ?? 0.0);
+          final max = (r['max_price'] ?? r['maxPrice'] ?? r['max'] ?? 0.0);
+
           return MandiRate(
             id: r['id']?.toString() ?? 'm_${r['market']}',
             mandiName: r['market'] ?? r['mandiName'] ?? 'APMC Market',
             state: r['state'] ?? _selectedState,
-            district: r['district'] ?? 'Warangal',
+            district: r['district'] ?? _selectedDistrict,
             commodity: r['commodity'] ?? _selectedCommodity,
-            modalPrice: (r['modal_price'] ?? r['modalPrice'] ?? 7850).toDouble(),
-            minPrice: (r['min_price'] ?? r['minPrice'] ?? 7200).toDouble(),
-            maxPrice: (r['max_price'] ?? r['maxPrice'] ?? 8200).toDouble(),
+            modalPrice: (modal is num) ? modal.toDouble() : 0.0,
+            minPrice: (min is num) ? min.toDouble() : 0.0,
+            maxPrice: (max is num) ? max.toDouble() : 0.0,
             arrivalDate: r['arrival_date'] != null
                 ? DateTime.tryParse(r['arrival_date']) ?? DateTime.now()
                 : DateTime.now(),
@@ -100,9 +133,18 @@ class _MandiScreenState extends State<MandiScreen> {
             _rates = parsed;
             _isLoading = false;
             _isCached = false;
+            _isLive = true;
           });
         }
         return;
+      } else {
+        if (mounted) {
+          setState(() {
+            _rates = [];
+            _isLoading = false;
+            _isLive = true;
+          });
+        }
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -118,10 +160,10 @@ class _MandiScreenState extends State<MandiScreen> {
           _isLoading = false;
         });
       }
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -184,8 +226,30 @@ class _MandiScreenState extends State<MandiScreen> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
           slivers: [
-            // Status Banner (Cached vs Live)
-            if (_isCached)
+            // Status Banner (Live vs Cached vs Offline Error)
+            if (_isLive)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sensors_rounded, size: 16, color: AppConstants.primaryDark),
+                      const SizedBox(width: 8),
+                      Text(
+                        'LIVE AGMARKNET INTELLIGENCE (${_rates.length} Mandi Yards)',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppConstants.primaryDark),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_isCached)
               SliverToBoxAdapter(
                 child: Container(
                   margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
@@ -208,14 +272,84 @@ class _MandiScreenState extends State<MandiScreen> {
                     ],
                   ),
                 ),
+              )
+            else if (_errorMessage != null && _rates.isEmpty)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.cloud_off_rounded, size: 16, color: AppConstants.dangerRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppConstants.dangerRed),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
-            // Search Bar & Filter
+            // Search Bar & Dynamic State / Commodity / District Filters
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _selectedState,
+                            decoration: InputDecoration(
+                              labelText: 'State',
+                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            items: _states.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12)))).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _selectedState = val);
+                                _loadMandiRates();
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _selectedCommodity,
+                            decoration: InputDecoration(
+                              labelText: 'Commodity',
+                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            items: _commodities.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _selectedCommodity = val);
+                                _loadMandiRates();
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     TextField(
                       decoration: InputDecoration(
                         hintText: 'Search commodity or APMC yard...',
@@ -236,7 +370,7 @@ class _MandiScreenState extends State<MandiScreen> {
                       ),
                       onChanged: (val) => setState(() => _searchQuery = val.trim()),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     SizedBox(
                       height: 36,
                       child: ListView(
@@ -258,7 +392,10 @@ class _MandiScreenState extends State<MandiScreen> {
                                     : AppConstants.textDark,
                               ),
                               onSelected: (val) {
-                                if (val) setState(() => _selectedDistrict = d);
+                                if (val) {
+                                  setState(() => _selectedDistrict = d);
+                                  _loadMandiRates();
+                                }
                               },
                             ),
                           );

@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nukrop_app/core/networking/api_client.dart';
 import 'package:nukrop_app/core/storage/secure_storage.dart';
+import 'package:nukrop_app/core/constants/app_constants.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -119,5 +120,39 @@ void main() {
       final savedAccess = await SecureStorage.getAccessToken();
       expect(savedAccess, equals('fresh_rotated_access_token'));
     });
+
+    test('Environment-aware baseUrl allows dynamic runtime override and reset', () {
+      expect(ApiClient.baseUrl, isNotEmpty);
+      ApiClient.setBaseUrl('https://api.staging.nukropai.com/api/v1/');
+      expect(ApiClient.baseUrl, equals('https://api.staging.nukropai.com/api/v1'));
+      ApiClient.resetBaseUrl();
+      expect(ApiClient.baseUrl, equals(AppConstants.apiBaseUrl));
+    });
+
+    test('Preserves identical X-Idempotency-Key across transient 503 retry attempts', () async {
+      final capturedIdempotencyKeys = <String>[];
+      int attempt = 0;
+
+      final mockClient = MockClient((request) async {
+        attempt++;
+        final key = request.headers['X-Idempotency-Key'];
+        if (key != null) capturedIdempotencyKeys.add(key);
+
+        if (attempt == 1) {
+          return http.Response(jsonEncode({'error': 'Temporarily unavailable'}), 503);
+        }
+        return http.Response(jsonEncode({'success': true, 'txId': 'tx_123'}), 200);
+      });
+
+      ApiClient.setMockClient(mockClient);
+
+      final res = await ApiClient.post<Map<String, dynamic>>('/khata/transactions', body: {'amount': 500});
+      expect(res['success'], isTrue);
+      expect(attempt, equals(2));
+      expect(capturedIdempotencyKeys.length, equals(2));
+      // CRITICAL: Both attempts must share the exact same idempotency key
+      expect(capturedIdempotencyKeys[0], equals(capturedIdempotencyKeys[1]));
+    });
   });
 }
+

@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/part-of: nukropai-platform
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: nukropai-redis
@@ -25,7 +27,7 @@ spec:
         - name: redis
           image: redis:7-alpine
           imagePullPolicy: IfNotPresent
-          command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+          command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
           ports:
             - name: redis
               containerPort: 6379
@@ -37,6 +39,9 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
           livenessProbe:
             tcpSocket:
               port: redis
@@ -47,6 +52,25 @@ spec:
               command: ["redis-cli", "ping"]
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: nukropai-redis-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nukropai-redis-pvc
+  namespace: nukropai
+  labels:
+    app.kubernetes.io/name: nukropai-redis
+    app.kubernetes.io/part-of: nukropai-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: v1
 kind: Service

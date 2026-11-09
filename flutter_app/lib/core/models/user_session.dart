@@ -9,6 +9,7 @@ class UserSession {
   final String state;
   final String district;
   final List<String> activeCrops;
+  final String languageCode;
   final String? accessToken;
   final String? refreshToken;
   final bool isVerified;
@@ -22,6 +23,7 @@ class UserSession {
     this.state = 'Telangana',
     this.district = 'Warangal',
     this.activeCrops = const ['Cotton', 'Chilli'],
+    this.languageCode = 'en',
     this.accessToken,
     this.refreshToken,
     this.isVerified = true,
@@ -39,6 +41,7 @@ class UserSession {
         'state': state,
         'district': district,
         'activeCrops': activeCrops,
+        'languageCode': languageCode,
         'accessToken': accessToken,
         'refreshToken': refreshToken,
         'isVerified': isVerified,
@@ -54,6 +57,7 @@ class UserSession {
       state: json['state'] ?? 'Telangana',
       district: json['district'] ?? 'Warangal',
       activeCrops: List<String>.from(json['activeCrops'] ?? ['Cotton', 'Chilli']),
+      languageCode: json['languageCode'] ?? 'en',
       accessToken: json['accessToken'],
       refreshToken: json['refreshToken'],
       isVerified: json['isVerified'] ?? true,

@@ -1746,8 +1746,8 @@ CREATE POLICY "public_read_subsidies" ON public.subsidies FOR SELECT USING (true
 -- ─────────────────────────────────────────────────────────────────
 -- STEP 7: SECURE AUTH SIGNUP TRIGGER (MAPPING auth.users TO profiles)
 -- ─────────────────────────────────────────────────────────────────
--- Prevents privilege escalation: whitelists requested roles strictly
--- to 'farmer' or 'driver'. 'admin' and 'agronomist' cannot be self-assigned.
+-- Prevents privilege escalation: only permits 'farmer' or 'driver' from user metadata.
+-- Administrative role ('admin') can NEVER be self-assigned during registration.
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
 RETURNS TRIGGER 
 SET search_path = public, pg_temp
@@ -1761,10 +1761,13 @@ DECLARE
   v_mandal text;
   v_district text;
   v_state text;
+  v_dpdp_consent boolean;
+  v_public_profile_enabled boolean;
   v_farmer_id text;
   v_driver_id text;
   v_public_id text;
 BEGIN
+  -- Extract metadata safely
   v_full_name := COALESCE(
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'name',
@@ -1772,20 +1775,35 @@ BEGIN
     'Farmer'
   );
   v_phone := COALESCE(
-    NEW.phone,
     NEW.raw_user_meta_data->>'phone',
-    NEW.raw_user_meta_data->>'phone_number'
+    NEW.raw_user_meta_data->>'phoneNumber',
+    to_jsonb(NEW)->>'phone'
   );
-
-  -- Dedicated opaque public identifier (122 bits of cryptographic randomness via RFC 4122 UUID v4)
+  
+  -- Generate dedicated opaque random public identifier (128-bit UUID representation, 122 bits of RFC 4122 UUIDv4 random entropy, 32 hex chars suffix)
   v_public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
 
-  -- Role whitelist & privilege escalation prevention:
-  v_requested_role := lower(COALESCE(NEW.raw_user_meta_data->>'role', 'farmer'));
+  -- ROLE WHITELISTING & PRIVILEGE ESCALATION BLOCK
+  v_requested_role := LOWER(COALESCE(
+    NEW.raw_app_meta_data->>'role',
+    NEW.raw_user_meta_data->>'role',
+    'farmer'
+  ));
+  
+  -- Privilege escalation prevention: strictly whitelist allowed roles
   IF v_requested_role NOT IN ('farmer', 'driver') THEN
     v_role := 'farmer'; -- Force safe non-privileged role
   ELSE
     v_role := v_requested_role;
+  END IF;
+
+  IF v_role = 'driver' THEN
+    v_driver_id := 'NKD-' || floor(1000 + random() * 8999)::text;
+    v_farmer_id := NULL;
+  ELSE
+    v_role := 'farmer';
+    v_farmer_id := 'NKF-' || floor(10000 + random() * 89999)::text;
+    v_driver_id := NULL;
   END IF;
 
   -- Extract location strictly from user metadata (never fabricate unverified geographic attributes)
@@ -1794,21 +1812,61 @@ BEGIN
   v_district := NEW.raw_user_meta_data->>'district';
   v_state := NEW.raw_user_meta_data->>'state';
 
-  IF v_role = 'driver' THEN
-    v_farmer_id := NULL;
-    v_driver_id := 'DRV-' || floor(10000 + random() * 89999)::text;
+  -- DPDP Consent: unknown or missing consent defaults strictly to FALSE (never fabricated as TRUE)
+  IF (NEW.raw_user_meta_data->>'dpdp_consent_given') IS NOT NULL THEN
+    v_dpdp_consent := (NEW.raw_user_meta_data->>'dpdp_consent_given')::boolean;
   ELSE
-    v_farmer_id := 'NK-' || floor(10000 + random() * 89999)::text;
-    v_driver_id := NULL;
+    v_dpdp_consent := FALSE;
+  END IF;
+
+  -- Public profile discovery opt-in: defaults strictly to FALSE (never exposed without explicit opt-in)
+  IF (NEW.raw_user_meta_data->>'public_profile_enabled') IS NOT NULL THEN
+    v_public_profile_enabled := (NEW.raw_user_meta_data->>'public_profile_enabled')::boolean;
+  ELSE
+    v_public_profile_enabled := FALSE;
   END IF;
 
   INSERT INTO public.profiles (
-    id, user_id, public_id, farmer_id, driver_id, email, full_name, phone, phone_number,
-    role, village, district, mandal, state, preferred_language, created_at, updated_at
+    id,
+    user_id,
+    public_id,
+    email,
+    role,
+    full_name,
+    phone,
+    phone_number,
+    farmer_id,
+    driver_id,
+    village,
+    mandal,
+    district,
+    state,
+    dpdp_consent_given,
+    dpdp_consent_timestamp,
+    public_profile_enabled,
+    created_at,
+    updated_at
   )
   VALUES (
-    NEW.id, NEW.id, v_public_id, v_farmer_id, v_driver_id, NEW.email, v_full_name,
-    v_phone, v_phone, v_role, v_village, v_district, v_mandal, v_state, 'en', NOW(), NOW()
+    NEW.id,
+    NEW.id,
+    v_public_id,
+    NEW.email,
+    v_role,
+    v_full_name,
+    v_phone,
+    v_phone,
+    v_farmer_id,
+    v_driver_id,
+    v_village,
+    v_mandal,
+    v_district,
+    v_state,
+    v_dpdp_consent,
+    CASE WHEN v_dpdp_consent THEN NOW() ELSE NULL END,
+    v_public_profile_enabled,
+    NOW(),
+    NOW()
   )
   ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.id,
@@ -1821,6 +1879,12 @@ BEGIN
     mandal = COALESCE(public.profiles.mandal, EXCLUDED.mandal),
     district = COALESCE(public.profiles.district, EXCLUDED.district),
     state = COALESCE(public.profiles.state, EXCLUDED.state),
+    dpdp_consent_given = COALESCE(public.profiles.dpdp_consent_given, EXCLUDED.dpdp_consent_given, FALSE),
+    dpdp_consent_timestamp = CASE 
+      WHEN EXCLUDED.dpdp_consent_given = TRUE AND public.profiles.dpdp_consent_given IS NOT TRUE THEN NOW()
+      ELSE public.profiles.dpdp_consent_timestamp 
+    END,
+    public_profile_enabled = COALESCE(public.profiles.public_profile_enabled, EXCLUDED.public_profile_enabled, FALSE),
     updated_at = NOW();
 
   RETURN NEW;

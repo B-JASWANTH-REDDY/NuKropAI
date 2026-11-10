@@ -241,12 +241,20 @@ BEGIN
     'farmer'
   ));
   
-  IF v_requested_role = 'driver' THEN
-    v_role := 'driver';
+  -- Privilege escalation prevention: strictly whitelist allowed roles
+  IF v_requested_role NOT IN ('farmer', 'driver') THEN
+    v_role := 'farmer'; -- Force safe non-privileged role
+  ELSE
+    v_role := v_requested_role;
+  END IF;
+
+  IF v_role = 'driver' THEN
     v_driver_id := 'NKD-' || floor(1000 + random() * 8999)::text;
+    v_farmer_id := NULL;
   ELSE
     v_role := 'farmer';
     v_farmer_id := 'NKF-' || floor(10000 + random() * 89999)::text;
+    v_driver_id := NULL;
   END IF;
 
   -- Extract location strictly from user metadata (never fabricate unverified geographic attributes)

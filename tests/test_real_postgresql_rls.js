@@ -1187,21 +1187,80 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0-AUTH-ROLE-NON-SUPERUSER', `supabase_auth_admin unexpectedly has superuser status: ${isSuperuser}`);
     }
 
-    // 2. P0-AUTH-ROLE-SIGNUP-PROVISIONING: Realistic signup executed under supabase_auth_admin role
-    const authAdminSignupUid = '44444444-aaaa-4444-aaaa-444444444444';
+    // 1b. P0-AUTH-FUNCTION-OWNERSHIP: Verify handle_new_auth_user & ensure_profile_public_id are owned by postgres
+    const fnOwnerCheck = await pglite.query(`
+      SELECT p.proname, r.rolname AS owner_role
+      FROM pg_proc p
+      JOIN pg_roles r ON p.proowner = r.oid
+      WHERE p.proname IN ('handle_new_auth_user', 'ensure_profile_public_id', 'generate_profile_public_id');
+    `);
+    const ownerMap = Object.fromEntries(fnOwnerCheck.rows.map(row => [row.proname, row.owner_role]));
+    if (ownerMap['handle_new_auth_user'] === 'postgres' && ownerMap['ensure_profile_public_id'] === 'postgres') {
+      pass('P0-AUTH-FUNCTION-OWNERSHIP', `Function catalog proves handle_new_auth_user & ensure_profile_public_id owned by postgres (found: ${JSON.stringify(ownerMap)})`);
+    } else {
+      fail('P0-AUTH-FUNCTION-OWNERSHIP', `Unexpected function ownership: ${JSON.stringify(ownerMap)}`);
+    }
+
+    // 2. P0-AUTH-ROLE-SIGNUP-FARMER-CONSENT: Farmer signup with explicit DPDP consent & discovery under supabase_auth_admin
+    const authAdminFarmerUid = '44444444-aaaa-4444-aaaa-444444444444';
     await pglite.exec(`SET ROLE supabase_auth_admin;`);
     await pglite.query(`
       INSERT INTO auth.users (id, email, raw_user_meta_data)
-      VALUES ($1, 'auth_admin_farmer@nukrop.ai', '{"full_name": "Auth Admin Farmer", "role": "farmer"}'::jsonb)
+      VALUES ($1, 'auth_admin_farmer@nukrop.ai', '{
+        "full_name": "Auth Admin Farmer",
+        "role": "farmer",
+        "phoneNumber": "+919876543999",
+        "village": "Mulugu",
+        "mandal": "Mulugu",
+        "district": "Mulugu",
+        "state": "Telangana",
+        "dpdp_consent_given": true,
+        "public_profile_enabled": true
+      }'::jsonb)
       ON CONFLICT (id) DO NOTHING;
-    `, [authAdminSignupUid]);
+    `, [authAdminFarmerUid]);
     await pglite.exec(`RESET ROLE;`);
-    const authAdminProfCheck = await pglite.query(`SELECT id, public_id, full_name, role FROM public.profiles WHERE id = $1`, [authAdminSignupUid]);
-    const authAdminProf = authAdminProfCheck.rows[0];
-    if (authAdminProf && /^nk_pub_[0-9a-f]{32}$/.test(authAdminProf.public_id) && authAdminProf.public_id.length === 39 && authAdminProf.role === 'farmer') {
-      pass('P0-AUTH-ROLE-SIGNUP-PROVISIONING', `Signup under realistic supabase_auth_admin role creates profile with valid CSPRNG public_id (${authAdminProf.public_id})`);
+    const authFarmerProfCheck = await pglite.query(`
+      SELECT id, public_id, full_name, role, farmer_id, driver_id, dpdp_consent_given, dpdp_consent_timestamp, public_profile_enabled
+      FROM public.profiles WHERE id = $1
+    `, [authAdminFarmerUid]);
+    const authFarmerProf = authFarmerProfCheck.rows[0];
+    const validFarmerPubId = authFarmerProf && /^nk_pub_[0-9a-f]{32}$/.test(authFarmerProf.public_id) && authFarmerProf.public_id.length === 39;
+    const validFarmerRole = authFarmerProf?.role === 'farmer' && authFarmerProf?.farmer_id?.startsWith('NKF-') && authFarmerProf?.driver_id === null;
+    const validFarmerConsent = authFarmerProf?.dpdp_consent_given === true && authFarmerProf?.dpdp_consent_timestamp !== null;
+    const validFarmerDiscovery = authFarmerProf?.public_profile_enabled === true;
+    if (validFarmerPubId && validFarmerRole && validFarmerConsent && validFarmerDiscovery) {
+      pass('P0-AUTH-ROLE-SIGNUP-FARMER-CONSENT', `Farmer signup sets role='farmer', NKF-* id, explicit DPDP consent, and public discovery opt-in (${authFarmerProf.public_id})`);
     } else {
-      fail('P0-AUTH-ROLE-SIGNUP-PROVISIONING', `Signup under supabase_auth_admin failed: ${JSON.stringify(authAdminProf)}`);
+      fail('P0-AUTH-ROLE-SIGNUP-FARMER-CONSENT', `Farmer signup failed validation: ${JSON.stringify(authFarmerProf)}`);
+    }
+
+    // 2b. P0-AUTH-ROLE-SIGNUP-DRIVER-DEFAULTS: Driver signup with omitted DPDP consent & omitted discovery under supabase_auth_admin
+    const authAdminDriverUid = '44444444-dddd-4444-dddd-444444444444';
+    await pglite.exec(`SET ROLE supabase_auth_admin;`);
+    await pglite.query(`
+      INSERT INTO auth.users (id, email, raw_user_meta_data)
+      VALUES ($1, 'auth_admin_driver@nukrop.ai', '{
+        "full_name": "Auth Admin Driver",
+        "role": "driver",
+        "phone": "+919123456789"
+      }'::jsonb)
+      ON CONFLICT (id) DO NOTHING;
+    `, [authAdminDriverUid]);
+    await pglite.exec(`RESET ROLE;`);
+    const authDriverProfCheck = await pglite.query(`
+      SELECT id, public_id, full_name, role, farmer_id, driver_id, dpdp_consent_given, dpdp_consent_timestamp, public_profile_enabled
+      FROM public.profiles WHERE id = $1
+    `, [authAdminDriverUid]);
+    const authDriverProf = authDriverProfCheck.rows[0];
+    const validDriverPubId = authDriverProf && /^nk_pub_[0-9a-f]{32}$/.test(authDriverProf.public_id) && authDriverProf.public_id.length === 39;
+    const validDriverRole = authDriverProf?.role === 'driver' && authDriverProf?.driver_id?.startsWith('NKD-') && authDriverProf?.farmer_id === null;
+    const validDriverConsent = authDriverProf?.dpdp_consent_given === false && authDriverProf?.dpdp_consent_timestamp === null;
+    const validDriverDiscovery = authDriverProf?.public_profile_enabled === false;
+    if (validDriverPubId && validDriverRole && validDriverConsent && validDriverDiscovery) {
+      pass('P0-AUTH-ROLE-SIGNUP-DRIVER-DEFAULTS', `Driver signup sets role='driver', NKD-* id, safe missing DPDP default (false), and discovery default (false) (${authDriverProf.public_id})`);
+    } else {
+      fail('P0-AUTH-ROLE-SIGNUP-DRIVER-DEFAULTS', `Driver signup failed validation: ${JSON.stringify(authDriverProf)}`);
     }
 
     // 3. P0-AUTH-TRIGGER-ATOMIC-ROLLBACK: Failed profile insert rolls back auth user creation atomically
@@ -1246,14 +1305,14 @@ $$ LANGUAGE plpgsql STABLE;`
     }
 
     // 4. P0-AUTH-DUPLICATE-RETRY-INTEGRITY: Duplicate signup under supabase_auth_admin rejected and preserves profile
-    const originalAdminPubId = authAdminProf.public_id;
+    const originalAdminPubId = authFarmerProf.public_id;
     let duplicateRejected = false;
     try {
       await pglite.exec(`SET ROLE supabase_auth_admin;`);
       await pglite.query(`
         INSERT INTO auth.users (id, email, raw_user_meta_data)
         VALUES ($1, 'auth_admin_farmer@nukrop.ai', '{"full_name": "Duplicate Farmer"}'::jsonb);
-      `, [authAdminSignupUid]);
+      `, [authAdminFarmerUid]);
     } catch (e) {
       if (e.message.includes('duplicate key') || e.message.includes('unique constraint')) {
         duplicateRejected = true;
@@ -1261,7 +1320,7 @@ $$ LANGUAGE plpgsql STABLE;`
     } finally {
       await pglite.exec(`RESET ROLE;`);
     }
-    const duplicatePreserveCheck = await pglite.query(`SELECT public_id, full_name FROM public.profiles WHERE id = $1`, [authAdminSignupUid]);
+    const duplicatePreserveCheck = await pglite.query(`SELECT public_id, full_name FROM public.profiles WHERE id = $1`, [authAdminFarmerUid]);
     if (duplicateRejected && duplicatePreserveCheck.rows[0]?.public_id === originalAdminPubId) {
       pass('P0-AUTH-DUPLICATE-RETRY-INTEGRITY', 'Duplicate user insert rejected by unique constraint; existing public_id preserved without mutation');
     } else {
@@ -1363,7 +1422,7 @@ $$ LANGUAGE plpgsql STABLE;`
     }
 
     // Clean up auth admin test profiles
-    await pglite.query(`DELETE FROM public.profiles WHERE id = $1`, [authAdminSignupUid]);
+    await pglite.query(`DELETE FROM public.profiles WHERE id IN ($1, $2)`, [authAdminFarmerUid, authAdminDriverUid]);
 
     // P0-UNTRUSTED-CREATE-DENIED: Untrusted roles denied CREATE ON SCHEMA public
     await pglite.exec(`SET ROLE authenticated;`);

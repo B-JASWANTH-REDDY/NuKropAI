@@ -1362,9 +1362,11 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0-ENSURE-PUBID-TRIGGER-AUTH-LEGIT', `Trigger execution failed on authenticated insert: ${legitPubId}`);
     }
 
-    // P0-ENSURE-PUBID-TRIGGER-ANON-DENIED: Anon role cannot insert into public.profiles
-    let anonInsertBlocked = false;
-    let anonInsertErr = null;
+    // P0-ENSURE-PUBID-TRIGGER-ANON-DENIED: Distinguish table privilege denial from RLS rejection for anonymous insert
+    const anonTablePriv = (await pglite.query(`SELECT has_table_privilege('anon', 'public.profiles', 'INSERT') AS can_insert;`)).rows[0]?.can_insert;
+    
+    let anonDirectInsertErr = null;
+    let anonDirectInsertCode = null;
     try {
       await pglite.exec(`
         SET ROLE anon;
@@ -1375,20 +1377,47 @@ $$ LANGUAGE plpgsql STABLE;`
         VALUES ('00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000aa', 'anon@nukrop.ai', 'Anon Intruder', 'farmer');
       `);
     } catch (e) {
-      anonInsertErr = e.message;
-      if (e.message.includes('permission denied') || e.message.includes('new row violates row-level security') || e.message.includes('42501')) {
-        anonInsertBlocked = true;
-      }
+      anonDirectInsertErr = e.message;
+      anonDirectInsertCode = e.code || '42501';
     } finally {
       await pglite.exec(`
         RESET ROLE;
         SET request.jwt.claims = '';
       `);
     }
-    if (anonInsertBlocked) {
-      pass('P0-ENSURE-PUBID-TRIGGER-ANON-DENIED', 'Anon insert into public.profiles strictly blocked by permissions / RLS');
+
+    const isTablePrivDenied = !anonTablePriv && anonDirectInsertCode === '42501' && (anonDirectInsertErr.includes('permission denied for table') || anonDirectInsertErr.includes('permission denied for relation'));
+
+    // Defense-in-depth verification: If table INSERT privilege was granted, RLS WITH CHECK policy still blocks anon
+    await pglite.exec(`GRANT INSERT ON public.profiles TO anon;`);
+    let anonRlsInsertErr = null;
+    let anonRlsInsertCode = null;
+    try {
+      await pglite.exec(`
+        SET ROLE anon;
+        SET request.jwt.claims = '{"role": "anon"}';
+      `);
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, email, full_name, role)
+        VALUES ('00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000aa', 'anon@nukrop.ai', 'Anon Intruder', 'farmer');
+      `);
+    } catch (e) {
+      anonRlsInsertErr = e.message;
+      anonRlsInsertCode = e.code || '42501';
+    } finally {
+      await pglite.exec(`
+        REVOKE INSERT ON public.profiles FROM anon;
+        RESET ROLE;
+        SET request.jwt.claims = '';
+      `);
+    }
+
+    const isRlsPolicyDenied = anonRlsInsertCode === '42501' && anonRlsInsertErr.includes('violates row-level security policy');
+
+    if (isTablePrivDenied && isRlsPolicyDenied) {
+      pass('P0-ENSURE-PUBID-TRIGGER-ANON-DENIED', `Anonymous profile insert strictly blocked at both layers with SQLSTATE 42501: Layer 1 table privilege denial (has_table_privilege=false, "${anonDirectInsertErr}"), Layer 2 defense-in-depth RLS rejection ("${anonRlsInsertErr}")`);
     } else {
-      fail('P0-ENSURE-PUBID-TRIGGER-ANON-DENIED', `Anon insert into public.profiles unexpectedly succeeded (err=${anonInsertErr})`);
+      fail('P0-ENSURE-PUBID-TRIGGER-ANON-DENIED', `Anon insert privilege distinction failed: isTablePrivDenied=${isTablePrivDenied} (code=${anonDirectInsertCode}, err=${anonDirectInsertErr}), isRlsPolicyDenied=${isRlsPolicyDenied} (code=${anonRlsInsertCode}, err=${anonRlsInsertErr})`);
     }
 
     // P0-ENSURE-PUBID-TRIGGER-CLIENT-ID-DENIED: Authenticated user attempting to supply client public_id is rejected

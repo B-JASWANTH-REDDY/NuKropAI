@@ -1187,7 +1187,7 @@ $$ LANGUAGE plpgsql STABLE;`
       fail('P0-AUTH-ROLE-NON-SUPERUSER', `supabase_auth_admin unexpectedly has superuser status: ${isSuperuser}`);
     }
 
-    // 1b. P0-AUTH-FUNCTION-OWNERSHIP: Verify handle_new_auth_user & ensure_profile_public_id are owned by postgres
+    // 1b. P0-AUTH-FUNCTION-OWNERSHIP: Verify handle_new_auth_user, ensure_profile_public_id, and generate_profile_public_id are owned by postgres
     const fnOwnerCheck = await pglite.query(`
       SELECT p.proname, r.rolname AS owner_role
       FROM pg_proc p
@@ -1195,10 +1195,116 @@ $$ LANGUAGE plpgsql STABLE;`
       WHERE p.proname IN ('handle_new_auth_user', 'ensure_profile_public_id', 'generate_profile_public_id');
     `);
     const ownerMap = Object.fromEntries(fnOwnerCheck.rows.map(row => [row.proname, row.owner_role]));
-    if (ownerMap['handle_new_auth_user'] === 'postgres' && ownerMap['ensure_profile_public_id'] === 'postgres') {
-      pass('P0-AUTH-FUNCTION-OWNERSHIP', `Function catalog proves handle_new_auth_user & ensure_profile_public_id owned by postgres (found: ${JSON.stringify(ownerMap)})`);
+    const requiredOwnerFns = ['handle_new_auth_user', 'ensure_profile_public_id', 'generate_profile_public_id'];
+    const missingOwnerFns = requiredOwnerFns.filter(fn => !(fn in ownerMap));
+    const nonPostgresOwnerFns = requiredOwnerFns.filter(fn => ownerMap[fn] && ownerMap[fn] !== 'postgres');
+
+    if (missingOwnerFns.length === 0 && nonPostgresOwnerFns.length === 0 && Object.keys(ownerMap).length === 3) {
+      pass('P0-AUTH-FUNCTION-OWNERSHIP', `Function catalog proves all 3 functions (handle_new_auth_user, ensure_profile_public_id, generate_profile_public_id) exist and are owned by postgres: ${JSON.stringify(ownerMap)}`);
     } else {
-      fail('P0-AUTH-FUNCTION-OWNERSHIP', `Unexpected function ownership: ${JSON.stringify(ownerMap)}`);
+      fail('P0-AUTH-FUNCTION-OWNERSHIP', `Incomplete or invalid function ownership: missing=${JSON.stringify(missingOwnerFns)}, nonPostgres=${JSON.stringify(nonPostgresOwnerFns)}, ownerMap=${JSON.stringify(ownerMap)}`);
+    }
+
+    // 1c. P0-FUNCTION-SECURITY-CONFIG-CATALOG: Verify prosecdef and proconfig across all three functions from pg_proc
+    const fnConfigCheck = await pglite.query(`
+      SELECT p.proname, p.prosecdef, p.proconfig, p.prorettype::regtype::text AS return_type
+      FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'public' AND p.proname IN ('handle_new_auth_user', 'generate_profile_public_id', 'ensure_profile_public_id');
+    `);
+    const configMap = Object.fromEntries(fnConfigCheck.rows.map(r => [r.proname, r]));
+
+    const checkSearchPath = (cfg) => (cfg || []).some(c => {
+      const lower = c.toLowerCase().replace(/\s+/g, '');
+      return lower === 'search_path=public,pg_temp';
+    });
+
+    // Check handle_new_auth_user
+    const hProc = configMap['handle_new_auth_user'];
+    if (hProc && hProc.prosecdef === true && checkSearchPath(hProc.proconfig) && hProc.return_type === 'trigger') {
+      pass('P0-CATALOG-SEC-HANDLE-AUTH-USER', `handle_new_auth_user confirmed in catalog as prosecdef=true with fixed search_path=public, pg_temp (return_type=${hProc.return_type})`);
+    } else {
+      fail('P0-CATALOG-SEC-HANDLE-AUTH-USER', `Catalog check failed for handle_new_auth_user: ${JSON.stringify(hProc)}`);
+    }
+
+    // Check generate_profile_public_id
+    const gProc = configMap['generate_profile_public_id'];
+    if (gProc && gProc.prosecdef === true && checkSearchPath(gProc.proconfig) && gProc.return_type === 'text') {
+      pass('P0-CATALOG-SEC-GENERATE-PUBID', `generate_profile_public_id confirmed in catalog as prosecdef=true with fixed search_path=public, pg_temp (return_type=${gProc.return_type})`);
+    } else {
+      fail('P0-CATALOG-SEC-GENERATE-PUBID', `Catalog check failed for generate_profile_public_id: ${JSON.stringify(gProc)}`);
+    }
+
+    // Check ensure_profile_public_id
+    const eProc = configMap['ensure_profile_public_id'];
+    if (eProc && eProc.prosecdef === false && checkSearchPath(eProc.proconfig) && eProc.return_type === 'trigger') {
+      pass('P0-CATALOG-SEC-ENSURE-PUBID', `ensure_profile_public_id confirmed in catalog as prosecdef=false (trigger invoker) with fixed search_path=public, pg_temp (return_type=${eProc.return_type})`);
+    } else {
+      fail('P0-CATALOG-SEC-ENSURE-PUBID', `Catalog check failed for ensure_profile_public_id: ${JSON.stringify(eProc)}`);
+    }
+
+    // 1d. Exact privileges verification across all 3 functions separately using has_function_privilege:
+    
+    // Function 1: handle_new_auth_user()
+    const hPrivPublic = (await pglite.query(`SELECT has_function_privilege('public', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const hPrivAnon = (await pglite.query(`SELECT has_function_privilege('anon', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const hPrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const hPrivSvc = (await pglite.query(`SELECT has_function_privilege('service_role', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const hPrivAdmin = (await pglite.query(`SELECT has_function_privilege('supabase_auth_admin', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+
+    if (!hPrivPublic && !hPrivAnon && !hPrivAuth && hPrivSvc && hPrivAdmin) {
+      pass('P0-PRIVILEGE-HANDLE-AUTH-USER', `handle_new_auth_user privileges confirmed: PUBLIC=false, anon=false, authenticated=false, service_role=true, supabase_auth_admin=true`);
+    } else {
+      fail('P0-PRIVILEGE-HANDLE-AUTH-USER', `handle_new_auth_user privilege violation: public=${hPrivPublic}, anon=${hPrivAnon}, auth=${hPrivAuth}, service_role=${hPrivSvc}, supabase_auth_admin=${hPrivAdmin}`);
+    }
+
+    // Function 2: generate_profile_public_id()
+    const gPrivPublic = (await pglite.query(`SELECT has_function_privilege('public', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const gPrivAnon = (await pglite.query(`SELECT has_function_privilege('anon', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const gPrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const gPrivSvc = (await pglite.query(`SELECT has_function_privilege('service_role', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const gPrivAdmin = (await pglite.query(`SELECT has_function_privilege('supabase_auth_admin', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+
+    if (!gPrivPublic && !gPrivAnon && !gPrivAuth && gPrivSvc && !gPrivAdmin) {
+      pass('P0-PRIVILEGE-GENERATE-PUBID', `generate_profile_public_id privileges confirmed: PUBLIC=false, anon=false, authenticated=false, service_role=true, supabase_auth_admin=false`);
+    } else {
+      fail('P0-PRIVILEGE-GENERATE-PUBID', `generate_profile_public_id privilege violation: public=${gPrivPublic}, anon=${gPrivAnon}, auth=${gPrivAuth}, service_role=${gPrivSvc}, supabase_auth_admin=${gPrivAdmin}`);
+    }
+
+    // Function 3: ensure_profile_public_id()
+    const ePrivSvc = (await pglite.query(`SELECT has_function_privilege('service_role', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const ePrivAdmin = (await pglite.query(`SELECT has_function_privilege('supabase_auth_admin', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const ePrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+
+    // Additionally verify direct SQL execution of trigger function ensure_profile_public_id() is rejected by engine
+    let ensureDirectAnonBlocked = false;
+    try {
+      await pglite.exec(`SET ROLE anon;`);
+      await pglite.query(`SELECT public.ensure_profile_public_id();`);
+    } catch (e) {
+      if (e.message.includes('cannot be invoked from SQL') || e.message.includes('trigger') || e.message.includes('2F005')) {
+        ensureDirectAnonBlocked = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+
+    let ensureDirectAuthBlocked = false;
+    try {
+      await pglite.exec(`SET ROLE authenticated;`);
+      await pglite.query(`SELECT public.ensure_profile_public_id();`);
+    } catch (e) {
+      if (e.message.includes('cannot be invoked from SQL') || e.message.includes('trigger') || e.message.includes('2F005')) {
+        ensureDirectAuthBlocked = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+
+    if (ePrivSvc && ePrivAdmin && ePrivAuth && ensureDirectAnonBlocked && ensureDirectAuthBlocked) {
+      pass('P0-PRIVILEGE-ENSURE-PUBID', `ensure_profile_public_id privileges confirmed: service_role=true, supabase_auth_admin=true, authenticated=true (trigger execution), direct SQL invocation blocked for anon and authenticated (2F005)`);
+    } else {
+      fail('P0-PRIVILEGE-ENSURE-PUBID', `ensure_profile_public_id privilege check failed: svc=${ePrivSvc}, admin=${ePrivAdmin}, auth=${ePrivAuth}, anonDirectBlocked=${ensureDirectAnonBlocked}, authDirectBlocked=${ensureDirectAuthBlocked}`);
     }
 
     // 2. P0-AUTH-ROLE-SIGNUP-FARMER-CONSENT: Farmer signup with explicit DPDP consent & discovery under supabase_auth_admin

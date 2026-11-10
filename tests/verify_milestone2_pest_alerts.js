@@ -98,7 +98,7 @@ const targetFiles = [
 
     test(`M2.5 [${relName}]: APP_NOTIFICATIONS notif-1 and notif-2 are clean of hardcoded Warangal`, () => {
       const html = fs.readFileSync(targetPath, 'utf8');
-      const notifMatch = html.match(/let APP_NOTIFICATIONS = \[([\s\S]*?)\];/);
+      const notifMatch = html.match(/let APP_NOTIFICATIONS = (?:\[|\(function\(\)[\s\S]*?return \[)([\s\S]*?)\];/);
       assert.ok(notifMatch, 'APP_NOTIFICATIONS must exist');
       const notifCode = notifMatch[1];
       const notif1 = notifCode.match(/id:\s*'notif-1'[\s\S]*?msg:\s*\{[\s\S]*?\}/);

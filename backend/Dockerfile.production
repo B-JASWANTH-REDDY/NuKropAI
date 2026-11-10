@@ -1,0 +1,63 @@
+# ==============================================================================
+# NuKropAI Enterprise Backend — Multi-Stage Production Container Specification
+# Architecture: Node.js 20 LTS (Alpine), Least-Privilege Execution, dumb-init
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Stage 1: Build & Dependencies
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /usr/src/app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Copy dependency manifests
+COPY package*.json tsconfig.json ./
+
+# Install all dependencies (including devDependencies for TypeScript compilation)
+RUN npm ci
+
+# Copy full backend source tree
+COPY . .
+
+# Compile TypeScript to production JavaScript distribution
+RUN npm run build
+
+# Prune devDependencies to keep production image footprint minimal
+RUN npm prune --production
+
+# ------------------------------------------------------------------------------
+# Stage 2: Hardened Runtime Container
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS runner
+
+# Install dumb-init for proper PID 1 signal forwarding (SIGTERM / SIGINT) and curl for healthchecks
+RUN apk add --no-cache dumb-init curl
+
+WORKDIR /usr/src/app
+
+# Set production environment flags
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Copy runtime production node_modules from builder
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/package*.json ./
+
+# Switch from root to non-privileged node user for container security hardening
+USER node
+
+# Expose API port
+EXPOSE 3000
+
+# Container healthcheck for Kubernetes readiness and Docker orchestration
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Launch application via dumb-init to ensure graceful termination without zombie processes
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["node", "dist/server.js"]
+

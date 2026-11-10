@@ -29,15 +29,13 @@ export const getLatestTelemetry = async (request: FastifyRequest, reply: Fastify
       [userId]
     );
     if (result.rows.length === 0) {
-      return reply.send({
-        nitrogen: 50,
-        phosphorus: 25,
-        potassium: 38,
-        ph: 6.8,
-        organic_carbon: 1.45,
-        moisture: 45,
+      return reply.status(200).send({
+        status: 'no_data',
+        message: 'No subsoil telemetry recorded for this user. Connect an authorized IoT probe or upload a verified soil health card.',
+        data: null
       });
     }
+
     return reply.send(result.rows[0]);
   } catch (err) {
     console.error(err);

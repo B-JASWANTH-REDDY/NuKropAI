@@ -50,7 +50,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_user_location geography;
@@ -97,7 +97,7 @@ CREATE OR REPLACE FUNCTION public.upsert_driver_location(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 BEGIN
   INSERT INTO public.driver_locations (
@@ -149,5 +149,5 @@ GRANT EXECUTE ON FUNCTION public.upsert_driver_location(VARCHAR, DOUBLE PRECISIO
 -- 8. Enable Supabase Realtime replication on driver_locations
 DO $$ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_locations;
-EXCEPTION WHEN OTHERS THEN NULL; END $$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 

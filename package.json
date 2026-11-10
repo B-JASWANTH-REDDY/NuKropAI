@@ -2,14 +2,17 @@
   "name": "agriculture-ai-os",
   "version": "1.0.0",
   "description": "<div align=\"center\">\r   <img src=\"./app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp\" alt=\"NuKropAI Logo\" width=\"120\" />\r   <h1>NuKropAI (v2.0)</h1>\r   <p><strong>The Next-Generation Agrarian Intelligence Operating System for Indian Farmers</strong></p>\r   <p>\r     <a href=\"https://github.com/JACK-AI7/NuKropAI/blob/main/LICENSE\">\r       <img src=\"https://img.shields.io/badge/License-MIT-green.svg\" alt=\"License: MIT\" />\r     </a>\r     <a href=\"https://react.dev\">\r       <img src=\"https://img.shields.io/badge/Web-React_Vite-blue\" alt=\"Web: React\" />\r     </a>\r     <a href=\"https://developer.android.com/kotlin\">\r       <img src=\"https://img.shields.io/badge/Android-Kotlin_Jetpack_Compose-purple\" alt=\"Android: Kotlin\" />\r     </a>\r     <a href=\"https://supabase.com\">\r       <img src=\"https://img.shields.io/badge/Backend-Supabase_PostgreSQL-emerald\" alt=\"Backend: Supabase\" />\r     </a>\r     <a href=\"https://groq.com\">\r       <img src=\"https://img.shields.io/badge/AI-Llama_3.2_Vision-orange\" alt=\"AI: Groq Llama 3.2\" />\r     </a>\r   </p>\r </div>",
-  "main": "check_dom.js",
+  "main": "index.js",
   "directories": {
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/test_jwt_auth_security.js && node tests/run_e2e_tests.js && node tests/test_community_stories_and_real_posts.js && node tests/test_onboarding_and_splash_flows.js && python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py && python tests/test_rls_multi_role_adversarial.py && python tests/test_real_world_production_verification.py",
+    "test:unit": "python tests/test_mandi_pipeline_sync.py && python tests/test_sql_security_audit.py",
+    "test:e2e": "node tests/run_e2e_tests.js",
     "sync-apk": "node web/sync-apk.js",
-    "build:web": "cd web && npm run build"
+    "build:web": "cd web && npm run build",
+    "build:backend": "cd backend && npm run build"
   },
   "repository": {
     "type": "git",

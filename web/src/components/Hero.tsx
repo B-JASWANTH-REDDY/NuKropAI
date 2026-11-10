@@ -35,9 +35,13 @@ export default function Hero() {
         </p>
 
         <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="/NuKropAI.apk" download="NuKropAI.apk" className="nukrop-btn" style={{ padding: '14px 28px', fontSize: '15px', borderRadius: '12px' }}>
+          <a href="/NuKropAI_preview_debug.apk" download="NuKropAI_preview_debug.apk" className="nukrop-btn" style={{ padding: '14px 24px', fontSize: '15px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(202, 138, 4, 0.45) 100%)', border: '1px solid rgba(234, 179, 8, 0.6)', color: '#FEF08A' }}>
             <Download style={{ width: '18px', height: '18px' }} />
-            <span>Download NuKropAI APK (v2.0 Latest)</span>
+            <span>Native OS APK (62 MB)</span>
+          </a>
+          <a href="/NuKropAI_flutter_mobile_debug.apk" download="NuKropAI_flutter_mobile_debug.apk" className="nukrop-btn" style={{ padding: '14px 24px', fontSize: '15px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(2, 132, 199, 0.45) 100%)', border: '1px solid rgba(56, 189, 248, 0.6)', color: '#BAE6FD' }}>
+            <Download style={{ width: '18px', height: '18px' }} />
+            <span>Flutter Mobile APK (87 MB)</span>
           </a>
           <a href="#tools" className="nukrop-btn nukrop-btn-secondary" style={{ padding: '14px 24px', fontSize: '15px', borderRadius: '12px' }}>
             <Activity style={{ width: '18px', height: '18px' }} />
@@ -45,9 +49,13 @@ export default function Hero() {
           </a>
         </div>
 
-        <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--nukrop-text-muted)', fontSize: '12px' }}>
+        <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#EAB308', fontSize: '12px', fontWeight: 600 }}>
+          <span>⚠️ DEBUG SIGNED / NOT FOR PRODUCTION — Internal Preview Testing Only</span>
+        </div>
+
+        <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--nukrop-text-muted)', fontSize: '12px' }}>
           <Smartphone style={{ width: '14px', height: '14px' }} />
-          <span>Android 7.0+ · Sideload Ready · Zero Ads · 100% Free</span>
+          <span>Android 7.0+ · Preview Sideload · Production Signing Pending</span>
         </div>
       </div>
     </section>

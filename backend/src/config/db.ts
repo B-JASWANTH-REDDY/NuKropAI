@@ -1,33 +1,47 @@
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
+import * as crypto from 'crypto';
 
 dotenv.config();
 
-const connectionString = process.env.DB_CONNECTION_STRING || 'postgresql://enterprise_ai:securepassword123@localhost:5432/ai_os_db';
+const connectionString = (process.env.DATABASE_URL || process.env.DB_CONNECTION_STRING || '').trim();
 
-const rawPool = new Pool({
+if (process.env.NODE_ENV === 'production' && !connectionString) {
+  throw new Error('FATAL_DATABASE_CONFIG_ERROR: Authoritative database connection URL (DATABASE_URL or DB_CONNECTION_STRING) is missing from production environment.');
+}
+
+const rawPool = connectionString ? new Pool({
   connectionString,
   max: 5,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 2000,
-});
+}) : null;
 
 let isDbConnected = false;
 
 // Test connection at start
-rawPool.connect((err, client, release) => {
-  if (err) {
-    console.warn("⚠️ PostgreSQL database offline. Falling back to state-preserving in-memory data tables.");
-    isDbConnected = false;
-  } else {
-    console.log("🔌 Connected to PostgreSQL Database.");
-    isDbConnected = true;
-    if (release) release();
-  }
-});
+if (rawPool) {
+  rawPool.connect((err, client, release) => {
+    if (err) {
+      console.warn("⚠️ PostgreSQL database offline. Falling back to state-preserving in-memory data tables.");
+      isDbConnected = false;
+    } else {
+      console.log("🔌 Connected to PostgreSQL Database.");
+      isDbConnected = true;
+      if (release) release();
+    }
+  });
+} else {
+  console.warn("⚠️ PostgreSQL database connection URL not provided. Running in safe state-preserving in-memory mode.");
+  isDbConnected = false;
+}
 
 // Verify connection dynamically
 export async function getDbStatus(): Promise<boolean> {
+  if (!rawPool) {
+    isDbConnected = false;
+    return false;
+  }
   try {
     const client = await rawPool.connect();
     client.release();
@@ -39,56 +53,126 @@ export async function getDbStatus(): Promise<boolean> {
   }
 }
 
-// In-Memory Database Storage
+// In-Memory Database Storage (Starts empty - Zero Fabricated Data)
 export const memoryStore = {
   users: [] as any[],
+  profiles: [] as any[],
   refreshTokens: [] as any[],
   pestOutbreaks: [] as any[],
-  soilTelemetry: [
-    {
-      nitrogen: 45,
-      phosphorus: 22,
-      potassium: 37,
-      ph: 6.7,
-      organic_carbon: 1.35,
-      moisture: 44,
-      logged_at: new Date()
-    }
-  ] as any[],
-  valveOperations: [
-    { valve_name: 'Valve 01 (Northeast)', state: 'CLOSED', flow_rate: 0.0, triggered_by: 'manual', logged_at: new Date() },
-    { valve_name: 'Valve 02 (Northwest)', state: 'CLOSED', flow_rate: 0.0, triggered_by: 'manual', logged_at: new Date() },
-    { valve_name: 'Valve 03 (South Field)', state: 'CLOSED', flow_rate: 0.0, triggered_by: 'manual', logged_at: new Date() }
-  ] as any[],
+  soilTelemetry: [] as any[],
+  valveOperations: [] as any[],
   escrowContracts: [] as any[],
-  cropSimulations: [] as any[]
+  cropSimulations: [] as any[],
+  communityPosts: [] as any[],
+  postLikes: [] as any[],
+  priceAlerts: [] as any[],
+  notifications: [] as any[],
+  idempotencyKeys: new Map<string, any>()
 };
+
 
 // SQL query parser/simulator
 export async function query(text: string, params: any[] = []): Promise<{ rows: any[] }> {
   const connected = await getDbStatus();
-  if (connected) {
+  if (connected && rawPool) {
     try {
       return await rawPool.query(text, params);
     } catch (err) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`SERVICE_UNAVAILABLE: Database persistent query failed in production: ${(err as Error).message}`);
+      }
       console.warn("Database query error, falling back to memory execution.");
     }
   }
 
-  // Standard Normalized SQL simulation
-  const queryStr = text.toLowerCase();
+  // Strict Data Reliability: In production mode, both reads and writes MUST fail closed
+  // immediately if the database is offline. Never allow in-memory fallbacks in production.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SERVICE_UNAVAILABLE: Database is offline in production mode.');
+  }
 
-  // 1. Users Operations
+  const queryStr = text.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  // 1. Users & Profiles Operations
   if (queryStr.includes('insert into public.users')) {
     const newUser = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       email: params[0],
       password_hash: params[1],
       role: params[2] || 'buyer',
       created_at: new Date()
     };
     memoryStore.users.push(newUser);
+    // 122 bits of cryptographic randomness via RFC 4122 UUID v4 (32 hex characters)
+    const generatedPublicId = `nk_pub_${crypto.randomUUID().replace(/-/g, '').toLowerCase()}`;
+    memoryStore.profiles.push({
+      id: newUser.id,
+      user_id: newUser.id,
+      public_id: generatedPublicId,
+      email: newUser.email,
+      role: newUser.role,
+      full_name: newUser.email.split('@')[0],
+      public_profile_enabled: false,
+      created_at: newUser.created_at
+    });
     return { rows: [newUser] };
+  }
+
+  if (queryStr.includes('insert into public.profiles')) {
+    // Reject client-supplied, empty, arbitrary, or UUID-injected public_id
+    const pubIdMatch = queryStr.match(/insert into public\.profiles\s*\(([^)]+)\)/i);
+    if (pubIdMatch) {
+      const cols = pubIdMatch[1].split(',').map(c => c.trim().toLowerCase());
+      const pubIdIdx = cols.indexOf('public_id');
+      if (pubIdIdx !== -1 && pubIdIdx < params.length) {
+        const val = params[pubIdIdx];
+        if (val === '') {
+          throw new Error('MALFORMED_PUBLIC_ID: public_id cannot be an empty string');
+        }
+        if (typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)) {
+          throw new Error('UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id');
+        }
+        if (typeof val === 'string' && !/^nk_pub_[0-9a-f]{32}$/i.test(val)) {
+          throw new Error(`INVALID_PUBLIC_ID: Caller cannot supply user-selected, arbitrary or malformed public_id "${val}"`);
+        }
+      }
+    }
+  }
+
+  if (queryStr.includes('update public.profiles set public_profile_enabled =')) {
+    const enabled = params[0];
+    const targetId = params[1];
+    const profile = memoryStore.profiles.find(p => p.id === targetId || p.user_id === targetId);
+    if (profile) {
+      profile.public_profile_enabled = enabled;
+      return { rows: [{ id: profile.id, public_profile_enabled: enabled }] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('from public.profiles') && (queryStr.includes('id =') || queryStr.includes('user_id ='))) {
+    const targetUserId = params[0];
+    const matchingProfiles = memoryStore.profiles.filter(p => p.id === targetUserId || p.user_id === targetUserId);
+    return { rows: matchingProfiles };
+  }
+
+  if (queryStr.includes('from public.public_profiles')) {
+    const optedIn = memoryStore.profiles
+      .filter(p => p.public_profile_enabled === true)
+      .map(p => ({
+        public_id: p.public_id || (p.public_id = `nk_pub_${crypto.randomUUID().replace(/-/g, '').toLowerCase()}`),
+        full_name: p.full_name,
+        role: p.role,
+        avatar_url: p.avatar_url || null,
+        district: p.district || null,
+        state: p.state || null,
+        created_at: p.created_at
+      }));
+    return { rows: optedIn };
+  }
+
+  if (queryStr.includes('update public.profiles') && queryStr.includes('public_id =')) {
+    throw new Error('IMMUTABLE_FIELD: public_id cannot be modified once set');
   }
 
   if (queryStr.includes('select * from public.users where email =')) {
@@ -104,7 +188,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 2. Refresh Tokens Operations
   if (queryStr.includes('insert into public.refresh_tokens')) {
     const newToken = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       token_hash: params[0],
       user_id: params[1],
       expires_at: params[2],
@@ -139,7 +223,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 3. Telemetry Operations
   if (queryStr.includes('insert into public.soil_telemetry')) {
     const telemetry = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       user_id: params[0],
       nitrogen: params[1],
       phosphorus: params[2],
@@ -170,7 +254,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     const triggeredBy = params[3];
 
     const newOp = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       valve_name: valveName,
       state: state,
       flow_rate: flowRate,
@@ -191,7 +275,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 5. Contracts Operations
   if (queryStr.includes('insert into public.escrow_contracts')) {
     const contract = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       contract_address: params[0],
       buyer_name: params[1],
       commodity: params[2],
@@ -232,7 +316,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 6. Pest Outbreaks
   if (queryStr.includes('insert into public.pest_outbreaks')) {
     const outbreak = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       pest_name: params[0],
       latitude: params[1],
       longitude: params[2],
@@ -252,7 +336,7 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
   // 7. Simulations
   if (queryStr.includes('insert into public.crop_simulations')) {
     const sim = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       user_id: params[0],
       crop_name: params[1],
       field_size: params[2],
@@ -269,22 +353,294 @@ export async function query(text: string, params: any[] = []): Promise<{ rows: a
     return { rows: sims };
   }
 
+  // 8. Idempotency Keys (Persistent Deduplication)
+  if (queryStr.includes('select') && queryStr.includes('public.idempotency_keys')) {
+    const key = params[0];
+    const record = memoryStore.idempotencyKeys.get(key);
+    if (record) {
+      const isExpired = record.expires_at && new Date(record.expires_at).getTime() <= Date.now();
+      if (!isExpired) {
+        return { rows: [{ response_code: record.response_code, response_body: record.response_body }] };
+      }
+      memoryStore.idempotencyKeys.delete(key);
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('insert into public.idempotency_keys')) {
+    const key = params[0];
+    const record = {
+      key,
+      user_id: params[1],
+      operation: params[2],
+      response_code: params[3],
+      response_body: typeof params[4] === 'string' ? JSON.parse(params[4]) : params[4],
+      created_at: new Date(),
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
+    memoryStore.idempotencyKeys.set(key, record);
+    return { rows: [record] };
+  }
+
+  // 9. Community Posts
+  if (queryStr.includes('insert into public.community_posts')) {
+    const newPost = {
+      id: params[0],
+      user_id: params[1],
+      author_name: params[2],
+      author_village: params[3],
+      crop_id: params[4],
+      title: params[5],
+      content: params[6],
+      body: params[7],
+      media_url: params[8],
+      media_type: params[9],
+      likes_count: 0,
+      comments_count: 0,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    memoryStore.communityPosts.unshift(newPost);
+    return { rows: [newPost] };
+  }
+
+  if (queryStr.includes('from public.community_posts')) {
+    let posts = [...memoryStore.communityPosts];
+    if (params.length > 0 && typeof params[0] === 'string' && params[0] !== 'all topics') {
+      const topic = params[0].toLowerCase();
+      posts = posts.filter(p => (p.crop_id || '').toLowerCase() === topic);
+    }
+    return { rows: posts };
+  }
+
+  // 10. Post Likes
+  if (queryStr.includes('select id from public.post_likes')) {
+    const postId = params[0];
+    const userId = params[1];
+    const match = memoryStore.postLikes.find(l => l.post_id === postId && l.user_id === userId);
+    return { rows: match ? [match] : [] };
+  }
+
+  if (queryStr.includes('insert into public.post_likes')) {
+    const like = {
+      id: params[0],
+      post_id: params[1],
+      user_id: params[2],
+      created_at: new Date()
+    };
+    memoryStore.postLikes.push(like);
+    return { rows: [like] };
+  }
+
+  if (queryStr.includes('delete from public.post_likes')) {
+    const postId = params[0];
+    const userId = params[1];
+    memoryStore.postLikes = memoryStore.postLikes.filter(l => !(l.post_id === postId && l.user_id === userId));
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('update public.community_posts set likes_count')) {
+    return { rows: [] };
+  }
+
+  // 11. Price Alerts Operations
+  if (queryStr.includes('insert into public.price_alerts')) {
+    const newAlert = {
+      id: crypto.randomUUID(),
+      user_id: params[0],
+      crop: params[1],
+      commodity: params[2],
+      mandi: params[3],
+      target_price: Number(params[4]),
+      condition: params[5] || 'ABOVE',
+      status: 'ACTIVE',
+      idempotency_key: params[6] || null,
+      created_at: new Date(),
+      updated_at: new Date(),
+      triggered_at: null
+    };
+
+    if (newAlert.idempotency_key) {
+      const existing = memoryStore.priceAlerts.find(a => a.user_id === newAlert.user_id && a.idempotency_key === newAlert.idempotency_key);
+      if (existing) {
+        const dupErr: any = new Error('duplicate key value violates unique constraint "price_alerts_idempotency_key_key"');
+        dupErr.code = '23505';
+        throw dupErr;
+      }
+    }
+
+    memoryStore.priceAlerts.unshift(newAlert);
+    return { rows: [newAlert] };
+  }
+
+  if (queryStr.includes('from public.price_alerts') && queryStr.includes('user_id =')) {
+    const alerts = memoryStore.priceAlerts.filter(a => a.user_id === params[0] && a.status !== 'CANCELLED');
+    return { rows: alerts };
+  }
+
+  if (queryStr.includes('from public.price_alerts') && queryStr.includes('status = \'active\'')) {
+    const alerts = memoryStore.priceAlerts.filter(a => a.status === 'ACTIVE');
+    return { rows: alerts };
+  }
+
+  if (queryStr.includes('update public.price_alerts set status =')) {
+    const status = params[0];
+    const alertId = params[1];
+    const userId = params[2];
+    const alert = memoryStore.priceAlerts.find(a => a.id === alertId && (!userId || a.user_id === userId));
+    if (alert) {
+      if (queryStr.includes("status = 'active'") && alert.status !== 'ACTIVE') {
+        return { rows: [] };
+      }
+      alert.status = status;
+      alert.updated_at = new Date();
+      if (status === 'TRIGGERED') alert.triggered_at = new Date();
+      return { rows: [alert] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('delete from public.price_alerts where id =')) {
+    const alertId = params[0];
+    const userId = params[1];
+    const idx = memoryStore.priceAlerts.findIndex(a => a.id === alertId && (!userId || a.user_id === userId));
+    if (idx !== -1) {
+      const deleted = memoryStore.priceAlerts.splice(idx, 1);
+      return { rows: deleted };
+    }
+    return { rows: [] };
+  }
+
+  // 12. Notifications Operations
+  if (queryStr.includes('insert into public.notifications')) {
+    // ON CONFLICT (user_id, event_source, event_id) DO NOTHING
+    if (queryStr.includes('on conflict (user_id, event_source, event_id) do nothing')) {
+      const exists = memoryStore.notifications.some(
+        n => n.user_id === params[0] && n.event_source === params[1] && n.event_id === params[2]
+      );
+      if (exists) {
+        return { rows: [] };
+      }
+    }
+    const newNotif = {
+      id: crypto.randomUUID(),
+      user_id: params[0],
+      event_source: params[1],
+      event_id: params[2],
+      category: params[3] || 'SYSTEM',
+      title: params[4],
+      body: params[5],
+      is_read: false,
+      created_at: new Date()
+    };
+    memoryStore.notifications.unshift(newNotif);
+    return { rows: [newNotif] };
+  }
+
+  if (queryStr.includes('from public.notifications') && queryStr.includes('is_read = false')) {
+    const userId = params[0];
+    const unread = memoryStore.notifications.filter(n => n.user_id === userId && !n.is_read);
+    return { rows: [{ unread_count: unread.length }] };
+  }
+
+  if (queryStr.includes('from public.notifications') && queryStr.includes('user_id =')) {
+    const userId = params[0];
+    const notifs = memoryStore.notifications.filter(n => n.user_id === userId);
+    return { rows: notifs };
+  }
+
+  if (queryStr.includes('update public.notifications set is_read = true where id =')) {
+    const notifId = params[0];
+    const userId = params[1];
+    const notif = memoryStore.notifications.find(n => n.id === notifId && (!userId || n.user_id === userId));
+    if (notif) {
+      notif.is_read = true;
+      return { rows: [notif] };
+    }
+    return { rows: [] };
+  }
+
+  if (queryStr.includes('update public.notifications set is_read = true where user_id =')) {
+    const userId = params[0];
+    const updated: any[] = [];
+    memoryStore.notifications.forEach(n => {
+      if (n.user_id === userId && !n.is_read) {
+        n.is_read = true;
+        updated.push(n);
+      }
+    });
+    return { rows: updated };
+  }
+
   return { rows: [] };
+}
+
+function createMemoryTransactionClient() {
+  let inTransaction = false;
+  let snapshotAlerts: any[] | null = null;
+  let snapshotNotifications: any[] | null = null;
+
+  return {
+    query: async (text: string, params: any[] = []) => {
+      const q = text.toLowerCase().trim();
+      if (q === 'begin') {
+        inTransaction = true;
+        snapshotAlerts = JSON.parse(JSON.stringify(memoryStore.priceAlerts));
+        snapshotNotifications = JSON.parse(JSON.stringify(memoryStore.notifications));
+        return { rows: [] };
+      }
+      if (q === 'commit') {
+        inTransaction = false;
+        snapshotAlerts = null;
+        snapshotNotifications = null;
+        return { rows: [] };
+      }
+      if (q === 'rollback') {
+        if (inTransaction) {
+          if (snapshotAlerts !== null) {
+            memoryStore.priceAlerts = snapshotAlerts;
+          }
+          if (snapshotNotifications !== null) {
+            memoryStore.notifications = snapshotNotifications;
+          }
+          inTransaction = false;
+          snapshotAlerts = null;
+          snapshotNotifications = null;
+        }
+        return { rows: [] };
+      }
+      return query(text, params);
+    },
+    release: () => {
+      if (inTransaction && snapshotAlerts !== null) {
+        memoryStore.priceAlerts = snapshotAlerts;
+        if (snapshotNotifications !== null) {
+          memoryStore.notifications = snapshotNotifications;
+        }
+      }
+    }
+  };
 }
 
 // Export wrapper matching standard Pool class interface
 export const pool = {
   query: query,
   connect: async () => {
-    // If Postgres is online, return raw pool client. Otherwise, return fake client
-    try {
-      const client = await rawPool.connect();
-      return client;
-    } catch (err) {
-      return {
-        query: query,
-        release: () => {}
-      };
+    // If Postgres is online, return raw pool client. Otherwise, fail-closed in production
+    if (rawPool) {
+      try {
+        const client = await rawPool.connect();
+        return client;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error(`SERVICE_UNAVAILABLE: Database offline: Cannot establish client connection or transaction in production: ${(err as Error).message}`);
+        }
+        return createMemoryTransactionClient();
+      }
     }
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SERVICE_UNAVAILABLE: Database offline: Cannot establish client connection or transaction in production: DATABASE_URL not configured.');
+    }
+    return createMemoryTransactionClient();
   }
 };

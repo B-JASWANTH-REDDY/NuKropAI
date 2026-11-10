@@ -80,7 +80,7 @@ CREATE OR REPLACE FUNCTION public.get_farmer_agristack(p_fid VARCHAR)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_profile JSONB;

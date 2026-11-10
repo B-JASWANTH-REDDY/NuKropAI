@@ -25,6 +25,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DATABASE_URL=postgresql://enterprise_ai:securepassword123@postgres:5432/ai_os_db
       - DB_CONNECTION_STRING=postgresql://enterprise_ai:securepassword123@postgres:5432/ai_os_db
       - JWT_SECRET=SUPER_SECURE_JWT_SECRET_KEY_12345
       - JWT_REFRESH_SECRET=SUPER_SECURE_REFRESH_SECRET_KEY_98765

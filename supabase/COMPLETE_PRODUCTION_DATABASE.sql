@@ -282,7 +282,8 @@ BEGIN
     )
   ORDER BY distance_km ASC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, extensions, pg_temp;
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- 9. ROW LEVEL SECURITY (RLS) POLICIES

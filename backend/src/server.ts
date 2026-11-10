@@ -13,6 +13,7 @@ import client from 'prom-client';
 import pino from 'pino';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
+import * as fs from 'fs';
 
 
 dotenv.config();
@@ -25,9 +26,15 @@ const logger = pino({
 
 const fastify = Fastify({ logger });
 
-// Serve APKs directly from the user's Downloads folder
+// Platform-agnostic static APK and artifact serving (Linux container & Windows compatible)
+const downloadsDir = process.env.DOWNLOADS_PATH || (process.platform === 'win32' && fs.existsSync('C:\\Users\\bjasw\\Downloads') ? 'C:\\Users\\bjasw\\Downloads' : path.join(process.cwd(), 'downloads'));
+if (!fs.existsSync(downloadsDir)) {
+  try {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+  } catch (_) {}
+}
 fastify.register(fastifyStatic, {
-  root: 'C:\\Users\\bjasw\\Downloads',
+  root: downloadsDir,
   prefix: '/downloads/', 
 });
 
@@ -100,12 +107,12 @@ fastify.get('/health', async (request, reply) => {
 fastify.register(apiRoutes, { prefix: '/api/v1' });
 
 // Global Error Handler
-fastify.setErrorHandler((error, request, reply) => {
+fastify.setErrorHandler((error: any, request, reply) => {
   fastify.log.error(error);
   
-  if (error.statusCode) {
+  if (error && error.statusCode) {
     return reply.status(error.statusCode).send({
-      error: error.name,
+      error: error.name || 'Error',
       message: error.message
     });
   }
@@ -116,8 +123,28 @@ fastify.setErrorHandler((error, request, reply) => {
   });
 });
 
+function validateStartupConfig() {
+  const configs = [
+    { name: 'DATA_GOV_IN_API_KEY', present: !!process.env.DATA_GOV_IN_API_KEY, required: false, purpose: 'Official Agmarknet Mandi Integration' },
+    { name: 'GROQ_API_KEY', present: !!(process.env.GROQ_API_KEY || process.env.GROQ_FALLBACK_API_KEY), required: false, purpose: 'Groq AI Vision & Multimodal Diagnostics' },
+    { name: 'SUPABASE_URL', present: !!process.env.SUPABASE_URL, required: false, purpose: 'Supabase PostgreSQL & Auth' },
+    { name: 'SUPABASE_ANON_KEY', present: !!process.env.SUPABASE_ANON_KEY, required: false, purpose: 'Supabase Public Client Auth' },
+    { name: 'SUPABASE_SERVICE_ROLE_KEY', present: !!process.env.SUPABASE_SERVICE_ROLE_KEY, required: false, purpose: 'Supabase Admin Privileges (Server-Only)' },
+    { name: 'MQTT_BROKER_URL', present: !!process.env.MQTT_BROKER_URL, required: false, purpose: 'IoT Telemetry Broker' },
+    { name: 'TUYA_CLIENT_ID', present: !!process.env.TUYA_CLIENT_ID, required: false, purpose: 'Tuya Cloud Motor Interlock' }
+  ];
+
+  console.log('--- NuKropAI Configuration Pre-flight Validation ---');
+  for (const c of configs) {
+    const status = c.present ? 'CONFIGURED [OK]' : 'UNCONFIGURED [OPTIONAL/DEFERRED]';
+    console.log(`[Config] ${c.name.padEnd(25)} : ${status} (${c.purpose})`);
+  }
+  console.log('----------------------------------------------------');
+}
+
 const start = async () => {
   try {
+    validateStartupConfig();
     const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
     await fastify.listen({ port, host: '0.0.0.0' });
     console.log(`NuKropAI Core Server listening on port ${port}`);

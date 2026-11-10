@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'buyer' CHECK (role IN ('farmer', 'buyer', 'admin')),
+    role VARCHAR(50) NOT NULL DEFAULT 'buyer' CHECK (role IN ('farmer', 'buyer', 'admin', 'driver')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
@@ -849,7 +849,11 @@ CREATE INDEX IF NOT EXISTS idx_user_follows_following ON public.user_follows(fol
 CREATE INDEX IF NOT EXISTS idx_user_follows_created_at ON public.user_follows(created_at DESC);
 
 CREATE OR REPLACE FUNCTION public.fn_sync_post_likes_count()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
     IF (TG_OP = 'INSERT') THEN
         UPDATE public.community_posts
@@ -866,7 +870,7 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS trg_post_likes_count ON public.post_likes;
 CREATE TRIGGER trg_post_likes_count
@@ -884,11 +888,17 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public insert on community_posts') THEN
         CREATE POLICY "Allow public insert on community_posts" ON public.community_posts FOR INSERT WITH CHECK (true);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public update on community_posts') THEN
-        CREATE POLICY "Allow public update on community_posts" ON public.community_posts FOR UPDATE USING (true) WITH CHECK (true);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow author update on community_posts') THEN
+        CREATE POLICY "Allow author update on community_posts" ON public.community_posts FOR UPDATE USING (
+            auth.uid()::text = user_id OR auth.role() = 'service_role' OR user_id IS NULL
+        ) WITH CHECK (
+            auth.uid()::text = user_id OR auth.role() = 'service_role' OR user_id IS NULL
+        );
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public delete on community_posts') THEN
-        CREATE POLICY "Allow public delete on community_posts" ON public.community_posts FOR DELETE USING (true);
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow author delete on community_posts') THEN
+        CREATE POLICY "Allow author delete on community_posts" ON public.community_posts FOR DELETE USING (
+            auth.uid()::text = user_id OR auth.role() = 'service_role' OR user_id IS NULL
+        );
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow public read on post_likes') THEN

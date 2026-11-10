@@ -1,0 +1,21 @@
+{
+  "production_distribution_enabled": false,
+  "release_signing_gate": "BLOCKED",
+  "mode": "STAGING_PREVIEW_ONLY",
+  "signing_classification": "DEBUG_SIGNED",
+  "warning": "DEBUG SIGNED / NOT FOR PRODUCTION — INTERNAL PREVIEW ONLY",
+  "preview_artifact": {
+    "name": "NuKropAI_preview_debug.apk",
+    "title": "NuKropAI Agrarian OS Native Engine",
+    "url": "/NuKropAI_preview_debug.apk",
+    "size_bytes": 62119658
+  },
+  "flutter_preview_artifact": {
+    "name": "NuKropAI_flutter_mobile_debug.apk",
+    "title": "NuKropAI Fullstack Mobile Client (Flutter)",
+    "architecture": "arm64-v8a",
+    "url": "/NuKropAI_flutter_mobile_debug.apk",
+    "size_bytes": 87098156
+  },
+  "generated_at": "2026-11-10T11:49:56.609Z"
+}

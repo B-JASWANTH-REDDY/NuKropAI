@@ -85,6 +85,20 @@ CREATE INDEX IF NOT EXISTS idx_driver_telemetry_online ON public.driver_telemetr
 CREATE INDEX IF NOT EXISTS idx_price_alerts_user ON public.price_alerts(user_id);
 
 -- ── 6. ENABLE SUPABASE REALTIME REPLICATION ──
-ALTER PUBLICATION supabase_realtime ADD TABLE public.haul_bookings;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_telemetry;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts;
+DO 
+DECLARE
+  tbl text;
+  tables text[] := ARRAY['haul_bookings', 'driver_telemetry', 'community_posts'];
+BEGIN
+  FOREACH tbl IN ARRAY tables LOOP
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = tbl) THEN
+      IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = tbl) THEN
+        BEGIN
+          EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+        EXCEPTION
+          WHEN duplicate_object THEN NULL;
+        END;
+      END IF;
+    END IF;
+  END LOOP;
+END ;

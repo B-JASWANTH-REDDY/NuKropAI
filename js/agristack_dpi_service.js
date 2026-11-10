@@ -54,7 +54,7 @@
   async function searchFarmerLandRegistry(p_search_token) {
     const rawInput = (typeof p_search_token === 'string') ? p_search_token.trim() : '';
     if (!rawInput) {
-      alert("Please enter a verified Aadhaar / Farmer ID to inspect records.");
+      if (typeof showLuxuryToast === "function") showLuxuryToast("Please enter a verified Aadhaar / Farmer ID to inspect records.", "warning"); else console.warn("Aadhaar query empty");
       return { success: false, message: "Empty search query" };
     }
 
@@ -94,7 +94,7 @@
                 days_since_sowing: p.days_sown || 0,
                 inspection_date: p.inspection_stamp,
                 verification_timestamp: p.inspection_stamp,
-                verification_status: 'VERIFIED_BY_OFFICER',
+                verification_status: 'SOURCE_RETRIEVED',
                 irrigation_method: p.irrigation_method || 'Verified Source',
                 growth_stage: p.growth_stage || 'Cultivation Stage',
                 officer_name: p.officer_name || 'Agricultural Officer'
@@ -148,7 +148,7 @@
 
     // 3. Fallback: No fake data. If token is not found in database or local store:
     clearActiveAgristackView();
-    alert("No verified land parcels found for this identifier in the National Registry.");
+    if (typeof showLuxuryToast === "function") showLuxuryToast("No verified land parcels found for this identifier in the National Registry.", "warning"); else console.warn("No parcels found");
     return { success: false, message: "No records found" };
   }
 
@@ -157,7 +157,7 @@
   async function saveParcelToUserAccount(parcelId) {
     const client = window.sbClient || (typeof supabase !== 'undefined' ? supabase : null);
     if (!client) {
-      alert("Database client is offline. Please check connection.");
+      if (typeof showLuxuryToast === "function") showLuxuryToast("Database client is offline. Please check connection.", "error"); else console.error("Database client offline");
       return;
     }
 
@@ -179,13 +179,13 @@
     }
 
     if (!user) {
-      alert("Please log into your application account first.");
+      if (typeof showLuxuryToast === "function") showLuxuryToast("Please log into your application account first.", "warning"); else console.warn("Login required");
       return;
     }
 
     const targetParcelId = parcelId || (agristackStore.data && agristackStore.data.parcels[agristackStore.activeParcelIndex]?.parcel_id);
     if (!targetParcelId) {
-      alert("No active parcel selected to save.");
+      if (typeof showLuxuryToast === "function") showLuxuryToast("No active parcel selected to save.", "warning"); else console.warn("No parcel selected");
       return;
     }
 
@@ -199,12 +199,12 @@
 
     if (error) {
       if (error.code === '23505') {
-        alert("✓ Plot already saved in your dashboard portfolio!");
+        if (typeof showLuxuryToast === "function") showLuxuryToast("✓ Plot already saved in your dashboard portfolio!", "info"); else console.log("Plot already saved");
       } else {
-        alert("Error saving record: " + error.message);
+        if (typeof showLuxuryToast === "function") showLuxuryToast("Error saving record: " + error.message, "error"); else console.error(error.message);
       }
     } else {
-      alert("✓ Plot successfully saved and linked to your dashboard portfolio!");
+      if (typeof showLuxuryToast === "function") showLuxuryToast("✓ Plot successfully saved and linked to your dashboard portfolio!", "success"); else console.log("Plot saved");
     }
   }
 
@@ -237,25 +237,11 @@
     }
   }
 
-  // 7. Nationwide Cadastral WMS Layer (NIC BhuNaksha / ISRO Bhuvan OGC EPSG:4326)
+  // 7. Nationwide Cadastral WMS Layer (Disabled pending bilateral NRSC/ISRO authorization MoU)
   function createNationalCadastralWMS(map) {
-    if (typeof L === 'undefined' || !L.tileLayer || !L.tileLayer.wms) {
-      return null;
-    }
-    const layer = L.tileLayer.wms('https://nrsc.gov.in', {
-      layers: 'multihazard:village_boundary,cadastral:cadastral_boundary',
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      maxZoom: 22,
-      crs: L.CRS.EPSG4326,
-      attribution: '© ISRO Bhuvan / National Cadastral'
-    });
-    layer.on('tileerror', function() {});
-    if (map) {
-      layer.addTo(map);
-    }
-    return layer;
+    // Disabled: NRSC / ISRO Bhuvan WMS is pending bilateral data licensing agreement.
+    // Preserves standard OpenStreetMap basemap without unauthorized third-party tile streaming.
+    return null;
   }
 
   // 8. Metric Conversion: Longitude-first [lon, lat] parsing to Latitude-first [lat, lon] for Leaflet

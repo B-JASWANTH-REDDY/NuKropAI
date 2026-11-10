@@ -1,11 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { pool } from '../config/db';
+import { authenticate, requireRole } from '../middleware/auth';
 
 export default async function geoRoutes(fastify: FastifyInstance) {
     
-    // 1. Create a Farm (Polygon)
-    fastify.post('/farms', async (request, reply) => {
-        const { userId, name, geojsonBoundary } = request.body as any;
+    // 1. Create a Farm (Polygon) - Protected, Farmer/Admin only
+    fastify.post('/farms', { preHandler: [authenticate, requireRole(['farmer', 'admin'])] }, async (request, reply) => {
+        const userId = request.user!.id;
+        const { name, geojsonBoundary } = request.body as any;
         const client = await pool.connect();
         
         try {
@@ -30,9 +32,9 @@ export default async function geoRoutes(fastify: FastifyInstance) {
         }
     });
 
-    // 2. Get Farms (Returns as GeoJSON FeatureCollection for Mapbox)
-    fastify.get('/farms', async (request, reply) => {
-        const userId = (request.query as any).userId;
+    // 2. Get Farms (Returns as GeoJSON FeatureCollection for Mapbox) - Protected, Owner-only
+    fastify.get('/farms', { preHandler: [authenticate] }, async (request, reply) => {
+        const userId = request.user!.id;
         const client = await pool.connect();
         
         try {
@@ -58,12 +60,22 @@ export default async function geoRoutes(fastify: FastifyInstance) {
         }
     });
 
-    // 3. Create a Zone within a Farm
-    fastify.post('/zones', async (request, reply) => {
+    // 3. Create a Zone within a Farm - Protected, Farmer/Admin only
+    fastify.post('/zones', { preHandler: [authenticate, requireRole(['farmer', 'admin'])] }, async (request, reply) => {
+        const userId = request.user!.id;
         const { farmId, name, cropType, plantingDate, geojsonBoundary } = request.body as any;
         const client = await pool.connect();
         
         try {
+            // Verify that farm belongs to authenticated user
+            const farmOwnership = await client.query(`
+                SELECT id FROM farms WHERE id = $1 AND user_id = $2
+            `, [farmId, userId]);
+
+            if (farmOwnership.rows.length === 0) {
+                return reply.status(403).send({ error: 'Forbidden: Target farm does not exist or is not owned by user' });
+            }
+
             // First check if the zone is completely inside the farm boundary (ST_Within)
             const validation = await client.query(`
                 SELECT ST_Within(

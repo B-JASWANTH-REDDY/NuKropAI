@@ -1,5 +1,5 @@
-import { IotDeviceState } from './providers/BaseDeviceProvider';
-import { IoTGateway } from './Gateway';
+import { IotDeviceState } from '../providers/BaseDeviceProvider';
+import { IoTGateway } from '../Gateway';
 
 export interface AutomationRule {
     id: string;
@@ -40,19 +40,23 @@ export class RuleEngine {
             if (metricValue === undefined) continue;
 
             let conditionMet = false;
-            if (rule.conditionOp === '<' && metricValue < rule.conditionValue) conditionMet = true;
-            if (rule.conditionOp === '>' && metricValue > rule.conditionValue) conditionMet = true;
-            if (rule.conditionOp === '==' && metricValue === rule.conditionValue) conditionMet = true;
+            switch (rule.conditionOp) {
+                case '<': conditionMet = metricValue < rule.conditionValue; break;
+                case '>': conditionMet = metricValue > rule.conditionValue; break;
+                case '==': conditionMet = metricValue === rule.conditionValue; break;
+            }
 
             if (conditionMet) {
-                console.log(`[RuleEngine] Rule ${rule.id} triggered: ${rule.conditionMetric} ${metricValue} ${rule.conditionOp} ${rule.conditionValue}`);
+                console.log(`[RuleEngine] ⚡ Rule triggered for ${deviceId}: ${rule.conditionMetric} ${rule.conditionOp} ${rule.conditionValue} -> ${rule.actionCommand}`);
                 
-                // Prevent infinite loop if already in target state
-                if (rule.actionCommand === 'MOTOR_ON' && state.isRunning) continue;
-                if (rule.actionCommand === 'MOTOR_OFF' && !state.isRunning) continue;
-
-                console.log(`[RuleEngine] Executing automated action: ${rule.actionCommand}`);
-                this.gateway.executeCommand(deviceId, rule.actionCommand);
+                // Dispatch action via the Gateway
+                this.gateway.executeCommand(deviceId, rule.actionCommand)
+                    .then(() => {
+                        console.log(`[RuleEngine] Action ${rule.actionCommand} dispatched successfully.`);
+                    })
+                    .catch((err: any) => {
+                        console.error(`[RuleEngine] Action ${rule.actionCommand} failed:`, err);
+                    });
             }
         }
     }

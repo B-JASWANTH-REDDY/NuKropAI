@@ -7,13 +7,14 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
+  validate-pr:
+    name: "PR Validation (Compilation & Unit Tests)"
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-    - name: set up JDK 17
+    
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
@@ -23,11 +24,62 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build Release APK
+    - name: Validate Android Compilation & Run Unit Tests
+      # Strictly validates compilation, manifests, and unit tests without requiring production signing secrets
+      run: ./gradlew assembleDebug testDebugUnitTest --no-daemon
+
+  production-release:
+    name: "Production Release Signing"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate-pr]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+        
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Check Production Keystore Availability
+      id: check-keystore
+      run: |
+        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          echo "has_keystore=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_keystore=false" >> $GITHUB_OUTPUT
+          echo "::notice ::Production signing secrets (KEYSTORE_BASE64) are pending in GitHub Actions repository secrets. Refusing to release unverified or debug-signed APK."
+        fi
+
+    - name: Decode Production Keystore
+      if: steps.check-keystore.outputs.has_keystore == 'true'
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/production.keystore
+
+    - name: Build and Sign Production Release APK
+      if: steps.check-keystore.outputs.has_keystore == 'true'
+      env:
+        KEYSTORE_PATH: /tmp/production.keystore
+        STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        STRICT_RELEASE_SIGNING: "true"
       run: ./gradlew assembleRelease --no-daemon
 
-    - name: Upload APK Artifact
+    - name: Verify APK Signature
+      if: steps.check-keystore.outputs.has_keystore == 'true'
+      run: |
+        $ANDROID_HOME/build-tools/36.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
+
+    - name: Upload Verified Release APK Artifact
+      if: steps.check-keystore.outputs.has_keystore == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: app-release-apk
+        name: app-production-release-apk
         path: app/build/outputs/apk/release/app-release.apk

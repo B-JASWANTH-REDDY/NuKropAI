@@ -28,7 +28,7 @@ def get_file_category(file_path):
 
 def determine_execute_grants(fn_name, full_fn_text, file_content):
     if fn_name == 'public.generate_profile_public_id':
-        return 'PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role)'
+        return 'SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated)'
     
     authenticated_rpcs = [
         'public.set_my_profile_discovery',

@@ -48,7 +48,7 @@ This document contains the authoritative audit of every `SECURITY DEFINER` funct
 | `20261105000005_gramhaul_end_to_end_offers_and_lifecycle.sql` | `public.atomic_cancel_booking` | `p_booking_id TEXT, p_actor_id TEXT, p_ac...` | `public, extensions, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |
 | `20261105000005_gramhaul_end_to_end_offers_and_lifecycle.sql` | `public.atomic_extend_rental` | `p_rental_id TEXT, p_renter_id TEXT, p_ne...` | `public, extensions, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |
 | `20261105000005_gramhaul_end_to_end_offers_and_lifecycle.sql` | `public.atomic_return_rental` | `p_rental_id TEXT, p_actor_id TEXT, p_ret...` | `public, extensions, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |
-| `20261109000001_canonical_identity_reconciliation.sql` | `public.generate_profile_public_id` | `` | `public, pg_temp` | **ELIMINATED** | PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role) |
+| `20261109000001_canonical_identity_reconciliation.sql` | `public.generate_profile_public_id` | `` | `public, pg_temp` | **ELIMINATED** | SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated) |
 | `20261109000001_canonical_identity_reconciliation.sql` | `public.handle_new_auth_user` | `` | `public, pg_temp` | **ELIMINATED** | TRIGGER / SYSTEM DEFINER ONLY |
 | `20261109000001_canonical_identity_reconciliation.sql` | `public.prevent_direct_discovery_mutation` | `` | `public, pg_temp` | **ELIMINATED** | TRIGGER / SYSTEM DEFINER ONLY |
 | `20261109000001_canonical_identity_reconciliation.sql` | `public.set_my_profile_discovery` | `p_enabled boolean` | `public, pg_temp` | **ELIMINATED** | AUTHENTICATED ONLY (REVOKE anon, PUBLIC) |
@@ -58,13 +58,13 @@ This document contains the authoritative audit of every `SECURITY DEFINER` funct
 | Setup Script | Function | Signature | search_path | Shadowing Defense | Authority & Execute Grants |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `CANONICAL_PRODUCTION_SETUP.sql` | `public.fn_sync_post_likes_count` | `` | `public, pg_temp` | **ELIMINATED** | TRIGGER / SYSTEM DEFINER ONLY |
-| `CANONICAL_PRODUCTION_SETUP.sql` | `public.generate_profile_public_id` | `` | `public, pg_temp` | **ELIMINATED** | PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role) |
+| `CANONICAL_PRODUCTION_SETUP.sql` | `public.generate_profile_public_id` | `` | `public, pg_temp` | **ELIMINATED** | SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated) |
 | `CANONICAL_PRODUCTION_SETUP.sql` | `public.set_my_profile_discovery` | `p_enabled boolean` | `public, pg_temp` | **ELIMINATED** | AUTHENTICATED ONLY (REVOKE anon, PUBLIC) |
 | `CANONICAL_PRODUCTION_SETUP.sql` | `public.get_community_author_profile` | `p_author_id text` | `public, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |
 | `CANONICAL_PRODUCTION_SETUP.sql` | `public.get_community_authors` | `p_author_ids text[]` | `public, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |
 | `CANONICAL_PRODUCTION_SETUP.sql` | `public.handle_new_auth_user` | `` | `public, pg_temp` | **ELIMINATED** | TRIGGER / SYSTEM DEFINER ONLY |
 | `COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql` | `public.fn_sync_post_likes_count` | `` | `public, pg_temp` | **ELIMINATED** | TRIGGER / SYSTEM DEFINER ONLY |
-| `COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql` | `public.generate_profile_public_id` | `` | `public, pg_temp` | **ELIMINATED** | PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role) |
+| `COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql` | `public.generate_profile_public_id` | `` | `public, pg_temp` | **ELIMINATED** | SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated) |
 | `COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql` | `public.set_my_profile_discovery` | `p_enabled boolean` | `public, pg_temp` | **ELIMINATED** | AUTHENTICATED ONLY (REVOKE anon, PUBLIC) |
 | `COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql` | `public.get_community_author_profile` | `p_author_id text` | `public, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |
 | `COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql` | `public.get_community_authors` | `p_author_ids text[]` | `public, pg_temp` | **ELIMINATED** | RESTRICTED / DEFINER AUTHORITY |

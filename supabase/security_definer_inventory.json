@@ -32,7 +32,7 @@
       "pg_temp_last": true,
       "status": "OK",
       "shadowing_defense": "ELIMINATED",
-      "execute_grants": "PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role)"
+      "execute_grants": "SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated)"
     },
     {
       "file": "supabase/CANONICAL_PRODUCTION_SETUP.sql",
@@ -116,7 +116,7 @@
       "pg_temp_last": true,
       "status": "OK",
       "shadowing_defense": "ELIMINATED",
-      "execute_grants": "PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role)"
+      "execute_grants": "SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated)"
     },
     {
       "file": "supabase/COMPLETE_SUPABASE_ALL_IN_ONE_PRODUCTION.sql",
@@ -752,7 +752,7 @@
       "pg_temp_last": true,
       "status": "OK",
       "shadowing_defense": "ELIMINATED",
-      "execute_grants": "PUBLIC DEFAULT GENERATOR (EXECUTE: anon, authenticated, service_role)"
+      "execute_grants": "SERVICE ROLE ONLY (REVOKE PUBLIC, anon, authenticated)"
     },
     {
       "file": "supabase/migrations/20261109000001_canonical_identity_reconciliation.sql",

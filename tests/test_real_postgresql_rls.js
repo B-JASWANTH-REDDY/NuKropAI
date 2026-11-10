@@ -803,6 +803,7 @@ $$ LANGUAGE plpgsql STABLE;`
     // P0-PUBID-AUTHENTICATED-FORBIDDEN: Authenticated role cannot supply client-chosen public_id
     const authSupplyUid = '77777777-7777-7777-7777-7777777777a1';
     let authSupplyBlocked = false;
+    let authSupplyErrorCode = null;
     try {
       await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
       await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'auth_supply@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authSupplyUid]);
@@ -819,14 +820,73 @@ $$ LANGUAGE plpgsql STABLE;`
     } catch (e) {
       await pglite.exec(`RESET ROLE;`);
       await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+      authSupplyErrorCode = e.code;
       if (e.message.includes('PERMISSION_DENIED') || e.message.includes('Client-specified public_id is prohibited')) {
         authSupplyBlocked = true;
       }
     }
-    if (authSupplyBlocked) {
-      pass('P0-PUBID-AUTHENTICATED-FORBIDDEN', 'Authenticated caller attempting custom public_id strictly rejected with PERMISSION_DENIED');
+    if (authSupplyBlocked && authSupplyErrorCode === '42501') {
+      pass('P0-PUBID-AUTHENTICATED-FORBIDDEN', 'Authenticated caller attempting custom public_id strictly rejected with PERMISSION_DENIED (42501)');
     } else {
-      fail('P0-PUBID-AUTHENTICATED-FORBIDDEN', 'Authenticated caller was allowed to specify custom public_id!');
+      fail('P0-PUBID-AUTHENTICATED-FORBIDDEN', `Authenticated caller was allowed to specify custom public_id or wrong code: ${authSupplyErrorCode}`);
+    }
+
+    // P0-PUBID-GUC-BYPASS-REJECTED: Adversarial attempt to forge public_id via custom GUC set_config is completely defeated
+    const gucBypassUid = '77777777-7777-7777-7777-7777777777c4';
+    let gucBypassBlocked = false;
+    let gucBypassErrorCode = null;
+    try {
+      await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+      await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'guc_bypass@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [gucBypassUid]);
+      await pglite.exec(`
+        SET ROLE authenticated;
+        SET request.jwt.claims = '{"sub": "${gucBypassUid}", "role": "authenticated"}';
+      `);
+      await pglite.exec('BEGIN;');
+      await pglite.query(`SELECT set_config('nukrop.server_generated_public_id', 'nk_pub_deadbeefcafebabef00ddeadbeefcafe', true);`);
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+        VALUES ($1, $1, 'guc_bypass@nukrop.ai', 'GUC Bypass Attacker', 'farmer', 'nk_pub_deadbeefcafebabef00ddeadbeefcafe');
+      `, [gucBypassUid]);
+      await pglite.exec('COMMIT;');
+      await pglite.exec(`RESET ROLE;`);
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    } catch (e) {
+      await pglite.exec('ROLLBACK;');
+      await pglite.exec(`RESET ROLE;`);
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+      gucBypassErrorCode = e.code;
+      if (e.message.includes('PERMISSION_DENIED') || e.message.includes('Client-specified public_id is prohibited')) {
+        gucBypassBlocked = true;
+      }
+    }
+    if (gucBypassBlocked && gucBypassErrorCode === '42501') {
+      pass('P0-PUBID-GUC-BYPASS-REJECTED', 'Adversarial custom GUC set_config bypass attempt strictly rejected with PERMISSION_DENIED (42501)');
+    } else {
+      fail('P0-PUBID-GUC-BYPASS-REJECTED', `GUC bypass unexpectedly succeeded or wrong code: ${gucBypassErrorCode}`);
+    }
+
+    // P0-PUBID-GENERATOR-DIRECT-CALL-DENIED: Authenticated role calling generate_profile_public_id() directly is denied
+    let generatorDirectCallDenied = false;
+    let generatorErrorCode = null;
+    try {
+      await pglite.exec(`
+        SET ROLE authenticated;
+        SET request.jwt.claims = '{"sub": "${authSupplyUid}", "role": "authenticated"}';
+      `);
+      await pglite.query(`SELECT public.generate_profile_public_id();`);
+      await pglite.exec(`RESET ROLE;`);
+    } catch (e) {
+      await pglite.exec(`RESET ROLE;`);
+      generatorErrorCode = e.code;
+      if (e.message.includes('permission denied') && e.message.includes('generate_profile_public_id')) {
+        generatorDirectCallDenied = true;
+      }
+    }
+    if (generatorDirectCallDenied && generatorErrorCode === '42501') {
+      pass('P0-PUBID-GENERATOR-DIRECT-CALL-DENIED', 'Direct execution of generate_profile_public_id() by authenticated caller strictly denied (42501)');
+    } else {
+      fail('P0-PUBID-GENERATOR-DIRECT-CALL-DENIED', `Authenticated caller was unexpectedly permitted to execute generator: ${generatorErrorCode}`);
     }
 
     // P0-PUBID-AUTH-MALFORMED: Authenticated role inserting malformed public_id is rejected
@@ -871,7 +931,7 @@ $$ LANGUAGE plpgsql STABLE;`
       await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
     } catch (e) {
       await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
-      if (e.message.includes('INVALID_PUBLIC_ID')) arbitraryBlocked = true;
+      if (e.message.includes('INVALID_PUBLIC_ID') || e.message.includes('PERMISSION_DENIED')) arbitraryBlocked = true;
     }
     if (arbitraryBlocked) {
       pass('P0-PUBID-ARBITRARY-REJECTED', 'Arbitrary vanity public_id strictly rejected with INVALID_PUBLIC_ID');
@@ -952,6 +1012,43 @@ $$ LANGUAGE plpgsql STABLE;`
       pass('P0-PUBID-RERUN-STABLE', 'Migration rerun preserves existing public_id without regeneration (idempotent)');
     } else {
       fail('P0-PUBID-RERUN-STABLE', `public_id was mutated on rerun: before=${pubIdBeforeRerun}, after=${pubIdAfterRerun}`);
+    }
+
+    // P0-PUBID-MULTIROW-TX: Multi-row and repeated inserts in one transaction generate distinct non-colliding IDs
+    const multiRowUid1 = '77777777-7777-7777-7777-7777777777d2';
+    const multiRowUid2 = '77777777-7777-7777-7777-7777777777d3';
+    await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'm1@nukrop.ai'), ($2, 'm2@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [multiRowUid1, multiRowUid2]);
+    await pglite.exec(`
+      SET ROLE service_role;
+      SET request.jwt.claims = '{"role": "service_role"}';
+    `);
+    const multiRowRes = await pglite.query(`
+      INSERT INTO public.profiles (id, user_id, email, full_name, role)
+      VALUES 
+        ($1, $1, 'm1@nukrop.ai', 'Multi Row 1', 'farmer'),
+        ($2, $2, 'm2@nukrop.ai', 'Multi Row 2', 'farmer')
+      RETURNING id, public_id;
+    `, [multiRowUid1, multiRowUid2]);
+    await pglite.exec(`RESET ROLE;`);
+    await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    const mIds = multiRowRes.rows.map(r => r.public_id);
+    if (mIds.length === 2 && mIds[0] !== mIds[1] && mIds.every(id => /^nk_pub_[0-9a-f]{32}$/.test(id))) {
+      pass('P0-PUBID-MULTIROW-TX', `Multi-row insert in single transaction generated distinct 122-bit CSPRNG identifiers (${mIds.join(', ')})`);
+    } else {
+      fail('P0-PUBID-MULTIROW-TX', `Multi-row insert failed distinct ID requirement: ${JSON.stringify(mIds)}`);
+    }
+
+    // P0-PUBID-CATALOG-PRIVILEGES: Verify PostgreSQL catalog privileges for generator and trigger functions
+    const genPrivAnon = (await pglite.query(`SELECT has_function_privilege('anon', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const genPrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const genPrivSvc = (await pglite.query(`SELECT has_function_privilege('service_role', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const authTriggerPrivAnon = (await pglite.query(`SELECT has_function_privilege('anon', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const authTriggerPrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    if (!genPrivAnon && !genPrivAuth && genPrivSvc && !authTriggerPrivAnon && !authTriggerPrivAuth) {
+      pass('P0-PUBID-CATALOG-PRIVILEGES', 'Database catalog confirms EXECUTE revoked from anon/authenticated and granted to service_role');
+    } else {
+      fail('P0-PUBID-CATALOG-PRIVILEGES', `Catalog privilege violation: genAnon=${genPrivAnon}, genAuth=${genPrivAuth}, genSvc=${genPrivSvc}, authAnon=${authTriggerPrivAnon}, authUser=${authTriggerPrivAuth}`);
     }
 
     // P1-CROSS-COLLISION: Profile A id collides with Profile B user_id

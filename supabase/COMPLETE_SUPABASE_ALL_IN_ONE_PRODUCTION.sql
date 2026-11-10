@@ -940,82 +940,70 @@ BEGIN
   END IF;
 END $$;
 
--- Dedicated server generator for public_id default (128-bit UUID representation, 122 bits of RFC 4122 UUIDv4 random entropy)
+-- Dedicated server generator for public_id (128-bit UUID representation, 122 bits of RFC 4122 UUIDv4 random entropy)
+-- Restricted strictly to service_role and postgres; denied to untrusted roles.
 CREATE OR REPLACE FUNCTION public.generate_profile_public_id()
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-DECLARE
-  v_id text;
 BEGIN
-  v_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
-  PERFORM set_config('nukrop.server_generated_public_id', v_id, true);
-  RETURN v_id;
+  RETURN 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.generate_profile_public_id() TO anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.generate_profile_public_id() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.generate_profile_public_id() TO service_role;
 
 -- Populate public_id with dedicated opaque random identifier if null (128-bit UUID representation, 122 bits of RFC 4122 UUIDv4 random entropy, 32 hex chars suffix)
 UPDATE public.profiles 
 SET public_id = 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''))
 WHERE public_id IS NULL;
 
-ALTER TABLE public.profiles ALTER COLUMN public_id SET DEFAULT public.generate_profile_public_id();
+-- Ensure public_id has NO column default so untrusted callers cannot rely on or manipulate default evaluation
+ALTER TABLE public.profiles ALTER COLUMN public_id DROP DEFAULT;
 ALTER TABLE public.profiles ALTER COLUMN public_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_public_id_unique ON public.profiles(public_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_user_id_unique ON public.profiles(user_id) WHERE user_id IS NOT NULL;
 
 -- Enforce server-controlled public_id generation on profile insert (rejects client selection, empty, malformed, or UUID injection)
+-- Does NOT rely on custom GUCs, client headers, or forgeable session state.
 CREATE OR REPLACE FUNCTION public.ensure_profile_public_id()
 RETURNS TRIGGER 
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
-DECLARE
-  v_server_generated text;
-  v_role text;
 BEGIN
-  -- Check if this execution was populated by the trusted column default generator in this transaction
-  BEGIN
-    v_server_generated := current_setting('nukrop.server_generated_public_id', true);
-  EXCEPTION WHEN OTHERS THEN
-    v_server_generated := NULL;
-  END;
-
   -- 1. If public_id is omitted or explicitly passed as NULL, generate 122-bit CSPRNG server identifier (RFC 4122 UUID v4)
   IF NEW.public_id IS NULL THEN
     NEW.public_id := 'nk_pub_' || lower(replace(gen_random_uuid()::text, '-', ''));
     RETURN NEW;
   END IF;
 
-  -- 2. Reject empty strings
+  -- 2. Reject client-specified public IDs if called by untrusted authenticated or anon role
+  IF current_user IN ('authenticated', 'anon') THEN
+    RAISE EXCEPTION 'PERMISSION_DENIED: Client-specified public_id is prohibited. public_id must be server-generated.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  -- 3. Reject empty strings
   IF NEW.public_id = '' THEN
-    RAISE EXCEPTION 'MALFORMED_PUBLIC_ID: public_id cannot be an empty string';
+    RAISE EXCEPTION 'MALFORMED_PUBLIC_ID: public_id cannot be an empty string'
+      USING ERRCODE = '22023';
   END IF;
 
-  -- 3. Reject UUID injection (e.g. attempting to inject internal auth UUID with hyphens as public identifier)
+  -- 4. Reject UUID injection (e.g. attempting to inject internal auth UUID with hyphens as public identifier)
   IF NEW.public_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
-    RAISE EXCEPTION 'UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id';
+    RAISE EXCEPTION 'UUID_INJECTION_REJECTED: Internal UUID cannot be used as public_id'
+      USING ERRCODE = '22023';
   END IF;
 
-  -- 4. Reject client-specified public IDs if called by untrusted authenticated or anon role
-  v_role := current_user;
-  IF (v_role = 'authenticated' OR v_role = 'anon') THEN
-    IF v_server_generated IS NOT NULL AND v_server_generated = NEW.public_id THEN
-      -- Trusted database default execution: clear setting to ensure one-time consumption per row
-      PERFORM set_config('nukrop.server_generated_public_id', '', true);
-    ELSE
-      RAISE EXCEPTION 'PERMISSION_DENIED: Client-specified public_id is prohibited. public_id must be server-generated.';
-    END IF;
-  END IF;
-
-  -- 5. Reject arbitrary strings, user-selected vanity names, or malformed/predictable strings
-  -- Only exact 32-hex format 'nk_pub_[32 hex]' is permitted from trusted internal callers/triggers
+  -- 5. Reject arbitrary strings, user-selected vanity names, or malformed/predictable strings from trusted callers
+  -- Only exact 32-hex format 'nk_pub_[32 hex]' is permitted
   IF NOT (NEW.public_id ~ '^nk_pub_[0-9a-f]{32}$') THEN
-    RAISE EXCEPTION 'INVALID_PUBLIC_ID: Caller-supplied public_id "%" is prohibited. Must be server-generated with 122-bit UUIDv4 randomness.', NEW.public_id;
+    RAISE EXCEPTION 'INVALID_PUBLIC_ID: Caller-supplied public_id "%" is prohibited. Must be server-generated with 122-bit UUIDv4 randomness.', NEW.public_id
+      USING ERRCODE = '22023';
   END IF;
 
   RETURN NEW;
@@ -1843,6 +1831,10 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
+
+-- Revoke handle_new_auth_user execute from untrusted roles
+REVOKE ALL ON FUNCTION public.handle_new_auth_user() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO service_role;
 
 -- Safe, non-destructive backfill: ensure existing auth.users have matching profiles
 DO $$

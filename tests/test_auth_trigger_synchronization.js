@@ -227,6 +227,16 @@ function runSyncAudit() {
     }
   }
 
+  // Check explicit revoke on ensure_profile_public_id across all three files
+  for (const [key, content] of Object.entries(contents)) {
+    const hasRevokeEnsurePubId = /REVOKE\s+ALL\s+ON\s+FUNCTION\s+public\.ensure_profile_public_id\(\)\s+FROM\s+PUBLIC,\s*anon,\s*authenticated,\s*service_role,\s*supabase_auth_admin/i.test(content);
+    if (hasRevokeEnsurePubId) {
+      pass(`REVOKE-ENSURE-PUBID-${key}`, `${files[key].name} explicitly revokes direct EXECUTE on ensure_profile_public_id() from PUBLIC, anon, authenticated, service_role, and supabase_auth_admin`);
+    } else {
+      fail(`REVOKE-ENSURE-PUBID-${key}`, `${files[key].name} missing explicit REVOKE ALL ON FUNCTION public.ensure_profile_public_id() FROM PUBLIC, anon, authenticated, service_role, supabase_auth_admin`);
+    }
+  }
+
   // Check column DEFAULT on public_id is dropped in all three files
   for (const [key, content] of Object.entries(contents)) {
     const hasDropDefault = /ALTER TABLE public\.profiles ALTER COLUMN public_id DROP DEFAULT/i.test(content);

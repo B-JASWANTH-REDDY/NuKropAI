@@ -163,6 +163,9 @@ CREATE TRIGGER trg_ensure_profile_public_id
   FOR EACH ROW
   EXECUTE FUNCTION public.ensure_profile_public_id();
 
+-- Explicit Least-Privilege Enforcement: Trigger function must not have direct EXECUTE permissions
+REVOKE ALL ON FUNCTION public.ensure_profile_public_id() FROM PUBLIC, anon, authenticated, service_role, supabase_auth_admin;
+
 -- Enforce public_id immutability on profile updates
 CREATE OR REPLACE FUNCTION public.protect_profile_immutable_fields()
 RETURNS TRIGGER 
@@ -896,6 +899,8 @@ BEGIN
 END $$;
 
 -- Explicit Least-Privilege Enforcements: Revoke internal server routines from untrusted roles
+REVOKE ALL ON FUNCTION public.ensure_profile_public_id() FROM PUBLIC, anon, authenticated, service_role, supabase_auth_admin;
+
 REVOKE ALL ON FUNCTION public.generate_profile_public_id() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.generate_profile_public_id() TO service_role;
 

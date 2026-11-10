@@ -1272,39 +1272,151 @@ $$ LANGUAGE plpgsql STABLE;`
     }
 
     // Function 3: ensure_profile_public_id()
+    const ePrivPublic = (await pglite.query(`SELECT has_function_privilege('public', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const ePrivAnon = (await pglite.query(`SELECT has_function_privilege('anon', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const ePrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
     const ePrivSvc = (await pglite.query(`SELECT has_function_privilege('service_role', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
     const ePrivAdmin = (await pglite.query(`SELECT has_function_privilege('supabase_auth_admin', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
-    const ePrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    const ePrivOwner = (await pglite.query(`SELECT has_function_privilege('postgres', 'public.ensure_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
 
-    // Additionally verify direct SQL execution of trigger function ensure_profile_public_id() is rejected by engine
-    let ensureDirectAnonBlocked = false;
+    // Verify direct SQL execution of trigger function ensure_profile_public_id() is rejected by permissions (42501)
+    let directAnonErr = null;
     try {
       await pglite.exec(`SET ROLE anon;`);
       await pglite.query(`SELECT public.ensure_profile_public_id();`);
     } catch (e) {
-      if (e.message.includes('cannot be invoked from SQL') || e.message.includes('trigger') || e.message.includes('2F005')) {
-        ensureDirectAnonBlocked = true;
-      }
+      directAnonErr = e.message;
     } finally {
       await pglite.exec(`RESET ROLE;`);
     }
 
-    let ensureDirectAuthBlocked = false;
+    let directAuthErr = null;
     try {
       await pglite.exec(`SET ROLE authenticated;`);
       await pglite.query(`SELECT public.ensure_profile_public_id();`);
     } catch (e) {
-      if (e.message.includes('cannot be invoked from SQL') || e.message.includes('trigger') || e.message.includes('2F005')) {
-        ensureDirectAuthBlocked = true;
-      }
+      directAuthErr = e.message;
     } finally {
       await pglite.exec(`RESET ROLE;`);
     }
 
-    if (ePrivSvc && ePrivAdmin && ePrivAuth && ensureDirectAnonBlocked && ensureDirectAuthBlocked) {
-      pass('P0-PRIVILEGE-ENSURE-PUBID', `ensure_profile_public_id privileges confirmed: service_role=true, supabase_auth_admin=true, authenticated=true (trigger execution), direct SQL invocation blocked for anon and authenticated (2F005)`);
+    let directSvcErr = null;
+    try {
+      await pglite.exec(`SET ROLE service_role;`);
+      await pglite.query(`SELECT public.ensure_profile_public_id();`);
+    } catch (e) {
+      directSvcErr = e.message;
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+
+    let directAdminErr = null;
+    try {
+      await pglite.exec(`SET ROLE supabase_auth_admin;`);
+      await pglite.query(`SELECT public.ensure_profile_public_id();`);
+    } catch (e) {
+      directAdminErr = e.message;
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+
+    let directOwnerBlocked = false;
+    try {
+      await pglite.query(`SELECT public.ensure_profile_public_id();`);
+    } catch (e) {
+      if (e.message.includes('cannot be invoked from SQL') || e.message.includes('trigger') || e.message.includes('2F005')) {
+        directOwnerBlocked = true;
+      }
+    }
+
+    const isPermDenied = (msg) => msg && (msg.includes('permission denied') || msg.includes('42501'));
+
+    if (!ePrivPublic && !ePrivAnon && !ePrivAuth && !ePrivSvc && !ePrivAdmin && ePrivOwner &&
+        isPermDenied(directAnonErr) && isPermDenied(directAuthErr) &&
+        isPermDenied(directSvcErr) && isPermDenied(directAdminErr) && directOwnerBlocked) {
+      pass('P0-PRIVILEGE-ENSURE-PUBID', `ensure_profile_public_id privileges confirmed: PUBLIC=false, anon=false, authenticated=false, service_role=false, supabase_auth_admin=false, postgres=true; direct SQL execution blocked via 42501 (permission denied) for untrusted/service roles and 2F005 for owner`);
     } else {
-      fail('P0-PRIVILEGE-ENSURE-PUBID', `ensure_profile_public_id privilege check failed: svc=${ePrivSvc}, admin=${ePrivAdmin}, auth=${ePrivAuth}, anonDirectBlocked=${ensureDirectAnonBlocked}, authDirectBlocked=${ensureDirectAuthBlocked}`);
+      fail('P0-PRIVILEGE-ENSURE-PUBID', `ensure_profile_public_id privilege check failed: public=${ePrivPublic}, anon=${ePrivAnon}, auth=${ePrivAuth}, svc=${ePrivSvc}, admin=${ePrivAdmin}, owner=${ePrivOwner}, directAnon=${directAnonErr}, directAuth=${directAuthErr}, directSvc=${directSvcErr}, directAdmin=${directAdminErr}, directOwner=${directOwnerBlocked}`);
+    }
+
+    // P0-ENSURE-PUBID-TRIGGER-AUTH-LEGIT: Authenticated user insert still invokes trigger and generates valid CSPRNG public_id
+    const authTriggerLegitUid = '55555555-5555-5555-5555-555555555555';
+    await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'trigger_legit@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authTriggerLegitUid]);
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${authTriggerLegitUid}", "role": "authenticated"}';
+    `);
+    await pglite.query(`
+      INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+      VALUES ($1, $1, 'trigger_legit@nukrop.ai', 'Trigger Legit Farmer', 'farmer', NULL);
+    `, [authTriggerLegitUid]);
+    await pglite.exec(`RESET ROLE;`);
+    await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+
+    const legitProfCheck = await pglite.query(`SELECT public_id FROM public.profiles WHERE id = $1`, [authTriggerLegitUid]);
+    const legitPubId = legitProfCheck.rows[0]?.public_id;
+    if (typeof legitPubId === 'string' && /^nk_pub_[0-9a-f]{32}$/.test(legitPubId) && legitPubId.length === 39) {
+      pass('P0-ENSURE-PUBID-TRIGGER-AUTH-LEGIT', `Authenticated profile insert successfully executes trigger (despite revoked direct execute) and generates valid CSPRNG public_id (${legitPubId})`);
+    } else {
+      fail('P0-ENSURE-PUBID-TRIGGER-AUTH-LEGIT', `Trigger execution failed on authenticated insert: ${legitPubId}`);
+    }
+
+    // P0-ENSURE-PUBID-TRIGGER-ANON-DENIED: Anon role cannot insert into public.profiles
+    let anonInsertBlocked = false;
+    let anonInsertErr = null;
+    try {
+      await pglite.exec(`
+        SET ROLE anon;
+        SET request.jwt.claims = '{"role": "anon"}';
+      `);
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, email, full_name, role)
+        VALUES ('00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-0000000000aa', 'anon@nukrop.ai', 'Anon Intruder', 'farmer');
+      `);
+    } catch (e) {
+      anonInsertErr = e.message;
+      if (e.message.includes('permission denied') || e.message.includes('new row violates row-level security') || e.message.includes('42501')) {
+        anonInsertBlocked = true;
+      }
+    } finally {
+      await pglite.exec(`
+        RESET ROLE;
+        SET request.jwt.claims = '';
+      `);
+    }
+    if (anonInsertBlocked) {
+      pass('P0-ENSURE-PUBID-TRIGGER-ANON-DENIED', 'Anon insert into public.profiles strictly blocked by permissions / RLS');
+    } else {
+      fail('P0-ENSURE-PUBID-TRIGGER-ANON-DENIED', `Anon insert into public.profiles unexpectedly succeeded (err=${anonInsertErr})`);
+    }
+
+    // P0-ENSURE-PUBID-TRIGGER-CLIENT-ID-DENIED: Authenticated user attempting to supply client public_id is rejected
+    const authClientSuppliedUid = '66666666-6666-6666-6666-666666666666';
+    let clientSuppliedRejected = false;
+    await pglite.exec(`ALTER TABLE auth.users DISABLE TRIGGER on_auth_user_created;`);
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ($1, 'client_id_attacker@nukrop.ai') ON CONFLICT (id) DO NOTHING;`, [authClientSuppliedUid]);
+    try {
+      await pglite.exec(`
+        SET ROLE authenticated;
+        SET request.jwt.claims = '{"sub": "${authClientSuppliedUid}", "role": "authenticated"}';
+      `);
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, email, full_name, role, public_id)
+        VALUES ($1, $1, 'client_id_attacker@nukrop.ai', 'Client ID Attacker', 'farmer', 'nk_pub_deadbeefdeadbeefdeadbeefdeadbeef');
+      `, [authClientSuppliedUid]);
+    } catch (e) {
+      if (e.message.includes('PERMISSION_DENIED') || e.message.includes('22023') || e.message.includes('42501')) {
+        clientSuppliedRejected = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+      await pglite.exec(`ALTER TABLE auth.users ENABLE TRIGGER on_auth_user_created;`);
+    }
+    if (clientSuppliedRejected) {
+      pass('P0-ENSURE-PUBID-TRIGGER-CLIENT-ID-DENIED', 'Authenticated insert with client-supplied public_id strictly rejected with PERMISSION_DENIED (42501)');
+    } else {
+      fail('P0-ENSURE-PUBID-TRIGGER-CLIENT-ID-DENIED', 'Authenticated insert with client-supplied public_id unexpectedly succeeded');
     }
 
     // 2. P0-AUTH-ROLE-SIGNUP-FARMER-CONSENT: Farmer signup with explicit DPDP consent & discovery under supabase_auth_admin

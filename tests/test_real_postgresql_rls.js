@@ -48,6 +48,9 @@ async function runRealPostgreSqlRlsSuite() {
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
+    CREATE ROLE supabase_auth_admin;
+  END IF;
 END $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE TABLE IF NOT EXISTS auth.users (
@@ -60,6 +63,9 @@ CREATE TABLE IF NOT EXISTS auth.users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
+GRANT ALL ON TABLE auth.users TO supabase_auth_admin;
+GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
 CREATE OR REPLACE FUNCTION uuid_generate_v4() RETURNS uuid AS $$ SELECT gen_random_uuid(); $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS $$
 BEGIN
@@ -1045,10 +1051,11 @@ $$ LANGUAGE plpgsql STABLE;`
     const genPrivSvc = (await pglite.query(`SELECT has_function_privilege('service_role', 'public.generate_profile_public_id()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
     const authTriggerPrivAnon = (await pglite.query(`SELECT has_function_privilege('anon', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
     const authTriggerPrivAuth = (await pglite.query(`SELECT has_function_privilege('authenticated', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
-    if (!genPrivAnon && !genPrivAuth && genPrivSvc && !authTriggerPrivAnon && !authTriggerPrivAuth) {
-      pass('P0-PUBID-CATALOG-PRIVILEGES', 'Database catalog confirms EXECUTE revoked from anon/authenticated and granted to service_role');
+    const authTriggerPrivAdmin = (await pglite.query(`SELECT has_function_privilege('supabase_auth_admin', 'public.handle_new_auth_user()', 'EXECUTE') AS can_exec;`)).rows[0]?.can_exec;
+    if (!genPrivAnon && !genPrivAuth && genPrivSvc && !authTriggerPrivAnon && !authTriggerPrivAuth && authTriggerPrivAdmin) {
+      pass('P0-PUBID-CATALOG-PRIVILEGES', 'Database catalog confirms EXECUTE revoked from anon/authenticated, granted to service_role and supabase_auth_admin');
     } else {
-      fail('P0-PUBID-CATALOG-PRIVILEGES', `Catalog privilege violation: genAnon=${genPrivAnon}, genAuth=${genPrivAuth}, genSvc=${genPrivSvc}, authAnon=${authTriggerPrivAnon}, authUser=${authTriggerPrivAuth}`);
+      fail('P0-PUBID-CATALOG-PRIVILEGES', `Catalog privilege violation: genAnon=${genPrivAnon}, genAuth=${genPrivAuth}, genSvc=${genPrivSvc}, authAnon=${authTriggerPrivAnon}, authUser=${authTriggerPrivAuth}, authAdmin=${authTriggerPrivAdmin}`);
     }
 
     // P1-CROSS-COLLISION: Profile A id collides with Profile B user_id
@@ -1166,6 +1173,197 @@ $$ LANGUAGE plpgsql STABLE;`
     } else {
       fail('P0-SIGNUP-ALL-IN-ONE-SETUP', `COMPLETE_SUPABASE_ALL_IN_ONE trigger failed: ${JSON.stringify(allInOneProf)}`);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // P0: SUPABASE AUTH EXECUTION CONTEXT & REALISTIC PRIVILEGE BOUNDARY SUITE
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // 1. P0-AUTH-ROLE-NON-SUPERUSER: Verify supabase_auth_admin is a non-superuser role
+    const authAdminRoleCheck = await pglite.query(`SELECT rolsuper FROM pg_roles WHERE rolname = 'supabase_auth_admin';`);
+    const isSuperuser = authAdminRoleCheck.rows[0]?.rolsuper;
+    if (isSuperuser === false) {
+      pass('P0-AUTH-ROLE-NON-SUPERUSER', 'supabase_auth_admin role is strictly non-superuser (rolsuper = false)');
+    } else {
+      fail('P0-AUTH-ROLE-NON-SUPERUSER', `supabase_auth_admin unexpectedly has superuser status: ${isSuperuser}`);
+    }
+
+    // 2. P0-AUTH-ROLE-SIGNUP-PROVISIONING: Realistic signup executed under supabase_auth_admin role
+    const authAdminSignupUid = '44444444-aaaa-4444-aaaa-444444444444';
+    await pglite.exec(`SET ROLE supabase_auth_admin;`);
+    await pglite.query(`
+      INSERT INTO auth.users (id, email, raw_user_meta_data)
+      VALUES ($1, 'auth_admin_farmer@nukrop.ai', '{"full_name": "Auth Admin Farmer", "role": "farmer"}'::jsonb)
+      ON CONFLICT (id) DO NOTHING;
+    `, [authAdminSignupUid]);
+    await pglite.exec(`RESET ROLE;`);
+    const authAdminProfCheck = await pglite.query(`SELECT id, public_id, full_name, role FROM public.profiles WHERE id = $1`, [authAdminSignupUid]);
+    const authAdminProf = authAdminProfCheck.rows[0];
+    if (authAdminProf && /^nk_pub_[0-9a-f]{32}$/.test(authAdminProf.public_id) && authAdminProf.public_id.length === 39 && authAdminProf.role === 'farmer') {
+      pass('P0-AUTH-ROLE-SIGNUP-PROVISIONING', `Signup under realistic supabase_auth_admin role creates profile with valid CSPRNG public_id (${authAdminProf.public_id})`);
+    } else {
+      fail('P0-AUTH-ROLE-SIGNUP-PROVISIONING', `Signup under supabase_auth_admin failed: ${JSON.stringify(authAdminProf)}`);
+    }
+
+    // 3. P0-AUTH-TRIGGER-ATOMIC-ROLLBACK: Failed profile insert rolls back auth user creation atomically
+    await pglite.exec(`
+      CREATE OR REPLACE FUNCTION public.failing_trigger_test()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        RAISE EXCEPTION 'SIMULATED_PROFILE_INSERT_CRASH: storage error or constraint failure';
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_fail_rollback_test ON public.profiles;
+      CREATE TRIGGER trg_fail_rollback_test
+        BEFORE INSERT ON public.profiles
+        FOR EACH ROW
+        WHEN (NEW.email = 'fail_rollback@nukrop.ai')
+        EXECUTE FUNCTION public.failing_trigger_test();
+    `);
+
+    const failRollbackUid = '99999999-eeee-9999-eeee-999999999999';
+    let triggerCrashCaught = false;
+    try {
+      await pglite.exec(`SET ROLE supabase_auth_admin;`);
+      await pglite.query(`
+        INSERT INTO auth.users (id, email, raw_user_meta_data)
+        VALUES ($1, 'fail_rollback@nukrop.ai', '{"full_name": "Crash Farmer"}'::jsonb);
+      `, [failRollbackUid]);
+    } catch (e) {
+      if (e.message.includes('SIMULATED_PROFILE_INSERT_CRASH')) {
+        triggerCrashCaught = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+    const rolledBackUser = await pglite.query(`SELECT id FROM auth.users WHERE id = $1`, [failRollbackUid]);
+    const rolledBackProf = await pglite.query(`SELECT id FROM public.profiles WHERE id = $1`, [failRollbackUid]);
+    await pglite.exec(`DROP TRIGGER IF EXISTS trg_fail_rollback_test ON public.profiles; DROP FUNCTION IF EXISTS public.failing_trigger_test();`);
+    if (triggerCrashCaught && rolledBackUser.rows.length === 0 && rolledBackProf.rows.length === 0) {
+      pass('P0-AUTH-TRIGGER-ATOMIC-ROLLBACK', 'Failed profile insert in trigger atomically rolls back auth user creation (0 orphaned rows)');
+    } else {
+      fail('P0-AUTH-TRIGGER-ATOMIC-ROLLBACK', `Atomic rollback violated: caught=${triggerCrashCaught}, users=${rolledBackUser.rows.length}, profs=${rolledBackProf.rows.length}`);
+    }
+
+    // 4. P0-AUTH-DUPLICATE-RETRY-INTEGRITY: Duplicate signup under supabase_auth_admin rejected and preserves profile
+    const originalAdminPubId = authAdminProf.public_id;
+    let duplicateRejected = false;
+    try {
+      await pglite.exec(`SET ROLE supabase_auth_admin;`);
+      await pglite.query(`
+        INSERT INTO auth.users (id, email, raw_user_meta_data)
+        VALUES ($1, 'auth_admin_farmer@nukrop.ai', '{"full_name": "Duplicate Farmer"}'::jsonb);
+      `, [authAdminSignupUid]);
+    } catch (e) {
+      if (e.message.includes('duplicate key') || e.message.includes('unique constraint')) {
+        duplicateRejected = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+    const duplicatePreserveCheck = await pglite.query(`SELECT public_id, full_name FROM public.profiles WHERE id = $1`, [authAdminSignupUid]);
+    if (duplicateRejected && duplicatePreserveCheck.rows[0]?.public_id === originalAdminPubId) {
+      pass('P0-AUTH-DUPLICATE-RETRY-INTEGRITY', 'Duplicate user insert rejected by unique constraint; existing public_id preserved without mutation');
+    } else {
+      fail('P0-AUTH-DUPLICATE-RETRY-INTEGRITY', `Duplicate handling failed: rejected=${duplicateRejected}, pubId=${duplicatePreserveCheck.rows[0]?.public_id}`);
+    }
+
+    // 5. P0-CROSS-USER-PROFILE-INJECTION-DENIED: Authenticated user cannot insert profile for another user
+    const victimUid = '55555555-bbbb-5555-bbbb-555555555555';
+    const attackerUid = '66666666-cccc-6666-cccc-666666666666';
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${attackerUid}", "role": "authenticated"}';
+    `);
+    let crossUserInsertBlocked = false;
+    try {
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, full_name, email)
+        VALUES ($1, $1, 'Spoofed Victim Profile', 'victim@nukrop.ai');
+      `, [victimUid]);
+    } catch (e) {
+      if (e.message.includes('violates row-level security policy') || e.message.includes('permission denied')) {
+        crossUserInsertBlocked = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+    if (crossUserInsertBlocked) {
+      pass('P0-CROSS-USER-PROFILE-INJECTION-DENIED', 'Authenticated user strictly blocked by RLS from creating another user profile');
+    } else {
+      fail('P0-CROSS-USER-PROFILE-INJECTION-DENIED', 'Authenticated user was able to insert profile for another user!');
+    }
+
+    // 6. P0-AUTHENTICATED-CHOSEN-PUBID-DENIED: Authenticated user cannot choose or supply public_id
+    await pglite.exec(`
+      SET ROLE authenticated;
+      SET request.jwt.claims = '{"sub": "${attackerUid}", "role": "authenticated"}';
+    `);
+    let chosenPubIdBlocked = false;
+    try {
+      await pglite.query(`
+        INSERT INTO public.profiles (id, user_id, public_id, full_name)
+        VALUES ($1, $1, 'nk_pub_cafebabecafebabecafebabecafebabe', 'Attacker Profile');
+      `, [attackerUid]);
+    } catch (e) {
+      if (e.message.includes('PERMISSION_DENIED') || e.message.includes('42501')) {
+        chosenPubIdBlocked = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+    if (chosenPubIdBlocked) {
+      pass('P0-AUTHENTICATED-CHOSEN-PUBID-DENIED', 'Authenticated caller attempting to provide chosen public_id rejected with 42501 PERMISSION_DENIED');
+    } else {
+      fail('P0-AUTHENTICATED-CHOSEN-PUBID-DENIED', 'Authenticated caller was unexpectedly permitted to supply public_id!');
+    }
+
+    // 7. P0-DIRECT-AUTH-TRIGGER-CALL-DENIED: Untrusted roles denied direct execution of handle_new_auth_user
+    let directAnonCallDenied = false;
+    try {
+      await pglite.exec(`SET ROLE anon;`);
+      await pglite.query(`SELECT public.handle_new_auth_user();`);
+    } catch (e) {
+      if (e.message.includes('permission denied') || e.message.includes('cannot be invoked from SQL')) {
+        directAnonCallDenied = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+    let directAuthCallDenied = false;
+    try {
+      await pglite.exec(`SET ROLE authenticated;`);
+      await pglite.query(`SELECT public.handle_new_auth_user();`);
+    } catch (e) {
+      if (e.message.includes('permission denied') || e.message.includes('cannot be invoked from SQL')) {
+        directAuthCallDenied = true;
+      }
+    } finally {
+      await pglite.exec(`RESET ROLE;`);
+    }
+    if (directAnonCallDenied && directAuthCallDenied) {
+      pass('P0-DIRECT-AUTH-TRIGGER-CALL-DENIED', 'Direct SQL execution of handle_new_auth_user() strictly denied to anon and authenticated');
+    } else {
+      fail('P0-DIRECT-AUTH-TRIGGER-CALL-DENIED', `Direct trigger execution leak: anonDenied=${directAnonCallDenied}, authDenied=${directAuthCallDenied}`);
+    }
+
+    // 8. P0-AUTH-TRIGGER-SECURITY-DEFINER-CATALOG: Verify handle_new_auth_user is SECURITY DEFINER with fixed search_path
+    const triggerProcCheck = await pglite.query(`
+      SELECT p.proname, p.prosecdef, p.proconfig
+      FROM pg_proc p
+      JOIN pg_namespace n ON p.pronamespace = n.oid
+      WHERE n.nspname = 'public' AND p.proname = 'handle_new_auth_user';
+    `);
+    const trigProc = triggerProcCheck.rows[0];
+    const hasSafePath = (trigProc?.proconfig || []).some(c => c.toLowerCase().startsWith('search_path=') && c.toLowerCase().endsWith('pg_temp'));
+    if (trigProc && trigProc.prosecdef === true && hasSafePath) {
+      pass('P0-AUTH-TRIGGER-SECURITY-DEFINER-CATALOG', 'handle_new_auth_user() confirmed in pg_proc as prosecdef = true with safe search_path');
+    } else {
+      fail('P0-AUTH-TRIGGER-SECURITY-DEFINER-CATALOG', `Catalog check failed for handle_new_auth_user: ${JSON.stringify(trigProc)}`);
+    }
+
+    // Clean up auth admin test profiles
+    await pglite.query(`DELETE FROM public.profiles WHERE id = $1`, [authAdminSignupUid]);
 
     // P0-UNTRUSTED-CREATE-DENIED: Untrusted roles denied CREATE ON SCHEMA public
     await pglite.exec(`SET ROLE authenticated;`);

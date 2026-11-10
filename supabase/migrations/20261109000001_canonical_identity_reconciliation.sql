@@ -343,6 +343,11 @@ CREATE TRIGGER on_auth_user_created
 -- Revoke handle_new_auth_user execute from untrusted roles
 REVOKE ALL ON FUNCTION public.handle_new_auth_user() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO service_role;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
+    GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO supabase_auth_admin;
+  END IF;
+END $$;
 
 -- Step 4: Observable Legacy Account Migration with Audit Log
 CREATE TABLE IF NOT EXISTS public._migration_legacy_user_sync_audit (
@@ -888,3 +893,8 @@ GRANT EXECUTE ON FUNCTION public.generate_profile_public_id() TO service_role;
 
 REVOKE ALL ON FUNCTION public.handle_new_auth_user() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO service_role;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
+    GRANT EXECUTE ON FUNCTION public.handle_new_auth_user() TO supabase_auth_admin;
+  END IF;
+END $$;

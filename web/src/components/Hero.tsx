@@ -35,9 +35,13 @@ export default function Hero() {
         </p>
 
         <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="/NuKropAI_preview_debug.apk" download="NuKropAI_preview_debug.apk" className="nukrop-btn" style={{ padding: '14px 28px', fontSize: '15px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(202, 138, 4, 0.45) 100%)', border: '1px solid rgba(234, 179, 8, 0.6)' }}>
+          <a href="/NuKropAI_preview_debug.apk" download="NuKropAI_preview_debug.apk" className="nukrop-btn" style={{ padding: '14px 24px', fontSize: '15px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(202, 138, 4, 0.45) 100%)', border: '1px solid rgba(234, 179, 8, 0.6)', color: '#FEF08A' }}>
             <Download style={{ width: '18px', height: '18px' }} />
-            <span>Download Preview APK (Debug-Signed)</span>
+            <span>Native OS APK (62 MB)</span>
+          </a>
+          <a href="/NuKropAI_flutter_mobile_debug.apk" download="NuKropAI_flutter_mobile_debug.apk" className="nukrop-btn" style={{ padding: '14px 24px', fontSize: '15px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(2, 132, 199, 0.45) 100%)', border: '1px solid rgba(56, 189, 248, 0.6)', color: '#BAE6FD' }}>
+            <Download style={{ width: '18px', height: '18px' }} />
+            <span>Flutter Mobile APK (87 MB)</span>
           </a>
           <a href="#tools" className="nukrop-btn nukrop-btn-secondary" style={{ padding: '14px 24px', fontSize: '15px', borderRadius: '12px' }}>
             <Activity style={{ width: '18px', height: '18px' }} />

@@ -14,6 +14,14 @@ const releaseCandidates = [
 
 const debugCandidate = path.resolve(__dirname, '../app/build/outputs/apk/debug/app-debug.apk');
 
+// Flutter mobile app candidate paths
+const flutterCandidates = [
+  path.resolve(__dirname, '../flutter_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk'),
+  path.resolve(__dirname, '../flutter_app/build/app/outputs/flutter-apk/app-release.apk'),
+  path.resolve(__dirname, '../flutter_app/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk'),
+  path.resolve(__dirname, '../flutter_app/build/app/outputs/flutter-apk/app-debug.apk')
+];
+
 let releaseSource = null;
 for (const cand of releaseCandidates) {
   if (fs.existsSync(cand)) {
@@ -21,6 +29,18 @@ for (const cand of releaseCandidates) {
     if (stat.size > 20 * 1024 * 1024) {
       if (!releaseSource || stat.mtimeMs > releaseSource.mtimeMs) {
         releaseSource = { path: cand, size: stat.size, mtimeMs: stat.mtimeMs };
+      }
+    }
+  }
+}
+
+let flutterSource = null;
+for (const cand of flutterCandidates) {
+  if (fs.existsSync(cand)) {
+    const stat = fs.statSync(cand);
+    if (stat.size > 20 * 1024 * 1024) {
+      if (!flutterSource || stat.mtimeMs > flutterSource.mtimeMs) {
+        flutterSource = { path: cand, size: stat.size, mtimeMs: stat.mtimeMs };
       }
     }
   }
@@ -100,17 +120,26 @@ if (isCandidateDebug) {
   }
 
   const disclaimerText = `================================================================================
-NuKropAI Agrarian OS — Internal Staging Preview Build
+NuKropAI Agrarian OS & Fullstack Mobile Client — Internal Staging Preview Builds
 ================================================================================
 STATUS: STAGING / PREVIEW ONLY
 SIGNING CLASSIFICATION: DEBUG_SIGNED (NOT FOR PRODUCTION USE)
 CERTIFICATE SUBJECT: CN=Android Debug, O=Android, C=US
-CERTIFICATE SHA-256: badbc6f865a559a48fa7996d9aeea810a2a9af2150a49e97799e8040a4ab6309
+
+AVAILABLE STAGING ARTIFACTS:
+1. NuKropAI_preview_debug.apk
+   - Role: Android Native Agrarian OS Engine (WebView, Sensors, Background GPS Service)
+   - Route: /NuKropAI_preview_debug.apk, /NuKropAI-debug.apk
+
+2. NuKropAI_flutter_mobile_debug.apk
+   - Role: Fullstack Mobile Client (Flutter 3.44, Riverpod, Offline First)
+   - Architecture: arm64-v8a
+   - Route: /NuKropAI_flutter_mobile_debug.apk, /flutter-debug.apk
 
 WARNING:
-This binary is an internal preview build intended exclusively for staging evaluation,
-automated CI/CD testing, and internal QA. It is cryptographically signed using the standard
-Android debug key.
+These binaries are internal preview builds intended exclusively for staging evaluation,
+automated CI/CD testing, and internal QA. They are cryptographically signed using the
+standard Android debug key.
 
 Production release distribution (NuKropAI.apk) is strictly DISABLED until official
 Google Play Console upload keystore credentials are provided.
@@ -125,8 +154,16 @@ Google Play Console upload keystore credentials are provided.
     warning: "DEBUG SIGNED / NOT FOR PRODUCTION — INTERNAL PREVIEW ONLY",
     preview_artifact: sourceToUse ? {
       name: "NuKropAI_preview_debug.apk",
+      title: "NuKropAI Agrarian OS Native Engine",
       url: "/NuKropAI_preview_debug.apk",
       size_bytes: fs.statSync(sourceToUse).size
+    } : null,
+    flutter_preview_artifact: flutterSource ? {
+      name: "NuKropAI_flutter_mobile_debug.apk",
+      title: "NuKropAI Fullstack Mobile Client (Flutter)",
+      architecture: "arm64-v8a",
+      url: "/NuKropAI_flutter_mobile_debug.apk",
+      size_bytes: fs.statSync(flutterSource.path).size
     } : null,
     generated_at: new Date().toISOString()
   };
@@ -135,6 +172,10 @@ Google Play Console upload keystore credentials are provided.
     if (!fs.existsSync(dir)) return;
     if (sourceToUse) {
       fs.copyFileSync(sourceToUse, path.join(dir, 'NuKropAI_preview_debug.apk'));
+      fs.copyFileSync(sourceToUse, path.join(dir, 'NuKropAI-debug.apk'));
+    }
+    if (flutterSource) {
+      fs.copyFileSync(flutterSource.path, path.join(dir, 'NuKropAI_flutter_mobile_debug.apk'));
     }
     fs.writeFileSync(path.join(dir, 'NuKropAI_preview_debug.txt'), disclaimerText, 'utf8');
     fs.writeFileSync(path.join(dir, 'production-apk-status.json'), JSON.stringify(statusJson, null, 2), 'utf8');
@@ -143,6 +184,16 @@ Google Play Console upload keystore credentials are provided.
   writePreviewArtifacts(pubDir);
   if (fs.existsSync(distDir)) {
     writePreviewArtifacts(distDir);
+  }
+
+  // Also sync the root NuKropAI-debug.apk if source exists
+  if (sourceToUse) {
+    const rootDebugApk = path.resolve(__dirname, '../NuKropAI-debug.apk');
+    fs.copyFileSync(sourceToUse, rootDebugApk);
+    console.log(`  ✓ Synced Native APK -> ${path.relative(__dirname, rootDebugApk)}`);
+  }
+  if (flutterSource) {
+    console.log(`  ✓ Synced Flutter Mobile APK -> public/NuKropAI_flutter_mobile_debug.apk (${(flutterSource.size / (1024 * 1024)).toFixed(1)} MB)`);
   }
 
   console.log('✅ [sync-apk] Production download endpoints successfully disabled and purged.');

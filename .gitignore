@@ -40,7 +40,9 @@ __pycache__/
 *.pyc
 *.apk
 !NuKropAI-debug.apk
+!web/public/NuKropAI-debug.apk
 !web/public/NuKropAI_preview_debug.apk
+!web/public/NuKropAI_flutter_mobile_debug.apk
 !web/public/NuKropAI_preview_debug.txt
 *.bak
 *.bak_*

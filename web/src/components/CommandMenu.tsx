@@ -76,16 +76,30 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
   const commands: CommandItem[] = [
     {
-      id: 'download-apk',
-      title: 'Download Preview APK (Debug-Signed · Not for Production)',
+      id: 'download-native-apk',
+      title: 'Download Android Native OS APK (Engine · Debug-Signed · 62 MB)',
       category: 'Navigation',
       icon: <Download style={{ width: '16px', height: '16px', color: '#EAB308' }} />,
-      shortcut: 'APK',
+      shortcut: 'OS APK',
       action: () => {
         onClose();
         const a = document.createElement('a');
         a.href = '/NuKropAI_preview_debug.apk';
         a.download = 'NuKropAI_preview_debug.apk';
+        a.click();
+      }
+    },
+    {
+      id: 'download-flutter-apk',
+      title: 'Download Flutter Fullstack Mobile APK (Client · Debug-Signed · 87 MB)',
+      category: 'Navigation',
+      icon: <Download style={{ width: '16px', height: '16px', color: '#38BDF8' }} />,
+      shortcut: 'FLUTTER',
+      action: () => {
+        onClose();
+        const a = document.createElement('a');
+        a.href = '/NuKropAI_flutter_mobile_debug.apk';
+        a.download = 'NuKropAI_flutter_mobile_debug.apk';
         a.click();
       }
     },

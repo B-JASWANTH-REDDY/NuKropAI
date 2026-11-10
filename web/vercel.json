@@ -18,6 +18,22 @@
       "destination": "/NuKropAI_preview_debug.apk"
     },
     {
+      "source": "/NuKropAI_flutter_mobile_debug.apk",
+      "destination": "/NuKropAI_flutter_mobile_debug.apk"
+    },
+    {
+      "source": "/flutter-debug.apk",
+      "destination": "/NuKropAI_flutter_mobile_debug.apk"
+    },
+    {
+      "source": "/flutter-mobile.apk",
+      "destination": "/NuKropAI_flutter_mobile_debug.apk"
+    },
+    {
+      "source": "/fullstack-mobile.apk",
+      "destination": "/NuKropAI_flutter_mobile_debug.apk"
+    },
+    {
       "source": "/NuKropAI.apk",
       "destination": "/production-apk-status.json"
     },
@@ -49,7 +65,7 @@
       ]
     },
     {
-      "source": "/NuKropAI(.*).apk",
+      "source": "/(.*).apk",
       "headers": [
         {
           "key": "Content-Type",

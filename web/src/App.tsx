@@ -186,13 +186,27 @@ function AppContent() {
               download="NuKropAI_preview_debug.apk"
               onClick={() => {
                 analytics.track('download_apk_click', { source: 'navbar_pill', version: 'preview-debug' });
-                showToast({ type: 'info', message: 'Downloading NuKropAI Preview APK (Debug-Signed · Not for Production)...' });
+                showToast({ type: 'info', message: 'Downloading NuKropAI Native OS APK (62 MB)...' });
               }}
               className="nukrop-btn nav-download-btn"
               style={{ background: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgba(234, 179, 8, 0.5)', color: '#FEF08A' }}
             >
               <Download style={{ width: '14px', height: '14px' }} />
-              <span>Preview APK (Debug)</span>
+              <span>Native OS APK</span>
+            </a>
+
+            <a 
+              href="/NuKropAI_flutter_mobile_debug.apk" 
+              download="NuKropAI_flutter_mobile_debug.apk"
+              onClick={() => {
+                analytics.track('download_apk_click', { source: 'navbar_pill', version: 'flutter-debug' });
+                showToast({ type: 'info', message: 'Downloading NuKropAI Flutter Mobile APK (87 MB)...' });
+              }}
+              className="nukrop-btn nav-download-btn"
+              style={{ background: 'rgba(14, 165, 233, 0.2)', border: '1px solid rgba(56, 189, 248, 0.5)', color: '#BAE6FD' }}
+            >
+              <Download style={{ width: '14px', height: '14px' }} />
+              <span>Flutter APK</span>
             </a>
           </div>
 
@@ -245,12 +259,27 @@ function AppContent() {
           onClick={() => {
             setMobileMenuOpen(false);
             analytics.track('download_apk_click', { source: 'mobile_drawer', version: 'preview-debug' });
-            showToast({ type: 'info', message: 'Downloading Preview APK (Debug-Signed · Not for Production)...' });
+            showToast({ type: 'info', message: 'Downloading Native OS APK (62 MB)...' });
           }}
           style={{ width: '100%', padding: '12px 20px', fontSize: '14px', marginTop: '6px', borderRadius: '12px', background: 'rgba(234, 179, 8, 0.2)', border: '1px solid rgba(234, 179, 8, 0.5)', color: '#FEF08A' }}
         >
           <Download style={{ width: '16px', height: '16px' }} />
-          <span>Preview APK (Debug-Signed)</span>
+          <span>Native OS APK (62 MB)</span>
+        </a>
+
+        <a 
+          href="/NuKropAI_flutter_mobile_debug.apk" 
+          download="NuKropAI_flutter_mobile_debug.apk"
+          className="nukrop-btn" 
+          onClick={() => {
+            setMobileMenuOpen(false);
+            analytics.track('download_apk_click', { source: 'mobile_drawer', version: 'flutter-debug' });
+            showToast({ type: 'info', message: 'Downloading Flutter Mobile APK (87 MB)...' });
+          }}
+          style={{ width: '100%', padding: '12px 20px', fontSize: '14px', marginTop: '6px', borderRadius: '12px', background: 'rgba(14, 165, 233, 0.2)', border: '1px solid rgba(56, 189, 248, 0.5)', color: '#BAE6FD' }}
+        >
+          <Download style={{ width: '16px', height: '16px' }} />
+          <span>Flutter Mobile APK (87 MB)</span>
         </a>
       </div>
 
@@ -308,19 +337,19 @@ function AppContent() {
             A complete operating system engineered to eliminate crop loss, optimize fertilizer dosages, and secure fair APMC market pricing through edge AI and live government data.
           </p>
 
-          {/* Single Authoritative Download CTA */}
+          {/* Mobile Download CTAs */}
           <div className="hero-buttons" style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginBottom: '28px', flexWrap: 'wrap' }}>
             <a
               href="/NuKropAI_preview_debug.apk"
               download="NuKropAI_preview_debug.apk"
               onClick={() => {
                 analytics.track('download_apk_click', { source: 'hero_primary', version: 'preview-debug' });
-                showToast({ type: 'info', message: 'Downloading Preview APK (Debug-Signed · Not for Production)...' });
+                showToast({ type: 'info', message: 'Downloading Native Agrarian OS Engine APK (62 MB)...' });
               }}
               className="nukrop-btn"
               style={{
-                padding: '16px 36px',
-                fontSize: '16px',
+                padding: '16px 28px',
+                fontSize: '15px',
                 borderRadius: '16px',
                 background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.3) 0%, rgba(202, 138, 4, 0.5) 100%)',
                 border: '1px solid rgba(234, 179, 8, 0.6)',
@@ -328,17 +357,48 @@ function AppContent() {
                 boxShadow: '0 8px 32px rgba(234, 179, 8, 0.25)',
               }}
             >
-              <Download style={{ width: '20px', height: '20px' }} />
-              <span>Download Preview APK (Debug)</span>
+              <Download style={{ width: '18px', height: '18px' }} />
+              <span>Native OS Engine (62 MB)</span>
               <span className="tabular-nums" style={{
                 background: 'rgba(0,0,0,0.25)',
                 borderRadius: '6px',
                 padding: '3px 8px',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: '700',
                 marginLeft: '6px',
                 color: '#FEF08A'
-              }}>Staging Only</span>
+              }}>Android Native</span>
+            </a>
+
+            <a
+              href="/NuKropAI_flutter_mobile_debug.apk"
+              download="NuKropAI_flutter_mobile_debug.apk"
+              onClick={() => {
+                analytics.track('download_apk_click', { source: 'hero_flutter', version: 'flutter-debug' });
+                showToast({ type: 'info', message: 'Downloading Flutter Fullstack Mobile APK (87 MB)...' });
+              }}
+              className="nukrop-btn"
+              style={{
+                padding: '16px 28px',
+                fontSize: '15px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(2, 132, 199, 0.5) 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.6)',
+                color: '#BAE6FD',
+                boxShadow: '0 8px 32px rgba(14, 165, 233, 0.25)',
+              }}
+            >
+              <Download style={{ width: '18px', height: '18px' }} />
+              <span>Flutter Mobile App (87 MB)</span>
+              <span className="tabular-nums" style={{
+                background: 'rgba(0,0,0,0.25)',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontWeight: '700',
+                marginLeft: '6px',
+                color: '#BAE6FD'
+              }}>Cross-Platform</span>
             </a>
 
             <a
@@ -806,12 +866,26 @@ function AppContent() {
                     download="NuKropAI_preview_debug.apk" 
                     onClick={() => {
                       analytics.track('download_apk_click', { source: 'footer_link', version: 'preview-debug' });
-                      showToast({ type: 'info', message: 'Downloading Preview APK (Debug-Signed · Not for Production)...' });
+                      showToast({ type: 'info', message: 'Downloading Native OS APK (62 MB)...' });
                     }}
                     className="touch-target"
                     style={{ color: '#EAB308', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center' }}
                   >
-                    Download Preview APK (Debug)
+                    Download Native OS APK (62 MB)
+                  </a>
+                </li>
+                <li>
+                  <a 
+                    href="/NuKropAI_flutter_mobile_debug.apk" 
+                    download="NuKropAI_flutter_mobile_debug.apk" 
+                    onClick={() => {
+                      analytics.track('download_apk_click', { source: 'footer_link', version: 'flutter-debug' });
+                      showToast({ type: 'info', message: 'Downloading Flutter Mobile APK (87 MB)...' });
+                    }}
+                    className="touch-target"
+                    style={{ color: '#38BDF8', textDecoration: 'none', fontSize: '13.5px', fontWeight: '700', display: 'inline-flex', alignItems: 'center' }}
+                  >
+                    Download Flutter Mobile APK (87 MB)
                   </a>
                 </li>
               </ul>

@@ -1,15 +1,24 @@
 ================================================================================
-NuKropAI Agrarian OS — Internal Staging Preview Build
+NuKropAI Agrarian OS & Fullstack Mobile Client — Internal Staging Preview Builds
 ================================================================================
 STATUS: STAGING / PREVIEW ONLY
 SIGNING CLASSIFICATION: DEBUG_SIGNED (NOT FOR PRODUCTION USE)
 CERTIFICATE SUBJECT: CN=Android Debug, O=Android, C=US
-CERTIFICATE SHA-256: badbc6f865a559a48fa7996d9aeea810a2a9af2150a49e97799e8040a4ab6309
+
+AVAILABLE STAGING ARTIFACTS:
+1. NuKropAI_preview_debug.apk
+   - Role: Android Native Agrarian OS Engine (WebView, Sensors, Background GPS Service)
+   - Route: /NuKropAI_preview_debug.apk, /NuKropAI-debug.apk
+
+2. NuKropAI_flutter_mobile_debug.apk
+   - Role: Fullstack Mobile Client (Flutter 3.44, Riverpod, Offline First)
+   - Architecture: arm64-v8a
+   - Route: /NuKropAI_flutter_mobile_debug.apk, /flutter-debug.apk
 
 WARNING:
-This binary is an internal preview build intended exclusively for staging evaluation,
-automated CI/CD testing, and internal QA. It is cryptographically signed using the standard
-Android debug key.
+These binaries are internal preview builds intended exclusively for staging evaluation,
+automated CI/CD testing, and internal QA. They are cryptographically signed using the
+standard Android debug key.
 
 Production release distribution (NuKropAI.apk) is strictly DISABLED until official
 Google Play Console upload keystore credentials are provided.

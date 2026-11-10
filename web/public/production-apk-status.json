@@ -6,8 +6,16 @@
   "warning": "DEBUG SIGNED / NOT FOR PRODUCTION — INTERNAL PREVIEW ONLY",
   "preview_artifact": {
     "name": "NuKropAI_preview_debug.apk",
+    "title": "NuKropAI Agrarian OS Native Engine",
     "url": "/NuKropAI_preview_debug.apk",
     "size_bytes": 62119658
   },
-  "generated_at": "2026-11-10T08:52:17.791Z"
+  "flutter_preview_artifact": {
+    "name": "NuKropAI_flutter_mobile_debug.apk",
+    "title": "NuKropAI Fullstack Mobile Client (Flutter)",
+    "architecture": "arm64-v8a",
+    "url": "/NuKropAI_flutter_mobile_debug.apk",
+    "size_bytes": 87098156
+  },
+  "generated_at": "2026-11-10T11:49:56.609Z"
 }
